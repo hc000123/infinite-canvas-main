@@ -21,10 +21,10 @@ func TestAdminSkillFolderImportAndSourcePreview(t *testing.T) {
 	}
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
-	for key, value := range map[string]string{"ownerType": "system", "stageKey": "script", "folderName": "Seedance", "version": "1.0.0"} {
+	for key, value := range map[string]string{"ownerType": "system", "stageKey": "script", "folderName": "Seedance", "name": "确认后系统 Skill", "summary": "确认后系统用途", "version": "2.6.0"} {
 		_ = writer.WriteField(key, value)
 	}
-	for path, content := range map[string]string{"Seedance/SKILL.md": "---\nname: 导入剧本 Skill\n---\n# Rules", "Seedance/rules/preserve.md": "保留全部台词"} {
+	for path, content := range map[string]string{"Seedance/SKILL.md": "---\nname: frontmatter 原名\ndescription: frontmatter 原说明\nversion: 9.9.9\n---\n# Rules", "Seedance/rules/preserve.md": "保留全部台词"} {
 		_ = writer.WriteField("paths", path)
 		part, err := writer.CreateFormFile("files", path)
 		if err != nil {
@@ -43,10 +43,11 @@ func TestAdminSkillFolderImportAndSourcePreview(t *testing.T) {
 	}
 	var response struct {
 		Data struct {
-			Version model.SkillVersion `json:"version"`
+			Skill   model.SkillDefinition `json:"skill"`
+			Version model.SkillVersion    `json:"version"`
 		} `json:"data"`
 	}
-	if json.Unmarshal(recorder.Body.Bytes(), &response) != nil || response.Data.Version.ID == "" {
+	if json.Unmarshal(recorder.Body.Bytes(), &response) != nil || response.Data.Version.ID == "" || response.Data.Skill.Name != "确认后系统 Skill" || response.Data.Skill.Summary != "确认后系统用途" || response.Data.Version.Version != "2.6.0" {
 		t.Fatalf("body=%s", recorder.Body.String())
 	}
 	indexRecorder := httptest.NewRecorder()

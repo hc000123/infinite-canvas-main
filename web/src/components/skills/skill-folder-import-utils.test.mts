@@ -25,12 +25,16 @@ test("classifies added, modified, deleted, and unchanged folder files", async ()
         folderFile("skill", "SKILL.md", "Tools/SKILL.md"),
         folderFile("new rule", "rule.md", "Tools/rules/rule.md"),
         folderFile("new", "new.md", "Tools/new.md"),
+        folderFile("changed trash", ".DS_Store", "Tools/cache/.DS_Store"),
+        folderFile("new trash", "THUMBS.DB", "Tools/media/THUMBS.DB"),
     ];
     const hash = (value: string) => `sha256:${createHash("sha256").update(value).digest("hex")}`;
     const diff = await diffSkillFolderFiles(files, [
         { path: "SKILL.md", hash: hash("skill") },
         { path: "rules/rule.md", hash: hash("old rule") },
         { path: "deleted.md", hash: hash("deleted") },
+        { path: "cache/.DS_Store", hash: hash("old trash") },
+        { path: "old/Thumbs.db", hash: hash("deleted trash") },
     ]);
     assert.deepEqual(diff, {
         added: ["new.md"],

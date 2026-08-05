@@ -36,14 +36,14 @@ export async function readSkillFolderMetadata(files: File[], defaultVersion = "1
 
 export async function diffSkillFolderFiles(files: File[], previous: Array<Pick<SkillSourceFile, "path" | "hash">>): Promise<SkillFolderDiff> {
     const { relativePaths } = skillFolderLayout(files);
-    const before = new Map(previous.map((file) => [file.path, file.hash.toLowerCase()]));
+    const current = files.map((file, index) => ({ file, path: relativePaths[index] })).filter((item) => !skillFolderTrashPath(item.path));
+    const before = new Map(previous.filter((file) => !skillFolderTrashPath(file.path)).map((file) => [file.path, file.hash.toLowerCase()]));
     const diff: SkillFolderDiff = { added: [], modified: [], deleted: [], unchanged: [] };
-    for (let index = 0; index < files.length; index += 1) {
-        const path = relativePaths[index];
+    for (const { file, path } of current) {
         const oldHash = before.get(path);
         if (!oldHash) diff.added.push(path);
         else {
-            const hash = await sha256(files[index]);
+            const hash = await sha256(file);
             diff[hash === oldHash ? "unchanged" : "modified"].push(path);
             before.delete(path);
         }
@@ -51,6 +51,11 @@ export async function diffSkillFolderFiles(files: File[], previous: Array<Pick<S
     diff.deleted.push(...before.keys());
     for (const values of Object.values(diff)) values.sort();
     return diff;
+}
+
+function skillFolderTrashPath(path: string) {
+    const name = path.replaceAll("\\", "/").split("/").at(-1) || "";
+    return name === ".DS_Store" || name.toLowerCase() === "thumbs.db";
 }
 
 export async function readDroppedSkillFolder(items: Iterable<DropItem>) {

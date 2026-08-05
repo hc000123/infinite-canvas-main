@@ -59,12 +59,12 @@ func TestProjectSkillFolderImportSourceAndStandaloneTrialRoutes(t *testing.T) {
 	}
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
-	for key, value := range map[string]string{"projectId": "project-folder", "stageKey": "script", "folderName": "Script"} {
+	for key, value := range map[string]string{"projectId": "project-folder", "stageKey": "script", "folderName": "Script", "name": "确认后项目 Skill", "summary": "确认后用途", "version": "2.5.0"} {
 		_ = writer.WriteField(key, value)
 	}
 	_ = writer.WriteField("paths", "Script/SKILL.md")
 	part, _ := writer.CreateFormFile("files", "SKILL.md")
-	_, _ = part.Write([]byte("---\nname: 项目剧本 Skill\n---\n# Rules"))
+	_, _ = part.Write([]byte("---\nname: frontmatter 原名\ndescription: frontmatter 原说明\nversion: 9.9.9\n---\n# Rules"))
 	_ = writer.Close()
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/skills/import-folder", &body)
 	request.Header.Set("Authorization", "Bearer "+ownerToken)
@@ -77,7 +77,7 @@ func TestProjectSkillFolderImportSourceAndStandaloneTrialRoutes(t *testing.T) {
 	}
 	var created service.ResolvedSkill
 	decodeInvocationHTTPData(t, response, &created)
-	if created.Skill.OwnerType != model.SkillOwnerProject || created.Skill.OwnerProjectID != "project-folder" || created.Skill.StageKey != "script" {
+	if created.Skill.OwnerType != model.SkillOwnerProject || created.Skill.OwnerProjectID != "project-folder" || created.Skill.StageKey != "script" || created.Skill.Name != "确认后项目 Skill" || created.Skill.Summary != "确认后用途" || created.Version.Version != "2.5.0" {
 		t.Fatalf("created=%+v", created)
 	}
 	source := invocationHTTPCall(t, app, http.MethodGet, "/api/v1/skill-versions/"+created.Version.ID+"/source-files", ownerToken, nil)

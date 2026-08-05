@@ -45,7 +45,8 @@ func ImportProjectSkillFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := service.ImportManagedSkillFolder(user.ID, false, service.SkillFolderImportInput{
-		OwnerType: model.SkillOwnerProject, ProjectID: values.Get("projectId"), StageKey: values.Get("stageKey"), Snapshot: snapshot,
+		OwnerType: model.SkillOwnerProject, ProjectID: values.Get("projectId"), StageKey: values.Get("stageKey"),
+		Name: values.Get("name"), Summary: values.Get("summary"), Version: values.Get("version"), Snapshot: snapshot,
 	})
 	if err != nil {
 		FailError(w, err)
