@@ -29,6 +29,22 @@ func CreateSkillAggregate(skill model.SkillDefinition, version model.SkillVersio
 	})
 }
 
+func CreateSkillAggregateWithAudit(skill model.SkillDefinition, version model.SkillVersion, audit model.SkillAuditLog) error {
+	db, err := DB()
+	if err != nil {
+		return err
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&skill).Error; err != nil {
+			return err
+		}
+		if err := tx.Create(&version).Error; err != nil {
+			return err
+		}
+		return tx.Create(&audit).Error
+	})
+}
+
 func GetSkillDefinition(id string) (model.SkillDefinition, bool, error) {
 	db, err := DB()
 	if err != nil {
@@ -80,6 +96,19 @@ func CreateSkillVersion(version model.SkillVersion) error {
 		return err
 	}
 	return db.Create(&version).Error
+}
+
+func CreateSkillVersionWithAudit(version model.SkillVersion, audit model.SkillAuditLog) error {
+	db, err := DB()
+	if err != nil {
+		return err
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&version).Error; err != nil {
+			return err
+		}
+		return tx.Create(&audit).Error
+	})
 }
 
 func SaveSkillVersion(version model.SkillVersion) error {

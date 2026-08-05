@@ -28,7 +28,7 @@ type SkillDefinition struct {
 
 type SkillVersion struct {
 	ID                     string             `json:"id" gorm:"primaryKey"`
-	SkillID                string             `json:"skillId" gorm:"index;uniqueIndex:idx_skill_version,priority:1"`
+	SkillID                string             `json:"skillId" gorm:"index;uniqueIndex:idx_skill_version,priority:1;uniqueIndex:idx_skill_source_identity,priority:1"`
 	Version                string             `json:"version" gorm:"uniqueIndex:idx_skill_version,priority:2"`
 	Status                 SkillVersionStatus `json:"status" gorm:"index"`
 	ManifestJSON           string             `json:"-" gorm:"type:text"`
@@ -40,6 +40,7 @@ type SkillVersion struct {
 	EvaluationSummaryJSON  string             `json:"evaluationSummaryJson" gorm:"type:text"`
 	SourceKind             string             `json:"sourceKind" gorm:"index"`
 	SourceHash             string             `json:"sourceHash" gorm:"index"`
+	SourceIdentity         *string            `json:"-" gorm:"uniqueIndex:idx_skill_source_identity,priority:2"`
 	SourceArchiveBlob      []byte             `json:"-"`
 	SourceFileIndexJSON    string             `json:"-" gorm:"type:text"`
 	ImportMetadataJSON     string             `json:"-" gorm:"type:text"`

@@ -33,6 +33,66 @@ func TestSkillFolderSourceRoundTripsWithoutSerializingArchive(t *testing.T) {
 	}
 }
 
+func TestCreateImportedSkillAggregateRollsBackWhenAuditFails(t *testing.T) {
+	setupRepositoryTestDB(t)
+	if err := CreateSkillAuditLog(model.SkillAuditLog{ID: "duplicate-audit"}); err != nil {
+		t.Fatal(err)
+	}
+	skill := model.SkillDefinition{ID: "atomic-folder-skill", Name: "剧本优化", OwnerType: model.SkillOwnerSystem}
+	sourceIdentity := "sha256:atomic"
+	version := model.SkillVersion{ID: "atomic-folder-version", SkillID: skill.ID, Version: "1.0.0", SourceKind: "folder_import", SourceHash: sourceIdentity, SourceIdentity: &sourceIdentity}
+	if err := CreateSkillAggregateWithAudit(skill, version, model.SkillAuditLog{ID: "duplicate-audit"}); err == nil {
+		t.Fatal("duplicate audit should fail the aggregate")
+	}
+	if _, ok, _ := GetSkillDefinition(skill.ID); ok {
+		t.Fatal("definition survived failed audit transaction")
+	}
+	if _, ok, _ := GetSkillVersion(version.ID); ok {
+		t.Fatal("version survived failed audit transaction")
+	}
+}
+
+func TestCreateImportedSkillVersionWithAuditIsAtomicAndDeduplicatesSource(t *testing.T) {
+	setupRepositoryTestDB(t)
+	skill := model.SkillDefinition{ID: "source-unique-skill", Name: "剧本优化", OwnerType: model.SkillOwnerSystem}
+	if err := CreateSkillDefinition(skill); err != nil {
+		t.Fatal(err)
+	}
+	sourceIdentity := "sha256:same-folder"
+	first := model.SkillVersion{ID: "source-version-1", SkillID: skill.ID, Version: "1.0.0", SourceKind: "folder_import", SourceHash: sourceIdentity, SourceIdentity: &sourceIdentity}
+	if err := CreateSkillVersionWithAudit(first, model.SkillAuditLog{ID: "source-audit-1"}); err != nil {
+		t.Fatal(err)
+	}
+	duplicate := first
+	duplicate.ID, duplicate.Version = "source-version-2", "1.0.1"
+	if err := CreateSkillVersionWithAudit(duplicate, model.SkillAuditLog{ID: "source-audit-2"}); err == nil {
+		t.Fatal("same source content should be rejected for one Skill")
+	}
+	if _, ok, _ := GetSkillVersion(duplicate.ID); ok {
+		t.Fatal("duplicate source version was persisted")
+	}
+	database, err := DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var auditCount int64
+	if err := database.Model(&model.SkillAuditLog{}).Where("id = ?", "source-audit-2").Count(&auditCount).Error; err != nil || auditCount != 0 {
+		t.Fatalf("duplicate source audit count=%d err=%v", auditCount, err)
+	}
+
+	if err := CreateSkillAuditLog(model.SkillAuditLog{ID: "duplicate-version-audit"}); err != nil {
+		t.Fatal(err)
+	}
+	otherIdentity := "sha256:other-folder"
+	other := model.SkillVersion{ID: "source-version-3", SkillID: skill.ID, Version: "1.0.2", SourceKind: "folder_import", SourceHash: otherIdentity, SourceIdentity: &otherIdentity}
+	if err := CreateSkillVersionWithAudit(other, model.SkillAuditLog{ID: "duplicate-version-audit"}); err == nil {
+		t.Fatal("duplicate audit should fail version creation")
+	}
+	if _, ok, _ := GetSkillVersion(other.ID); ok {
+		t.Fatal("version survived failed audit transaction")
+	}
+}
+
 func TestListVisibleSkillDefinitionsIncludesSystemAndProject(t *testing.T) {
 	setupRepositoryTestDB(t)
 	for _, skill := range []model.SkillDefinition{
