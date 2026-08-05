@@ -213,9 +213,7 @@ func normalizeWorkflowAdapterDefinition(value WorkflowAdapterDefinition) (Workfl
 	if !skillManifestTokenPattern.MatchString(value.ID) || !skillSemanticVersionRegexp.MatchString(value.Version) || !skillManifestTokenPattern.MatchString(value.TransformKind) || !registered {
 		return value, errors.New("Workflow Adapter 定义无效")
 	}
-	if value.Transform == nil {
-		value.Transform = registeredTransform
-	}
+	value.Transform = registeredTransform
 	inputs, err := normalizeArtifactInputSpecs(value.InputContracts)
 	if err != nil || len(inputs) == 0 {
 		return value, errors.New("Workflow Adapter 输入契约无效")

@@ -34,6 +34,27 @@ func TestWorkflowAdapterCreatesDeterministicDerivedArtifact(t *testing.T) {
 	}
 }
 
+func TestWorkflowAdapterCannotOverrideRegisteredTransform(t *testing.T) {
+	setupInvocationServiceTest(t)
+	parent := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "production_script", `{"productionScript":"完整导演稿"}`)
+	adapter, err := ResolveWorkflowAdapter(WorkflowAdapterRef{AdapterID: "production-script-envelope", AdapterVersion: "1.0.0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	maliciousCalled := false
+	adapter.Transform = func([]ResolvedArtifactBinding) (json.RawMessage, error) {
+		maliciousCalled = true
+		return json.RawMessage(`{"productionScript":"恶意覆盖"}`), nil
+	}
+	output, err := ExecuteWorkflowAdapter("user-1", "project-1", "episode-1", adapter, []ArtifactRefInput{{BindingName: "production_script", ArtifactID: parent.Artifact.ID, ContentHash: parent.Artifact.ContentHash}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if maliciousCalled || output.Payload["productionScript"] != "完整导演稿" {
+		t.Fatalf("unregistered transform executed: called=%v output=%+v", maliciousCalled, output.Payload)
+	}
+}
+
 func TestWorkflowAdapterRejectsWrongInputContract(t *testing.T) {
 	setupInvocationServiceTest(t)
 	adapter, err := ResolveWorkflowAdapter(WorkflowAdapterRef{AdapterID: "production-script-envelope", AdapterVersion: "1.0.0"})
@@ -54,8 +75,18 @@ func TestWorkflowAdapterRejectsOutputSchemaFailureWithoutChangingParent(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	adapter.Transform = func([]ResolvedArtifactBinding) (json.RawMessage, error) {
+	originalTransforms := workflowAdapterTransformRegistry
+	workflowAdapterTransformRegistry = cloneWorkflowAdapterTransforms(workflowAdapterTransformRegistry)
+	t.Cleanup(func() { workflowAdapterTransformRegistry = originalTransforms })
+	adapter.ID = "test-invalid-production-script"
+	adapter.TransformKind = "test-invalid-production-script-v1"
+	adapter.ContentHash = ""
+	workflowAdapterTransformRegistry[adapter.TransformKind] = func([]ResolvedArtifactBinding) (json.RawMessage, error) {
 		return json.RawMessage(`{"productionScript":""}`), nil
+	}
+	adapter, err = normalizeWorkflowAdapterDefinition(adapter)
+	if err != nil {
+		t.Fatal(err)
 	}
 	_, err = ExecuteWorkflowAdapter("user-1", "project-1", "episode-1", adapter, []ArtifactRefInput{{BindingName: "production_script", ArtifactID: parent.Artifact.ID, ContentHash: parent.Artifact.ContentHash}})
 	if err == nil {
