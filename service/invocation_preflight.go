@@ -221,7 +221,19 @@ func (build *invocationPreflightBuild) freezeSchemas() error {
 		}
 		outputs = append(outputs, map[string]any{"spec": spec, "schema": schema})
 	}
-	build.coreSchemaJSON, _ = marshalInvocationJSON(map[string]any{"inputs": build.snapshots, "outputs": outputs})
+	coreSnapshot := map[string]any{"inputs": build.snapshots, "outputs": outputs}
+	if resolved.Version.SourceKind == "folder_import" {
+		template, err := ResolveImportedSkillStageSnapshot(resolved.Version, resolved.Package)
+		if err != nil {
+			return err
+		}
+		adapter, err := ResolveWorkflowAdapter(template.FixedAdapter)
+		if err != nil || adapter.ContentHash != template.FixedAdapter.ContentHash {
+			return safeMessageError{message: "Skill 冻结 Adapter 不可用"}
+		}
+		coreSnapshot["importedAdapter"] = workflowAdapterSnapshotValue(adapter)
+	}
+	build.coreSchemaJSON, _ = marshalInvocationJSON(coreSnapshot)
 	raw, _, err := canonicalJSONObject(resolved.Package.OutputContract.Schema)
 	if err != nil {
 		return err

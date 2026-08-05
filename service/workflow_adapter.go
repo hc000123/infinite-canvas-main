@@ -351,6 +351,11 @@ func ExecuteWorkflowAdapterOutputs(userID, projectID, episodeID string, definiti
 	if err != nil {
 		return nil, err
 	}
+	if reused, ok, err := reuseImportedInvocationAdapterOutputs(userID, normalized, envelopes); err != nil {
+		return nil, err
+	} else if ok {
+		return reused, nil
+	}
 	bindings := make([]ResolvedArtifactBinding, len(envelopes))
 	for index := range envelopes {
 		approved, err := invocationArtifactApproved(userID, envelopes[index].Artifact)
@@ -465,6 +470,52 @@ func ExecuteWorkflowAdapterOutputs(userID, projectID, episodeID string, definiti
 		outputs[index] = output
 	}
 	return outputs, nil
+}
+
+func reuseImportedInvocationAdapterOutputs(userID string, definition WorkflowAdapterDefinition, envelopes []ArtifactEnvelope) ([]ArtifactEnvelope, bool, error) {
+	if len(envelopes) == 0 {
+		return nil, false, nil
+	}
+	schema, err := ResolveArtifactSchema(definition.Output.ArtifactType, definition.Output.SchemaVersion)
+	if err != nil {
+		return nil, false, err
+	}
+	for _, envelope := range envelopes {
+		artifact := envelope.Artifact
+		if artifact.ProducerInvocationID == nil || artifact.ArtifactType != schema.ArtifactType || artifact.SchemaVersion != schema.Version || artifact.SchemaContentHash != schema.ContentHash {
+			return nil, false, nil
+		}
+		approved, err := invocationArtifactApproved(userID, artifact)
+		if err != nil {
+			return nil, false, err
+		}
+		actualHash, hashErr := frozenStoredArtifactHash(artifact)
+		if !approved || hashErr != nil || actualHash != artifact.ContentHash {
+			return nil, false, nil
+		}
+		matched := false
+		for key, value := range envelope.Extensions {
+			if key == workflowAdapterExtensionKey {
+				continue
+			}
+			raw, _ := json.Marshal(value)
+			var trace importedSkillAdapterArtifactExtension
+			if json.Unmarshal(raw, &trace) != nil || trace.AdapterID != definition.ID || trace.AdapterVersion != definition.Version || trace.AdapterContentHash != definition.ContentHash || trace.TransformKind != definition.TransformKind || trace.RawSchemaVersion != importedSkillRawSchemaVersion || trace.RawSchemaContentHash == "" {
+				continue
+			}
+			_, rawPayload, rawErr := canonicalRawObject(trace.RawPayload)
+			converted, convertErr := definition.Transform([]ResolvedArtifactBinding{{BindingName: definition.InputContracts[0].BindingName, Artifact: ArtifactEnvelope{Payload: rawPayload}}})
+			convertedCanonical, _, canonicalErr := canonicalRawObject(converted)
+			if rawErr == nil && convertErr == nil && canonicalErr == nil && string(convertedCanonical) == artifact.PayloadJSON {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return nil, false, nil
+		}
+	}
+	return envelopes, true, nil
 }
 
 func workflowAdapterArtifactsMatch(expected []model.Artifact, stored map[string]model.Artifact) bool {

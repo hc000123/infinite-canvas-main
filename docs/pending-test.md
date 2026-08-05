@@ -145,9 +145,10 @@
 - 文件夹拖放会递归保留顶层目录和所有相对路径；拖入普通单文件或根目录缺少 `SKILL.md` 时会直接提示，文件内容仅用于预览和上传，不执行脚本。
 - 同一 Definition 可继续载入新文件夹版本；通过独立试跑后才可设为可用、推荐，并可停用不再使用的 Definition。项目级 Skill 只对所属项目可见，管理员可管理系统 Skill。
 - 独立试跑不需要 Workflow Run ID，结果分别保存并展示“模型原始输出 / 标准产物 / 转换差异 / 质量问题”。文本 Skill 使用文本执行器；图片 Skill 使用正式 `/images/generations` 请求和输出映射，可直接粘贴资产 Brief，也可设置 `n / size / quality / background / output_format` 参数。
+- 文件夹导入版本的模型输出先按冻结 raw `0.1.0` 合同校验，再强制执行同一冻结 Adapter，最后按 Core `1.0.0` Schema 和业务门验证。Workflow、画布对话、生图和直接 API 不能绕过该链路；原始 payload、Adapter 版本 / 哈希和保真 diff 保存在标准 Artifact 的 Skill 命名空间扩展中，不作为下游 binding。显式系统转换节点遇到同一已应用 Adapter 的标准 Artifact 时复用原 Artifact ID。
 - 每个内容 Skill 后都串联不可编辑、不可删除的系统转换规则。转换规则只裁剪剧本外层空白，或为资产 / 分镜补稳定 ID，不摘要、润色、改写内容；当 Skill 输出多个 Artifact 时会逐个一对一转换并保留独立血缘。
 - 系统标准 Workflow 升级为不可变 `2.4.0`：12 个内容 Skill 节点 + 12 个锁定转换节点。编辑器将转换节点折叠为“系统转换规则”，制作人员只选择内容 Skill 版本。
-- 人工验收：分别从管理后台和项目页点击选择、直接拖入文件夹，确认 frontmatter 字段、默认值和子目录路径正确；修改、新增、删除不同文件后载入新版，确认差异清单相符且 Definition 未变。再查看源文件，运行文本与图片 Skill，检查四栏结果，完成发布 / 推荐 / 停用。在 Workflow、画布、生图和直接 API 中选择同一精确 Version ID，确认 ContentHash 与输入 / 输出契约一致；再用多资产 Brief 输出确认转换后数量不变。
+- 人工验收：分别从管理后台和项目页点击选择、直接拖入文件夹，确认 frontmatter 字段、默认值和子目录路径正确；修改、新增、删除不同文件后载入新版，确认差异清单相符且 Definition 未变。再查看源文件，运行文本与图片 Skill，检查四栏结果，完成发布 / 推荐 / 停用。在 Workflow、画布、生图和直接 API 中选择同一精确 Version ID，确认 ContentHash、标准 Artifact Schema 和 Adapter metadata / hash 一致；删除显式 Adapter 节点的自定义 Workflow 仍只能得到已标准化 Artifact，保留节点时复用同一 Artifact ID。再用多资产 Brief 输出确认转换后数量不变，任一项保真失败时不产生部分标准 Artifact。
 
 ### Workflow / Skill / 画布总控架构收口
 

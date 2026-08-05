@@ -141,8 +141,8 @@ func validateInvocationAssetCatalog(payload map[string]any) error {
 			characters[invocationString(item, "assetId")] = true
 		}
 	}
-	assetIDPattern := regexp.MustCompile(`^(character|scene|prop|costume)-\d{3}$`)
-	characterPattern := regexp.MustCompile(`character-\d{3}`)
+	assetIDPattern := regexp.MustCompile(`^((character|scene|prop|costume)-\d{3}|(CHAR|SCENE|PROP|COSTUME)-\d{3})$`)
+	characterPattern := regexp.MustCompile(`(character-\d{3}|CHAR-\d{3})`)
 	for index, item := range items {
 		id := invocationString(item, "assetId")
 		if !assetIDPattern.MatchString(id) {

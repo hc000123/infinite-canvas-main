@@ -30,6 +30,7 @@ type invocationCoreSchemaSnapshot struct {
 		Spec   ArtifactOutputSpec     `json:"spec"`
 		Schema ResolvedArtifactSchema `json:"schema"`
 	} `json:"outputs"`
+	ImportedAdapter *workflowAdapterSnapshot `json:"importedAdapter,omitempty"`
 }
 
 type invocationSkillSchemaSnapshot struct {
@@ -167,6 +168,23 @@ func buildInvocationCompletion(agentRun model.AgentRun, run model.InvocationRun,
 		gates = append(gates, invocationGate(run, attempt, 2, "output_schema", "frozen-image-cardinality", "1", false, err, stamp))
 		return fail("output_schema", gates, err)
 	}
+	imported := false
+	if skill, frozenErr := frozenInvocationSkill(revision); frozenErr == nil && skill.Version.SourceKind == "folder_import" {
+		imported = true
+		outputs, err = convertFrozenImportedInvocationOutputs(revision, outputs, coreSchemas, skillSchema)
+		if err != nil {
+			layer := "fixed_adapter"
+			for _, output := range outputs {
+				if output.validationError != nil {
+					if output.errorLayer != "" {
+						layer = output.errorLayer
+					}
+					gates = append(gates, invocationCoordinateGate(run, attempt, 2, layer, "frozen-imported-adapter", output, output.validationError, stamp))
+				}
+			}
+			return fail(layer, gates, err)
+		}
+	}
 	validOutputs := make([]validatedInvocationOutput, 0, len(outputs))
 	itemFailed := false
 	itemFailureLayer := ""
@@ -192,12 +210,14 @@ func buildInvocationCompletion(agentRun model.AgentRun, run model.InvocationRun,
 		}
 		validOutputs = append(validOutputs, output)
 	}
+	if imported && itemFailed {
+		return fail(itemFailureLayer, gates, errors.New("导入 Skill 的多输出必须全部通过标准化验证"))
+	}
 	artifacts, refs, err := buildFrozenInvocationArtifacts(run, revision, attempt, inputRefs, validOutputs, coreSchemas, retryPlan, stamp)
 	if err != nil {
 		gates = append(gates, invocationGate(run, attempt, 2, "output_schema", "frozen-dual-schema", "1", false, err, stamp))
 		return fail("output_schema", gates, err)
 	}
-	_ = skillSchema
 	for index, artifact := range artifacts {
 		output := validOutputs[index]
 		schemaGate := invocationArtifactGate(run, attempt, artifact, 2, "output_schema", "frozen-dual-schema", "1", true, nil, stamp)
@@ -277,7 +297,21 @@ type validatedInvocationOutput struct {
 	ordinal         int
 	payload         map[string]any
 	raw             json.RawMessage
+	rawPayload      json.RawMessage
+	adapterTrace    *importedSkillAdapterArtifactExtension
+	errorLayer      string
 	validationError error
+}
+
+type importedSkillAdapterArtifactExtension struct {
+	RawPayload           json.RawMessage `json:"rawPayload"`
+	RawSchemaVersion     string          `json:"rawSchemaVersion"`
+	RawSchemaContentHash string          `json:"rawSchemaContentHash"`
+	AdapterID            string          `json:"adapterId"`
+	AdapterVersion       string          `json:"adapterVersion"`
+	AdapterContentHash   string          `json:"adapterContentHash"`
+	TransformKind        string          `json:"transformKind"`
+	Diff                 map[string]any  `json:"diff"`
 }
 
 func validateFrozenInvocationInputs(userID string, revision model.InvocationPreflightRevision, refs []model.InvocationArtifactRef) error {
@@ -427,15 +461,84 @@ func validateFrozenInvocationOutputItems(revision model.InvocationPreflightRevis
 		if !ok {
 			return nil, nil, skillSchema, errors.New("输出 binding 缺少 frozen Core schema")
 		}
-		if err := ValidateArtifactPayload(schema, output.raw); err != nil {
-			declared[invocationOutputIndex(declared, output.bindingName, output.ordinal)].validationError = err
-			continue
-		}
 		if err := skillCompiled.Validate(output.payload); err != nil {
 			declared[invocationOutputIndex(declared, output.bindingName, output.ordinal)].validationError = fmt.Errorf("输出不符合 frozen Skill schema: %w", err)
+			continue
+		}
+		if skill.Version.SourceKind != "folder_import" {
+			if err := ValidateArtifactPayload(schema, output.raw); err != nil {
+				declared[invocationOutputIndex(declared, output.bindingName, output.ordinal)].validationError = err
+			}
 		}
 	}
 	return declared, coreSchemas, skillSchema, nil
+}
+
+func convertFrozenImportedInvocationOutputs(revision model.InvocationPreflightRevision, outputs []validatedInvocationOutput, schemas map[string]ResolvedArtifactSchema, rawSchema invocationSkillSchemaSnapshot) ([]validatedInvocationOutput, error) {
+	var core invocationCoreSchemaSnapshot
+	if json.Unmarshal([]byte(revision.CoreSchemaSnapshotJSON), &core) != nil || core.ImportedAdapter == nil {
+		return outputs, errors.New("frozen imported Adapter 快照缺失")
+	}
+	frozenRaw, err := marshalInvocationCanonical(*core.ImportedAdapter)
+	if err != nil {
+		return outputs, err
+	}
+	definition, err := ResolveWorkflowAdapter(WorkflowAdapterRef{AdapterID: core.ImportedAdapter.AdapterID, AdapterVersion: core.ImportedAdapter.AdapterVersion, TransformKind: core.ImportedAdapter.TransformKind, ContentHash: core.ImportedAdapter.ContentHash})
+	if err != nil {
+		return outputs, err
+	}
+	registeredRaw, _ := workflowAdapterSnapshotJSON(definition)
+	if !json.Valid(frozenRaw) || string(frozenRaw) != string(registeredRaw) {
+		return outputs, errors.New("frozen imported Adapter 快照/哈希无效")
+	}
+	failed := false
+	for index := range outputs {
+		output := &outputs[index]
+		if output.validationError != nil {
+			output.errorLayer = "output_schema"
+			failed = true
+			continue
+		}
+		before := append(json.RawMessage(nil), output.raw...)
+		converted, convertErr := definition.Transform([]ResolvedArtifactBinding{{BindingName: output.bindingName, Artifact: ArtifactEnvelope{Payload: output.payload}}})
+		if convertErr != nil {
+			output.validationError, output.errorLayer, failed = convertErr, "fixed_adapter", true
+			continue
+		}
+		schema, ok := schemas[output.bindingName]
+		if !ok || schema.ArtifactType != definition.Output.ArtifactType || schema.Version != definition.Output.SchemaVersion || schema.ContentHash == "" {
+			output.validationError, output.errorLayer, failed = errors.New("frozen standard Schema 与 Adapter 输出不匹配"), "output_schema", true
+			continue
+		}
+		if schemaErr := ValidateArtifactPayload(schema, converted); schemaErr != nil {
+			output.validationError, output.errorLayer, failed = schemaErr, "output_schema", true
+			continue
+		}
+		diff, fidelityErr := workflowAdapterContentFidelity(definition.TransformKind, before, converted)
+		if fidelityErr != nil {
+			output.validationError, output.errorLayer, failed = fidelityErr, "content_fidelity", true
+			continue
+		}
+		if changed, _ := diff["contentChanged"].(bool); changed {
+			output.validationError = errors.New("Skill Adapter 内容保真校验失败：" + workflowAdapterContentFidelitySummary(diff))
+			output.errorLayer, failed = "content_fidelity", true
+			continue
+		}
+		canonical, payload, canonicalErr := canonicalRawObject(converted)
+		if canonicalErr != nil {
+			output.validationError, output.errorLayer, failed = canonicalErr, "output_schema", true
+			continue
+		}
+		output.rawPayload, output.raw, output.payload = before, canonical, payload
+		output.adapterTrace = &importedSkillAdapterArtifactExtension{
+			RawPayload: before, RawSchemaVersion: rawSchema.SchemaVersion, RawSchemaContentHash: rawSchema.ContentHash,
+			AdapterID: definition.ID, AdapterVersion: definition.Version, AdapterContentHash: definition.ContentHash, TransformKind: definition.TransformKind, Diff: diff,
+		}
+	}
+	if failed {
+		return outputs, errors.New("导入 Skill 输出标准化失败")
+	}
+	return outputs, nil
 }
 
 func parseInvocationDeclaredImageOutputsForRetry(raw string, requested []InvocationOutputCoordinate) ([]validatedInvocationOutput, error) {
@@ -654,13 +757,21 @@ func buildFrozenInvocationArtifacts(run model.InvocationRun, revision model.Invo
 	refs := make([]model.InvocationArtifactRef, 0, len(outputs))
 	for _, output := range outputs {
 		schema := schemas[output.bindingName]
-		contentHash, hashErr := artifactEnvelopeContentHash(schema.ArtifactType, schema.Version, schema.ContentHash, run.ProjectID, run.EpisodeID, parentRefs, output.payload, map[string]any{})
+		extensions := map[string]any{}
+		if output.adapterTrace != nil {
+			extensions[revision.SkillID] = output.adapterTrace
+		}
+		extensionsJSON, _, extensionErr := canonicalJSONObject(extensions)
+		if extensionErr != nil {
+			return nil, nil, extensionErr
+		}
+		contentHash, hashErr := artifactEnvelopeContentHash(schema.ArtifactType, schema.Version, schema.ContentHash, run.ProjectID, run.EpisodeID, parentRefs, output.payload, extensions)
 		if hashErr != nil {
 			return nil, nil, hashErr
 		}
 		producer := run.ID
 		artifactID := deterministicInvocationID("artifact", run.ID, fmt.Sprint(attempt.Attempt), output.bindingName, fmt.Sprint(output.ordinal))
-		artifact := model.Artifact{ID: artifactID, UserID: run.UserID, ArtifactType: schema.ArtifactType, SchemaID: schema.ID, SchemaVersion: schema.Version, SchemaContentHash: schema.ContentHash, ProjectID: run.ProjectID, EpisodeID: run.EpisodeID, ParentArtifactRefsJSON: string(parentJSON), ProducerInvocationID: &producer, ProducerAttempt: attempt.Attempt, PayloadJSON: string(output.raw), ExtensionsJSON: `{}`, ContentHash: contentHash, CreatedAt: stamp}
+		artifact := model.Artifact{ID: artifactID, UserID: run.UserID, ArtifactType: schema.ArtifactType, SchemaID: schema.ID, SchemaVersion: schema.Version, SchemaContentHash: schema.ContentHash, ProjectID: run.ProjectID, EpisodeID: run.EpisodeID, ParentArtifactRefsJSON: string(parentJSON), ProducerInvocationID: &producer, ProducerAttempt: attempt.Attempt, PayloadJSON: string(output.raw), ExtensionsJSON: string(extensionsJSON), ContentHash: contentHash, CreatedAt: stamp}
 		artifacts = append(artifacts, artifact)
 		refs = append(refs, model.InvocationArtifactRef{ID: deterministicInvocationID("invocationref", run.ID, fmt.Sprint(attempt.Attempt), output.bindingName, fmt.Sprint(output.ordinal)), UserID: run.UserID, InvocationID: run.ID, Direction: "output", BindingName: output.bindingName, ArtifactID: artifact.ID, ArtifactHash: artifact.ContentHash, ArtifactType: artifact.ArtifactType, SchemaVersion: artifact.SchemaVersion, SchemaContentHash: artifact.SchemaContentHash, Revision: attempt.Revision, Attempt: attempt.Attempt, Ordinal: output.ordinal, CreatedAt: stamp})
 	}

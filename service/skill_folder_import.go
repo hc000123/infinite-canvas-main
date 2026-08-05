@@ -23,9 +23,10 @@ import (
 )
 
 const (
-	skillFolderMaxFiles     = 128
-	skillFolderMaxFileBytes = 2 << 20
-	skillFolderMaxBytes     = 32 << 20
+	skillFolderMaxFiles           = 128
+	skillFolderMaxFileBytes       = 2 << 20
+	skillFolderMaxBytes           = 32 << 20
+	importedSkillRawSchemaVersion = "0.1.0"
 )
 
 var skillFolderArchiveTime = time.Date(1980, time.January, 1, 0, 0, 0, 0, time.UTC)
@@ -262,6 +263,10 @@ func ImportManagedSkillFolder(userID string, isAdmin bool, input SkillFolderImpo
 	if err != nil {
 		return ResolvedSkill{}, err
 	}
+	packageValue, err = freezeImportedSkillRawContract(packageValue, template)
+	if err != nil {
+		return ResolvedSkill{}, err
+	}
 	projectID := strings.TrimSpace(input.ProjectID)
 	ownerUserID := ""
 	if input.OwnerType == model.SkillOwnerSystem {
@@ -329,6 +334,10 @@ func ImportOwnedSkillFolderVersion(userID string, isAdmin bool, skillID, version
 	if err != nil {
 		return model.SkillVersion{}, err
 	}
+	packageValue, err = freezeImportedSkillRawContract(packageValue, template)
+	if err != nil {
+		return model.SkillVersion{}, err
+	}
 	stamp := now()
 	version := importedSkillVersion(newID("skillversion"), skill.ID, versionName, userID, stamp, packageValue, snapshot, template)
 	if err := repository.CreateSkillVersion(version); err != nil {
@@ -349,13 +358,71 @@ func importedSkillVersion(id, skillID, versionName, userID, stamp string, packag
 		StageKey             string              `json:"stageKey"`
 		StageTemplateVersion string              `json:"stageTemplateVersion"`
 		FixedAdapter         WorkflowAdapterRef  `json:"fixedAdapter"`
-	}{snapshot.FolderName, snapshot.Metadata, template.Key, template.TemplateVersion, template.FixedAdapter})
+		RawSchemaVersion     string              `json:"rawSchemaVersion"`
+		RawSchemaContentHash string              `json:"rawSchemaContentHash"`
+	}{snapshot.FolderName, snapshot.Metadata, template.Key, template.TemplateVersion, template.FixedAdapter, packageValue.OutputContract.SchemaVersion, importedSkillRawSchemaHash(packageValue.OutputContract.Schema)})
 	version.SourceKind = "folder_import"
 	version.SourceHash = snapshot.SourceHash
 	version.SourceArchiveBlob = append([]byte(nil), snapshot.Archive...)
 	version.SourceFileIndexJSON = string(fileIndex)
 	version.ImportMetadataJSON = string(metadata)
 	return version
+}
+
+func freezeImportedSkillRawContract(packageValue SkillPackage, template SkillStageTemplate) (SkillPackage, error) {
+	raw, err := json.Marshal(packageValue.OutputContract.Schema)
+	if err != nil {
+		return SkillPackage{}, err
+	}
+	var schema map[string]any
+	if json.Unmarshal(raw, &schema) != nil {
+		return SkillPackage{}, safeMessageError{message: "Skill raw 输出 Schema 无效"}
+	}
+	switch template.FixedAdapter.TransformKind {
+	case "stage-art-normalize-v1":
+		removeImportedRawRequired(schema, "assetId")
+	case "stage-storyboard-normalize-v1", "stage-storyboard-vertical-short-normalize-v1", "stage-storyboard-horizontal-long-normalize-v1":
+		removeImportedRawRequired(schema, "shotId", "sceneKey")
+	}
+	packageValue.OutputContract.SchemaVersion = importedSkillRawSchemaVersion
+	packageValue.OutputContract.Schema = schema
+	return ValidateInvocableSkillPackage(packageValue)
+}
+
+func removeImportedRawRequired(value any, names ...string) {
+	remove := map[string]bool{}
+	for _, name := range names {
+		remove[name] = true
+	}
+	switch item := value.(type) {
+	case map[string]any:
+		if required, ok := item["required"].([]any); ok {
+			kept := required[:0]
+			for _, field := range required {
+				name, _ := field.(string)
+				if !remove[name] {
+					kept = append(kept, field)
+				}
+			}
+			item["required"] = kept
+		}
+		for _, child := range item {
+			removeImportedRawRequired(child, names...)
+		}
+	case []any:
+		for _, child := range item {
+			removeImportedRawRequired(child, names...)
+		}
+	}
+}
+
+func importedSkillRawSchemaHash(schema map[string]any) string {
+	raw, _, err := canonicalJSONObject(schema)
+	if err != nil {
+		return ""
+	}
+	digest := sha256.Sum256(raw)
+	return "sha256:" + hex.EncodeToString(digest[:])
 }
 
 func nextImportedSkillVersion(versions []model.SkillVersion) string {

@@ -161,12 +161,17 @@ func executeSkillTrial(executor AgentRunExecutor, skill model.SkillDefinition, v
 			report.add("output_payload", output.validationError.Error(), itemID)
 			continue
 		}
+		appendSkillSchemaIssues(output.raw, packageValue.OutputContract, &report)
 		converted, itemDiff, convertErr := ConvertSkillStageOutput(template, output.payload)
 		if convertErr != nil {
 			report.add("fixed_adapter", "固定转换失败："+convertErr.Error(), itemID)
 			continue
 		}
-		appendSkillSchemaIssues(converted, packageValue.OutputContract, &report)
+		standardSchema, schemaErr := ResolveArtifactSchema(template.OutputType, coreArtifactSchemaVersion)
+		if schemaErr != nil || ValidateArtifactPayload(standardSchema, converted) != nil {
+			report.add("output_schema", "固定转换产物不符合标准 Core Schema", itemID)
+			continue
+		}
 		var payload map[string]any
 		_ = json.Unmarshal(converted, &payload)
 		standardOutputs = append(standardOutputs, map[string]any{"bindingName": output.bindingName, "ordinal": output.ordinal, "payload": payload})

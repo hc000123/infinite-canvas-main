@@ -135,6 +135,8 @@ type importedSkillStageMetadata struct {
 	StageKey             string             `json:"stageKey"`
 	StageTemplateVersion string             `json:"stageTemplateVersion"`
 	FixedAdapter         WorkflowAdapterRef `json:"fixedAdapter"`
+	RawSchemaVersion     string             `json:"rawSchemaVersion"`
+	RawSchemaContentHash string             `json:"rawSchemaContentHash"`
 }
 
 func ResolveImportedSkillStageSnapshot(version model.SkillVersion, frozenPackages ...SkillPackage) (SkillStageTemplate, error) {
@@ -142,7 +144,7 @@ func ResolveImportedSkillStageSnapshot(version model.SkillVersion, frozenPackage
 		return SkillStageTemplate{}, safeMessageError{message: "Skill 版本不是文件夹导入快照"}
 	}
 	var snapshot importedSkillStageMetadata
-	if strings.TrimSpace(version.ImportMetadataJSON) == "" || json.Unmarshal([]byte(version.ImportMetadataJSON), &snapshot) != nil || strings.TrimSpace(snapshot.StageKey) == "" || strings.TrimSpace(snapshot.StageTemplateVersion) == "" || strings.TrimSpace(snapshot.FixedAdapter.AdapterID) == "" || strings.TrimSpace(snapshot.FixedAdapter.AdapterVersion) == "" || strings.TrimSpace(snapshot.FixedAdapter.TransformKind) == "" || strings.TrimSpace(snapshot.FixedAdapter.ContentHash) == "" {
+	if strings.TrimSpace(version.ImportMetadataJSON) == "" || json.Unmarshal([]byte(version.ImportMetadataJSON), &snapshot) != nil || strings.TrimSpace(snapshot.StageKey) == "" || strings.TrimSpace(snapshot.StageTemplateVersion) == "" || strings.TrimSpace(snapshot.FixedAdapter.AdapterID) == "" || strings.TrimSpace(snapshot.FixedAdapter.AdapterVersion) == "" || strings.TrimSpace(snapshot.FixedAdapter.TransformKind) == "" || strings.TrimSpace(snapshot.FixedAdapter.ContentHash) == "" || snapshot.RawSchemaVersion != importedSkillRawSchemaVersion || snapshot.RawSchemaContentHash == "" {
 		return SkillStageTemplate{}, safeMessageError{message: "Skill 导入阶段快照缺失或损坏"}
 	}
 	template, err := resolveSkillStageTemplateVersion(snapshot.StageKey, snapshot.StageTemplateVersion)
@@ -167,6 +169,9 @@ func ResolveImportedSkillStageSnapshot(version model.SkillVersion, frozenPackage
 	}
 	if err != nil {
 		return SkillStageTemplate{}, err
+	}
+	if packageValue.OutputContract.SchemaVersion != snapshot.RawSchemaVersion || importedSkillRawSchemaHash(packageValue.OutputContract.Schema) != snapshot.RawSchemaContentHash {
+		return SkillStageTemplate{}, safeMessageError{message: "Skill 冻结 raw Schema 版本或哈希已失效"}
 	}
 	if !importedSkillStageMatchesPackage(template, packageValue) {
 		return SkillStageTemplate{}, safeMessageError{message: "Skill 导入阶段快照与冻结 SkillPackage 不一致"}
