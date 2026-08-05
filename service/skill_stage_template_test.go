@@ -1,6 +1,9 @@
 package service
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestSkillStageTemplatesBuildInvocablePackages(t *testing.T) {
 	setupInvocationServiceTest(t)
@@ -28,6 +31,13 @@ func TestSkillStageTemplatesBuildInvocablePackages(t *testing.T) {
 			}
 			if item.OutputType != want[item.Key] {
 				t.Fatalf("template=%+v wantOutput=%s", item, want[item.Key])
+			}
+			encoded, _ := json.Marshal(item)
+			var snapshot map[string]any
+			_ = json.Unmarshal(encoded, &snapshot)
+			fixedAdapter, _ := snapshot["fixedAdapter"].(map[string]any)
+			if snapshot["templateVersion"] != "1.0.0" || fixedAdapter["contentHash"] == "" {
+				t.Fatalf("template snapshot=%s", encoded)
 			}
 			pkg, err := BuildImportedSkillPackage(item.Key, map[string]string{"SKILL.md": "# Test\n\nPreserve source facts."})
 			if err != nil {

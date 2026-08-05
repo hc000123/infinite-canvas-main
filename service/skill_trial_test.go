@@ -44,6 +44,68 @@ func TestTrialSkillRunsWithoutWorkflowAndPersistsRawAndStandardResults(t *testin
 	}
 }
 
+func TestTrialImportedSkillUsesFrozenStageSnapshotAfterDefinitionChanges(t *testing.T) {
+	setupInvocationServiceTest(t)
+	snapshot, _ := ParseSkillFolder("剧本优化", []SkillFolderFile{{Path: "SKILL.md", Data: []byte("# 保留台词")}})
+	created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: WorkflowSkillStageScript, Snapshot: snapshot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created.Skill.StageKey = WorkflowSkillStageArt
+	if err := repository.SaveSkillDefinition(created.Skill); err != nil {
+		t.Fatal(err)
+	}
+	restore := useSkillEvaluationExecutor(t, fakeSkillExecutor{output: `{"productionScript":"  历史版本  "}`})
+	defer restore()
+	result, err := TrialSkill("admin-1", created.Version.ID, SkillTrialInput{InputText: "原稿", ConfirmAPICost: true})
+	if err != nil || result.StageKey != WorkflowSkillStageScript || result.Evaluation.Status != "passed" || result.Standard["productionScript"] != "历史版本" {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+}
+
+func TestTrialImportedSkillRejectsDamagedOrMismatchedStageSnapshot(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		mutate func(model.SkillVersion) model.SkillVersion
+		want   string
+	}{
+		{name: "damaged metadata", want: "快照", mutate: func(version model.SkillVersion) model.SkillVersion {
+			version.ImportMetadataJSON = `{`
+			return version
+		}},
+		{name: "adapter hash mismatch", want: "冻结", mutate: func(version model.SkillVersion) model.SkillVersion {
+			var metadata map[string]any
+			_ = json.Unmarshal([]byte(version.ImportMetadataJSON), &metadata)
+			adapter, _ := metadata["fixedAdapter"].(map[string]any)
+			if adapter == nil {
+				adapter = map[string]any{}
+				metadata["fixedAdapter"] = adapter
+			}
+			adapter["contentHash"] = "sha256:mismatch"
+			encoded, _ := json.Marshal(metadata)
+			version.ImportMetadataJSON = string(encoded)
+			return version
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			setupInvocationServiceTest(t)
+			snapshot, _ := ParseSkillFolder("剧本优化", []SkillFolderFile{{Path: "SKILL.md", Data: []byte("# 保留台词")}})
+			created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: WorkflowSkillStageScript, Snapshot: snapshot})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := repository.SaveSkillVersion(test.mutate(created.Version)); err != nil {
+				t.Fatal(err)
+			}
+			restore := useSkillEvaluationExecutor(t, fakeSkillExecutor{output: `{"productionScript":"结果"}`})
+			defer restore()
+			if _, err := TrialSkill("admin-1", created.Version.ID, SkillTrialInput{InputText: "原稿", ConfirmAPICost: true}); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("err=%v", err)
+			}
+		})
+	}
+}
+
 func TestTrialImageSkillUsesImageRequestAndConvertsEveryOutput(t *testing.T) {
 	setupInvocationServiceTest(t)
 	setupImageInvocationSettings(t, true)

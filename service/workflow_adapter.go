@@ -169,10 +169,13 @@ func ConvertSkillStageOutput(template SkillStageTemplate, structured map[string]
 }
 
 func ResolveWorkflowAdapter(ref WorkflowAdapterRef) (WorkflowAdapterDefinition, error) {
-	id, version := strings.ToLower(strings.TrimSpace(ref.AdapterID)), strings.TrimSpace(ref.AdapterVersion)
+	id, version, contentHash := strings.ToLower(strings.TrimSpace(ref.AdapterID)), strings.TrimSpace(ref.AdapterVersion), strings.TrimSpace(ref.ContentHash)
 	for _, definition := range registeredWorkflowAdapters() {
 		if definition.ID != id || definition.Version != version {
 			continue
+		}
+		if contentHash != "" && definition.ContentHash != contentHash {
+			return WorkflowAdapterDefinition{}, safeMessageError{message: "Workflow Adapter 冻结哈希不匹配"}
 		}
 		if _, err := ResolveArtifactSchema(definition.Output.ArtifactType, definition.Output.SchemaVersion); err != nil {
 			return WorkflowAdapterDefinition{}, safeMessageError{message: "Workflow Adapter 输出 Schema 不可用"}

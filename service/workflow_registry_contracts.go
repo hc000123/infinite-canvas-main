@@ -43,6 +43,7 @@ type WorkflowNodeSpec struct {
 type WorkflowAdapterRef struct {
 	AdapterID      string `json:"adapterId"`
 	AdapterVersion string `json:"adapterVersion"`
+	ContentHash    string `json:"contentHash,omitempty"`
 }
 
 type WorkflowSkillBinding struct {

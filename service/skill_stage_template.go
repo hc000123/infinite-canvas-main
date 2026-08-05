@@ -1,18 +1,26 @@
 package service
 
-import "strings"
+import (
+	"encoding/json"
+	"strings"
+
+	"github.com/basketikun/infinite-canvas/model"
+)
+
+const currentSkillStageTemplateVersion = "1.0.0"
 
 type SkillStageTemplate struct {
-	Key          string             `json:"key"`
-	Label        string             `json:"label"`
-	Description  string             `json:"description"`
-	ExecutorKind string             `json:"executorKind"`
-	Capability   string             `json:"capability"`
-	InputTypes   []string           `json:"inputTypes"`
-	OutputType   string             `json:"outputType"`
-	OutputMin    int                `json:"outputMin"`
-	OutputMax    int                `json:"outputMax"`
-	FixedAdapter WorkflowAdapterRef `json:"fixedAdapter"`
+	Key             string             `json:"key"`
+	TemplateVersion string             `json:"templateVersion"`
+	Label           string             `json:"label"`
+	Description     string             `json:"description"`
+	ExecutorKind    string             `json:"executorKind"`
+	Capability      string             `json:"capability"`
+	InputTypes      []string           `json:"inputTypes"`
+	OutputType      string             `json:"outputType"`
+	OutputMin       int                `json:"outputMin"`
+	OutputMax       int                `json:"outputMax"`
+	FixedAdapter    WorkflowAdapterRef `json:"fixedAdapter"`
 }
 
 var workflowStageTemplateLabels = map[string][2]string{
@@ -34,7 +42,7 @@ func ListSkillStageTemplates() []SkillStageTemplate {
 			outputMax = 300
 		}
 		result = append(result, SkillStageTemplate{
-			Key: key, Label: label[0], Description: label[1], ExecutorKind: "text_model",
+			Key: key, TemplateVersion: currentSkillStageTemplateVersion, Label: label[0], Description: label[1], ExecutorKind: "text_model",
 			Capability: "workflow.stage." + key, InputTypes: append([]string(nil), artifacts.Inputs...), OutputType: artifacts.Outputs[0], OutputMin: 1, OutputMax: outputMax,
 			FixedAdapter: WorkflowAdapterRef{AdapterID: "stage-" + key + "-normalize", AdapterVersion: "1.0.0"},
 		})
@@ -49,10 +57,16 @@ func ListSkillStageTemplates() []SkillStageTemplate {
 			inputs = append(inputs, input.ArtifactType)
 		}
 		result = append(result, SkillStageTemplate{
-			Key: seed.Key, Label: seed.Name, Description: seed.Summary, ExecutorKind: executorKind,
+			Key: seed.Key, TemplateVersion: currentSkillStageTemplateVersion, Label: seed.Name, Description: seed.Summary, ExecutorKind: executorKind,
 			Capability: seed.Capabilities[0], InputTypes: inputs, OutputType: seed.Output.ArtifactType, OutputMin: seed.Output.Min, OutputMax: seed.Output.Max,
 			FixedAdapter: WorkflowAdapterRef{AdapterID: "stage-" + seed.Key + "-normalize", AdapterVersion: "1.0.0"},
 		})
+	}
+	for index := range result {
+		definition, err := normalizeWorkflowAdapterDefinition(stageWorkflowAdapter(result[index]))
+		if err == nil {
+			result[index].FixedAdapter.ContentHash = definition.ContentHash
+		}
 	}
 	return result
 }
@@ -65,6 +79,45 @@ func ResolveSkillStageTemplate(key string) (SkillStageTemplate, error) {
 		}
 	}
 	return SkillStageTemplate{}, safeMessageError{message: "Skill 所属阶段不存在"}
+}
+
+func resolveSkillStageTemplateVersion(key, version string) (SkillStageTemplate, error) {
+	key, version = strings.ToLower(strings.TrimSpace(key)), strings.TrimSpace(version)
+	for _, item := range ListSkillStageTemplates() {
+		if item.Key == key && item.TemplateVersion == version {
+			return item, nil
+		}
+	}
+	return SkillStageTemplate{}, safeMessageError{message: "Skill 冻结阶段模板精确版本未注册"}
+}
+
+type importedSkillStageMetadata struct {
+	StageKey             string             `json:"stageKey"`
+	StageTemplateVersion string             `json:"stageTemplateVersion"`
+	FixedAdapter         WorkflowAdapterRef `json:"fixedAdapter"`
+}
+
+func ResolveImportedSkillStageSnapshot(version model.SkillVersion) (SkillStageTemplate, error) {
+	if version.SourceKind != "folder_import" {
+		return SkillStageTemplate{}, safeMessageError{message: "Skill 版本不是文件夹导入快照"}
+	}
+	var snapshot importedSkillStageMetadata
+	if strings.TrimSpace(version.ImportMetadataJSON) == "" || json.Unmarshal([]byte(version.ImportMetadataJSON), &snapshot) != nil || strings.TrimSpace(snapshot.StageKey) == "" || strings.TrimSpace(snapshot.StageTemplateVersion) == "" || strings.TrimSpace(snapshot.FixedAdapter.AdapterID) == "" || strings.TrimSpace(snapshot.FixedAdapter.AdapterVersion) == "" || strings.TrimSpace(snapshot.FixedAdapter.ContentHash) == "" {
+		return SkillStageTemplate{}, safeMessageError{message: "Skill 导入阶段快照缺失或损坏"}
+	}
+	template, err := resolveSkillStageTemplateVersion(snapshot.StageKey, snapshot.StageTemplateVersion)
+	if err != nil {
+		return SkillStageTemplate{}, err
+	}
+	if template.FixedAdapter.AdapterID != snapshot.FixedAdapter.AdapterID || template.FixedAdapter.AdapterVersion != snapshot.FixedAdapter.AdapterVersion {
+		return SkillStageTemplate{}, safeMessageError{message: "Skill 冻结 Adapter 与阶段模板不匹配"}
+	}
+	definition, err := ResolveWorkflowAdapter(snapshot.FixedAdapter)
+	if err != nil || definition.ContentHash != snapshot.FixedAdapter.ContentHash {
+		return SkillStageTemplate{}, safeMessageError{message: "Skill 冻结 Adapter 精确版本或哈希已失效"}
+	}
+	template.FixedAdapter = snapshot.FixedAdapter
+	return template, nil
 }
 
 func BuildImportedSkillPackage(key string, files map[string]string) (SkillPackage, error) {

@@ -277,7 +277,7 @@ func ImportManagedSkillFolder(userID string, isAdmin bool, input SkillFolderImpo
 		ID: newID("skill"), Name: name, Summary: summary, OwnerType: input.OwnerType, OwnerUserID: ownerUserID,
 		OwnerProjectID: projectID, StageKey: template.Key, Enabled: true, CreatedAt: stamp, UpdatedAt: stamp,
 	}
-	version := importedSkillVersion(newID("skillversion"), skill.ID, versionName, userID, stamp, packageValue, input.Snapshot)
+	version := importedSkillVersion(newID("skillversion"), skill.ID, versionName, userID, stamp, packageValue, input.Snapshot, template)
 	if err := repository.CreateSkillAggregate(skill, version); err != nil {
 		return ResolvedSkill{}, err
 	}
@@ -319,12 +319,16 @@ func ImportOwnedSkillFolderVersion(userID string, isAdmin bool, skillID, version
 			return model.SkillVersion{}, safeMessageError{message: "Skill 版本号已存在"}
 		}
 	}
-	packageValue, err := BuildImportedSkillPackage(skill.StageKey, snapshot.TextFiles)
+	template, err := ResolveSkillStageTemplate(skill.StageKey)
+	if err != nil {
+		return model.SkillVersion{}, err
+	}
+	packageValue, err := BuildImportedSkillPackage(template.Key, snapshot.TextFiles)
 	if err != nil {
 		return model.SkillVersion{}, err
 	}
 	stamp := now()
-	version := importedSkillVersion(newID("skillversion"), skill.ID, versionName, userID, stamp, packageValue, snapshot)
+	version := importedSkillVersion(newID("skillversion"), skill.ID, versionName, userID, stamp, packageValue, snapshot, template)
 	if err := repository.CreateSkillVersion(version); err != nil {
 		return model.SkillVersion{}, err
 	}
@@ -334,10 +338,16 @@ func ImportOwnedSkillFolderVersion(userID string, isAdmin bool, skillID, version
 	return version, nil
 }
 
-func importedSkillVersion(id, skillID, versionName, userID, stamp string, packageValue SkillPackage, snapshot SkillFolderSnapshot) model.SkillVersion {
+func importedSkillVersion(id, skillID, versionName, userID, stamp string, packageValue SkillPackage, snapshot SkillFolderSnapshot, template SkillStageTemplate) model.SkillVersion {
 	version := skillVersionFromPackage(id, skillID, versionName, userID, stamp, packageValue)
 	fileIndex, _ := json.Marshal(snapshot.FileIndex)
-	metadata, _ := json.Marshal(map[string]any{"folderName": snapshot.FolderName, "metadata": snapshot.Metadata})
+	metadata, _ := json.Marshal(struct {
+		FolderName           string              `json:"folderName"`
+		Metadata             SkillFolderMetadata `json:"metadata"`
+		StageKey             string              `json:"stageKey"`
+		StageTemplateVersion string              `json:"stageTemplateVersion"`
+		FixedAdapter         WorkflowAdapterRef  `json:"fixedAdapter"`
+	}{snapshot.FolderName, snapshot.Metadata, template.Key, template.TemplateVersion, template.FixedAdapter})
 	version.SourceKind = "folder_import"
 	version.SourceHash = snapshot.SourceHash
 	version.SourceArchiveBlob = append([]byte(nil), snapshot.Archive...)
