@@ -139,12 +139,15 @@
 
 - 管理后台和项目 Skill 中心都可直接导入一个完整 Skill 文件夹；导入时只选所属阶段，系统自动生成 Capability、Artifact 输入 / 输出、Schema、执行器和固定转换契约，源文件以只读快照保存并可逐个浏览。
 - 选择或拖入完整目录后，确认界面会从根目录 `SKILL.md` frontmatter 读取名称、说明和版本；新 Skill 可在提交前修改这三项，缺少时默认使用文件夹名和 `1.0.0`。
+- frontmatter 在前后端使用同一方言：支持 UTF-8 BOM、LF / CRLF、分隔线尾部空白及 `...` YAML 结束符；已声明但未闭合或 YAML 无效时会明确拒绝。源文件预览接口禁止 MIME 嗅探、缓存和脚本执行。
 - 载入新版本时仅确认版本号，不修改 Definition 名称、说明或阶段；界面会以当前选中版本为基准列出新增、修改和删除文件，全部未变时明确提示。
 - 读取上一版本快照和计算 SHA-256 差异期间会暂停提交；当上一版本不是文件夹导入、没有可比对快照或差异计算失败时，界面改为警告但不阻止导入；最终内容重复仍由服务端权威校验。
 - 确认界面清空新 Skill 说明时会覆盖 frontmatter 说明为空；清空首版版本号时使用 `1.0.0`，清空新版本版本号时忽略 frontmatter 并自动增加补丁版。
 - 文件夹拖放会递归保留顶层目录和所有相对路径；拖入普通单文件或根目录缺少 `SKILL.md` 时会直接提示，文件内容仅用于预览和上传，不执行脚本。
 - 同一 Definition 可继续载入新文件夹版本；通过独立试跑后才可设为可用、推荐，并可停用不再使用的 Definition。项目级 Skill 只对所属项目可见，管理员可管理系统 Skill。
+- Skill Definition 以 ID 为身份，同一所有者可导入多个同名独立 Skill；同一 Definition 内的文件夹内容哈希由数据库唯一约束权威去重。Definition、Version 和导入审计同事务落库，失败不会留下幽灵记录。
 - 独立试跑不需要 Workflow Run ID，结果分别保存并展示“模型原始输出 / 标准产物 / 转换差异 / 质量问题”。文本 Skill 使用文本执行器；图片 Skill 使用正式 `/images/generations` 请求和输出映射，可直接粘贴资产 Brief，也可设置 `n / size / quality / background / output_format` 参数。
+- 独立试跑与正式 Invocation 共用不可变安全约束、冻结 Schema、binding 数量和 raw / Core 合同；文本与图片输入都标记为不可信业务数据，执行超时会传入 executor context。项目页刷新后从 Version 安全摘要恢复“同内容已通过”状态，不暴露管理端评测明细。
 - 文件夹导入版本的模型输出先按冻结 raw `0.1.0` 合同校验，再强制执行同一冻结 Adapter，最后按 Core `1.0.0` Schema 和业务门验证。Workflow、画布对话、生图和直接 API 不能绕过该链路；原始 payload、Adapter 版本 / 哈希和保真 diff 保存在标准 Artifact 的 Skill 命名空间扩展中，不作为下游 binding。显式系统转换节点遇到同一已应用 Adapter 的标准 Artifact 时复用原 Artifact ID。
 - 每个内容 Skill 后都串联不可编辑、不可删除的系统转换规则。转换规则只裁剪剧本外层空白，或为资产 / 分镜补稳定 ID，不摘要、润色、改写内容；当 Skill 输出多个 Artifact 时会逐个一对一转换并保留独立血缘。
 - 系统标准 Workflow 升级为不可变 `2.4.0`：12 个内容 Skill 节点 + 12 个锁定转换节点。编辑器将转换节点折叠为“系统转换规则”，制作人员只选择内容 Skill 版本。
