@@ -9,8 +9,8 @@ import (
 
 const (
 	systemProductionWorkflowID        = "workflow-system-standard-production"
-	systemProductionWorkflowVersionID = "workflow-version-system-standard-production-2.3.0"
-	systemProductionWorkflowVersion   = "2.3.0"
+	systemProductionWorkflowVersionID = "workflow-version-system-standard-production-2.4.0"
+	systemProductionWorkflowVersion   = "2.4.0"
 )
 
 func EnsureWorkflowSeeds() error {
@@ -52,48 +52,62 @@ func EnsureWorkflowSeeds() error {
 }
 
 func systemProductionWorkflowPackage() WorkflowPackage {
-	return WorkflowPackage{InputArtifactTypes: []string{"source_text"}, Nodes: []WorkflowNodeSpec{
-		manualSkillWorkflowNode("script", "剧本整理", WorkflowSkillStageScript, "production_script", []WorkflowNodeInputBinding{
-			workflowRootBinding("source_text", "source_text"),
-		}),
-		exactSkillWorkflowNode("classify", "内容分类", "content-classifier", "content_profile", []WorkflowNodeInputBinding{
-			workflowOutputBinding("production_script", "production_script", "script"),
-		}),
-		skillWorkflowNode("art", "资产提取", WorkflowSkillStageArt, "asset_catalog", []WorkflowNodeInputBinding{
-			workflowOutputBinding("production_script", "production_script", "script"),
-		}),
-		exactSkillWorkflowNode("character_brief", "角色资产 Brief", "asset-brief-character", "asset_brief", []WorkflowNodeInputBinding{
-			workflowOutputBinding("asset_catalog", "asset_catalog", "art"),
-		}),
-		exactSkillWorkflowNode("scene_brief", "场景资产 Brief", "asset-brief-scene", "asset_brief", []WorkflowNodeInputBinding{
-			workflowOutputBinding("asset_catalog", "asset_catalog", "art"),
-		}),
-		exactSkillWorkflowNode("prop_brief", "道具资产 Brief", "asset-brief-prop", "asset_brief", []WorkflowNodeInputBinding{
-			workflowOutputBinding("asset_catalog", "asset_catalog", "art"),
-		}),
-		routedSkillWorkflowNode("storyboard", "分镜制作", "storyboard.compose", []string{"skill-system-storyboard-vertical-short", "skill-system-storyboard-horizontal-long"}, "storyboard_package", []WorkflowNodeInputBinding{
-			workflowOutputBinding("production_script", "production_script", "script"),
-			workflowOutputBinding("asset_catalog", "asset_catalog", "art"),
-			workflowOutputBinding("content_profile", "content_profile", "classify"),
-		}),
-		exactSkillWorkflowNode("character_rendition", "角色资产成图", "asset-rendition-character", "asset_rendition", []WorkflowNodeInputBinding{
-			workflowOutputBinding("asset_brief", "asset_brief", "character_brief"),
-		}),
-		exactSkillWorkflowNode("scene_rendition", "场景资产成图", "asset-rendition-scene", "asset_rendition", []WorkflowNodeInputBinding{
-			workflowOutputBinding("asset_brief", "asset_brief", "scene_brief"),
-		}),
-		exactSkillWorkflowNode("prop_rendition", "道具资产成图", "asset-rendition-prop", "asset_rendition", []WorkflowNodeInputBinding{
-			workflowOutputBinding("asset_brief", "asset_brief", "prop_brief"),
-		}),
-		skillWorkflowNode("video", "视频提示词", WorkflowSkillStageVideo, "video_prompt_package", []WorkflowNodeInputBinding{
-			workflowOutputBinding("storyboard_package", "storyboard_package", "storyboard"),
-			workflowOutputBinding("asset_catalog", "asset_catalog", "art"),
-			workflowMultiOutputBinding("asset_rendition", "asset_rendition", []string{"character_rendition", "prop_rendition", "scene_rendition"}),
-		}),
-		skillWorkflowNode("delivery", "交付审计", WorkflowSkillStageDelivery, "delivery_report", []WorkflowNodeInputBinding{
-			workflowOutputBinding("video_prompt_package", "video_prompt_package", "video"),
-		}),
-	}}
+	nodes := make([]WorkflowNodeSpec, 0, 24)
+	add := func(content WorkflowNodeSpec, stageKey string) string {
+		adapterKey := content.NodeKey + "_system"
+		nodes = append(nodes, content, stageAdapterWorkflowNode(adapterKey, stageKey, content.OutputArtifactType, content.NodeKey))
+		return adapterKey
+	}
+	script := add(manualSkillWorkflowNode("script", "剧本整理", WorkflowSkillStageScript, "production_script", []WorkflowNodeInputBinding{
+		workflowRootBinding("source_text", "source_text"),
+	}), WorkflowSkillStageScript)
+	classify := add(exactSkillWorkflowNode("classify", "内容分类", "content-classifier", "content_profile", []WorkflowNodeInputBinding{
+		workflowOutputBinding("production_script", "production_script", script),
+	}), "content-classifier")
+	art := add(skillWorkflowNode("art", "资产提取", WorkflowSkillStageArt, "asset_catalog", []WorkflowNodeInputBinding{
+		workflowOutputBinding("production_script", "production_script", script),
+	}), WorkflowSkillStageArt)
+	characterBrief := add(exactSkillWorkflowNode("character_brief", "角色资产 Brief", "asset-brief-character", "asset_brief", []WorkflowNodeInputBinding{
+		workflowOutputBinding("asset_catalog", "asset_catalog", art),
+	}), "asset-brief-character")
+	sceneBrief := add(exactSkillWorkflowNode("scene_brief", "场景资产 Brief", "asset-brief-scene", "asset_brief", []WorkflowNodeInputBinding{
+		workflowOutputBinding("asset_catalog", "asset_catalog", art),
+	}), "asset-brief-scene")
+	propBrief := add(exactSkillWorkflowNode("prop_brief", "道具资产 Brief", "asset-brief-prop", "asset_brief", []WorkflowNodeInputBinding{
+		workflowOutputBinding("asset_catalog", "asset_catalog", art),
+	}), "asset-brief-prop")
+	storyboard := add(routedSkillWorkflowNode("storyboard", "分镜制作", "storyboard.compose", []string{"skill-system-storyboard-vertical-short", "skill-system-storyboard-horizontal-long"}, "storyboard_package", []WorkflowNodeInputBinding{
+		workflowOutputBinding("production_script", "production_script", script),
+		workflowOutputBinding("asset_catalog", "asset_catalog", art),
+		workflowOutputBinding("content_profile", "content_profile", classify),
+	}), WorkflowSkillStageStoryboard)
+	characterRendition := add(exactSkillWorkflowNode("character_rendition", "角色资产成图", "asset-rendition-character", "asset_rendition", []WorkflowNodeInputBinding{
+		workflowOutputBinding("asset_brief", "asset_brief", characterBrief),
+	}), "asset-rendition-character")
+	sceneRendition := add(exactSkillWorkflowNode("scene_rendition", "场景资产成图", "asset-rendition-scene", "asset_rendition", []WorkflowNodeInputBinding{
+		workflowOutputBinding("asset_brief", "asset_brief", sceneBrief),
+	}), "asset-rendition-scene")
+	propRendition := add(exactSkillWorkflowNode("prop_rendition", "道具资产成图", "asset-rendition-prop", "asset_rendition", []WorkflowNodeInputBinding{
+		workflowOutputBinding("asset_brief", "asset_brief", propBrief),
+	}), "asset-rendition-prop")
+	video := add(skillWorkflowNode("video", "视频提示词", WorkflowSkillStageVideo, "video_prompt_package", []WorkflowNodeInputBinding{
+		workflowOutputBinding("storyboard_package", "storyboard_package", storyboard),
+		workflowOutputBinding("asset_catalog", "asset_catalog", art),
+		workflowMultiOutputBinding("asset_rendition", "asset_rendition", []string{characterRendition, propRendition, sceneRendition}),
+	}), WorkflowSkillStageVideo)
+	add(skillWorkflowNode("delivery", "交付审计", WorkflowSkillStageDelivery, "delivery_report", []WorkflowNodeInputBinding{
+		workflowOutputBinding("video_prompt_package", "video_prompt_package", video),
+	}), WorkflowSkillStageDelivery)
+	return WorkflowPackage{InputArtifactTypes: []string{"source_text"}, Nodes: nodes}
+}
+
+func stageAdapterWorkflowNode(key, stageKey, artifactType, fromNode string) WorkflowNodeSpec {
+	template, _ := ResolveSkillStageTemplate(stageKey)
+	return WorkflowNodeSpec{
+		NodeKey: key, Name: "系统转换规则", ExecutorType: WorkflowExecutorAdapter, AdapterRef: &template.FixedAdapter,
+		InputBindings: []WorkflowNodeInputBinding{workflowOutputBinding(artifactType, artifactType, fromNode)}, OutputArtifactType: artifactType,
+		RetryPolicy: WorkflowRetryPolicy{MaxAttempts: 1},
+	}
 }
 
 func manualSkillWorkflowNode(key, name, stageKey, outputType string, inputs []WorkflowNodeInputBinding) WorkflowNodeSpec {

@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { App, Button, Checkbox, Empty, Input, InputNumber, Select, Skeleton, Space, Tag, Tooltip } from "antd";
-import { Bot, CheckCircle2, GitFork, Plus, Save, Send, Trash2, Wrench } from "lucide-react";
+import { Bot, CheckCircle2, GitFork, LockKeyhole, Plus, Save, Send, Trash2, Wrench } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import type { SkillOption } from "@/services/api/admin-skills";
@@ -110,10 +110,10 @@ export function WorkflowVersionEditor({ item, projectId, skillOptions, onVersion
             <div className="space-y-5 p-5">
                 <div className="rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3">
                     <div className="flex items-center justify-between gap-3"><div><div className="text-sm font-semibold">拓扑泳道</div><div className="mt-1 text-xs text-[var(--studio-text-muted)]">同一列可并行，后一列等待依赖的已批准 Artifact。</div></div><Tag icon={<GitFork className="size-3.5" />}>{editor.nodes.length} 节点</Tag></div>
-                    <div className="mt-3 flex min-w-0 gap-2 overflow-x-auto pb-1">{lanes.map((lane, index) => <div key={index} className="min-w-36 flex-1 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-2"><div className="text-[10px] font-semibold tracking-[0.14em] text-[var(--studio-text-muted)]">LANE {index + 1}</div><div className="mt-2 space-y-1.5">{lane.map((node) => <div key={node.nodeKey} className="flex items-center gap-2 rounded-md bg-[var(--studio-active-bg)] px-2 py-1.5 text-xs"><span className="grid size-5 place-items-center rounded bg-[var(--studio-accent-soft)] text-[var(--studio-accent)]">{node.executorType === "agent" ? <Bot className="size-3" /> : <Wrench className="size-3" />}</span><span className="truncate">{node.name}</span></div>)}</div></div>)}</div>
+                    <div className="mt-3 flex min-w-0 gap-2 overflow-x-auto pb-1">{lanes.map((lane, index) => <div key={index} className="min-w-36 flex-1 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-2"><div className="text-[10px] font-semibold tracking-[0.14em] text-[var(--studio-text-muted)]">LANE {index + 1}</div><div className="mt-2 space-y-1.5">{lane.map((node) => <div key={node.nodeKey} className="flex items-center gap-2 rounded-md bg-[var(--studio-active-bg)] px-2 py-1.5 text-xs"><span className="grid size-5 place-items-center rounded bg-[var(--studio-accent-soft)] text-[var(--studio-accent)]">{node.executorType === "agent" ? <Bot className="size-3" /> : node.executorType === "adapter" ? <LockKeyhole className="size-3" /> : <Wrench className="size-3" />}</span><span className="truncate">{node.name}</span></div>)}</div></div>)}</div>
                 </div>
 
-                <div className="space-y-3">{editor.nodes.map((node, index) => <WorkflowNodeEditor key={node.nodeKey} index={index} node={node} allNodes={editor.nodes} readOnly={readOnly || node.executorType === "agent"} skillOptions={skillOptions} onChange={(value) => updateNode(node.nodeKey, value)} onRemove={() => setPackage(removeWorkflowNode(editor, node.nodeKey))} />)}</div>
+                <div className="space-y-3">{editor.nodes.map((node, index) => <WorkflowNodeEditor key={node.nodeKey} index={index} node={node} allNodes={editor.nodes} readOnly={readOnly || node.executorType === "agent" || node.executorType === "adapter"} skillOptions={skillOptions} onChange={(value) => updateNode(node.nodeKey, value)} onRemove={() => setPackage(removeWorkflowNode(editor, node.nodeKey))} />)}</div>
                 {!readOnly ? <Button icon={<Wrench className="size-4" />} onClick={addNode}>添加 Skill 节点</Button> : null}
                 {isSystem ? <div className="rounded-lg border border-dashed border-[var(--studio-border-strong)] p-4 text-sm text-[var(--studio-text-secondary)]">系统 Workflow 只读；复制到项目后才能自由替换、增删和组合节点。</div> : null}
                 {busy ? <div className="text-xs text-[var(--studio-text-muted)]">正在同步 Workflow Registry…</div> : null}
@@ -123,6 +123,7 @@ export function WorkflowVersionEditor({ item, projectId, skillOptions, onVersion
 }
 
 function WorkflowNodeEditor({ index, node, allNodes, readOnly, skillOptions, onChange, onRemove }: { index: number; node: WorkflowNodeSpec; allNodes: WorkflowNodeSpec[]; readOnly: boolean; skillOptions: SkillOption[]; onChange: (node: WorkflowNodeSpec) => void; onRemove: () => void }) {
+    if (node.executorType === "adapter") return <article className="flex items-center gap-3 rounded-lg border border-dashed border-[var(--studio-border-strong)] bg-[var(--studio-panel-muted-bg)] px-4 py-3"><div className="grid size-8 shrink-0 place-items-center rounded-md bg-[var(--studio-accent-soft)] text-[var(--studio-accent)]"><LockKeyhole className="size-4" /></div><div className="min-w-0 flex-1"><div className="text-sm font-semibold">系统转换规则</div><div className="mt-1 truncate text-xs text-[var(--studio-text-muted)]">固定步骤，不可替换或删除 · {node.adapterRef?.adapterId}@{node.adapterRef?.adapterVersion}</div></div><Tag>已锁定</Tag></article>;
     const dependencies = allNodes.filter((candidate) => candidate.nodeKey !== node.nodeKey);
     const update = (patch: Partial<WorkflowNodeSpec>) => onChange({ ...node, ...patch });
     const skillOptionsForSelect = skillOptions.map((option) => ({ value: option.skillVersionId, label: `${option.skillName} · v${option.version} · ${option.manifest.inputArtifactTypes.join("+") || "无输入"} → ${option.manifest.outputArtifactTypes.join("+") || "无输出"}` }));

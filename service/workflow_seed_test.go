@@ -10,8 +10,56 @@ import (
 	"github.com/basketikun/infinite-canvas/repository"
 )
 
-func TestSystemProductionWorkflowExecutesRoutedTwelveNodeProductionChain(t *testing.T) {
+func TestSystemProductionWorkflowExecutesRoutedProductionChain(t *testing.T) {
 	runSystemProductionWorkflowE2E(t)
+}
+
+func TestSystemProductionWorkflowLocksStageAdaptersAfterContentSkills(t *testing.T) {
+	pkg := systemProductionWorkflowPackage()
+	wantStages := map[string]string{
+		"script": WorkflowSkillStageScript, "classify": "content-classifier", "art": WorkflowSkillStageArt,
+		"character_brief": "asset-brief-character", "scene_brief": "asset-brief-scene", "prop_brief": "asset-brief-prop",
+		"storyboard": WorkflowSkillStageStoryboard, "character_rendition": "asset-rendition-character",
+		"scene_rendition": "asset-rendition-scene", "prop_rendition": "asset-rendition-prop",
+		"video": WorkflowSkillStageVideo, "delivery": WorkflowSkillStageDelivery,
+	}
+	if systemProductionWorkflowVersion != "2.4.0" || systemProductionWorkflowVersionID != "workflow-version-system-standard-production-2.4.0" {
+		t.Fatalf("version=%s id=%s", systemProductionWorkflowVersion, systemProductionWorkflowVersionID)
+	}
+	if len(pkg.Nodes) != len(wantStages)*2 {
+		t.Fatalf("nodes=%d", len(pkg.Nodes))
+	}
+	adapters := map[string]string{}
+	for index := 0; index < len(pkg.Nodes); index += 2 {
+		content, adapter := pkg.Nodes[index], pkg.Nodes[index+1]
+		stageKey, ok := wantStages[content.NodeKey]
+		if !ok || content.ExecutorType != WorkflowExecutorSkill || adapter.ExecutorType != WorkflowExecutorAdapter {
+			t.Fatalf("pair[%d]=%+v / %+v", index/2, content, adapter)
+		}
+		template, err := ResolveSkillStageTemplate(stageKey)
+		if err != nil || adapter.AdapterRef == nil || *adapter.AdapterRef != template.FixedAdapter {
+			t.Fatalf("adapter=%+v template=%+v err=%v", adapter, template, err)
+		}
+		if len(adapter.InputBindings) != 1 || adapter.InputBindings[0].FromNodeKey != content.NodeKey || adapter.OutputArtifactType != content.OutputArtifactType {
+			t.Fatalf("adapter wiring=%+v", adapter)
+		}
+		adapters[content.NodeKey] = adapter.NodeKey
+	}
+	for _, node := range pkg.Nodes {
+		if node.ExecutorType == WorkflowExecutorAdapter {
+			continue
+		}
+		for _, binding := range node.InputBindings {
+			if replacement := adapters[binding.FromNodeKey]; replacement != "" {
+				t.Fatalf("node=%s bypasses locked adapter %s via %s", node.NodeKey, replacement, binding.FromNodeKey)
+			}
+			for _, source := range binding.FromNodeKeys {
+				if replacement := adapters[source]; replacement != "" {
+					t.Fatalf("node=%s bypasses locked adapter %s via %s", node.NodeKey, replacement, source)
+				}
+			}
+		}
+	}
 }
 
 func runSystemProductionWorkflowE2E(t *testing.T) {
@@ -43,7 +91,7 @@ func runSystemProductionWorkflowE2E(t *testing.T) {
 	if err != nil || duplicate.Run.ID != preflight.Run.ID || duplicate.Revision.ID != preflight.Revision.ID {
 		t.Fatalf("idempotent preflight=%#v duplicate=%#v err=%v", preflight.Run, duplicate.Run, err)
 	}
-	if !preflight.Preview.Executable || preflight.Run.EstimatedCredits != 18 || len(preflight.Nodes) != 12 {
+	if !preflight.Preview.Executable || preflight.Run.EstimatedCredits != 18 || len(preflight.Nodes) != 24 {
 		t.Fatalf("preflight=%#v", preflight)
 	}
 	confirmed, err := ConfirmWorkflowExecution("user-1", preflight.Run.ID, WorkflowExecutionConfirmationInput{Revision: 1, Fingerprint: preflight.Run.ConfirmationFingerprint, RequirementCodes: preflight.ConfirmationRequirements})
@@ -90,9 +138,10 @@ func runSystemProductionWorkflowE2E(t *testing.T) {
 	invocationIDs := make([]string, 0, len(expected))
 	detail := confirmed
 	for index, want := range expected {
-		node := detail.Nodes[index]
+		contentIndex, adapterIndex := index*2, index*2+1
+		node := detail.Nodes[contentIndex]
 		if node.NodeKey != want.key || node.ExecutorType != want.executorType || node.AgentPlanID != "" {
-			t.Fatalf("node[%d]=%#v want=%#v", index, node, want)
+			t.Fatalf("node[%d]=%#v want=%#v", contentIndex, node, want)
 		}
 		invocationID := node.InvocationID
 		if invocationID == "" {
@@ -116,7 +165,7 @@ func runSystemProductionWorkflowE2E(t *testing.T) {
 			t.Fatal(err)
 		}
 		reviewState, err := ContinueWorkflowExecution("user-1", confirmed.Run.ID)
-		if err != nil || reviewState.Nodes[index].Status != model.WorkflowNodeExecutionNeedsReview {
+		if err != nil || reviewState.Nodes[contentIndex].Status != model.WorkflowNodeExecutionNeedsReview {
 			failedInvocation, _ := GetInvocationDetail("user-1", invocationID)
 			t.Fatalf("node=%s review state=%#v invocation=%#v err=%v", want.key, reviewState.Nodes, failedInvocation, err)
 		}
@@ -136,13 +185,21 @@ func runSystemProductionWorkflowE2E(t *testing.T) {
 				t.Fatalf("node=%s gate=%#v", want.key, gate)
 			}
 		}
-		outputs[want.key] = invocation.OutputArtifacts[0]
 		detail, err = ContinueWorkflowExecution("user-1", confirmed.Run.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if detail.Nodes[index].Status != model.WorkflowNodeExecutionApproved && detail.Nodes[index].Status != model.WorkflowNodeExecutionCompleted {
-			t.Fatalf("node=%s after approval=%#v", want.key, detail.Nodes[index])
+		if detail.Nodes[contentIndex].Status != model.WorkflowNodeExecutionApproved && detail.Nodes[contentIndex].Status != model.WorkflowNodeExecutionCompleted {
+			t.Fatalf("node=%s after approval=%#v", want.key, detail.Nodes[contentIndex])
+		}
+		adapterNode := detail.Nodes[adapterIndex]
+		var adapterRefs []ArtifactRefInput
+		if adapterNode.ExecutorType != WorkflowExecutorAdapter || adapterNode.Status != model.WorkflowNodeExecutionCompleted || json.Unmarshal([]byte(adapterNode.OutputArtifactRefsJSON), &adapterRefs) != nil || len(adapterRefs) != 1 {
+			t.Fatalf("adapter=%#v refs=%#v", adapterNode, adapterRefs)
+		}
+		outputs[want.key], err = GetArtifact("user-1", adapterRefs[0].ArtifactID)
+		if err != nil || outputs[want.key].Artifact.ArtifactType != want.outputType {
+			t.Fatalf("adapter output=%#v err=%v", outputs[want.key], err)
 		}
 	}
 	if detail.Run.Status != model.WorkflowExecutionCompleted || outputs["delivery"].Artifact.ArtifactType != "delivery_report" {
@@ -190,19 +247,22 @@ func TestEnsureWorkflowSeedsPublishesComposableProductionTemplate(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if version.Version != "2.3.0" || len(packageValue.Nodes) != 12 || len(packageValue.InputArtifactTypes) != 1 || packageValue.InputArtifactTypes[0] != "source_text" {
+	if version.Version != "2.4.0" || len(packageValue.Nodes) != 24 || len(packageValue.InputArtifactTypes) != 1 || packageValue.InputArtifactTypes[0] != "source_text" {
 		t.Fatalf("package=%+v", packageValue)
 	}
-	for _, node := range packageValue.Nodes {
-		if node.ExecutorType != WorkflowExecutorSkill || node.AgentRef != nil || node.SkillBinding == nil {
-			t.Fatalf("system production node must be Skill-only: %+v", node)
+	for index, node := range packageValue.Nodes {
+		if index%2 == 0 && (node.ExecutorType != WorkflowExecutorSkill || node.AgentRef != nil || node.SkillBinding == nil) {
+			t.Fatalf("system production content node must be Skill-only: %+v", node)
+		}
+		if index%2 == 1 && (node.ExecutorType != WorkflowExecutorAdapter || node.AdapterRef == nil || node.SkillBinding != nil) {
+			t.Fatalf("system production conversion node must be locked Adapter: %+v", node)
 		}
 	}
 	script := packageValue.Nodes[0].SkillBinding
-	if script.Mode != WorkflowSkillBindingManualBeforeRun || script.SkillID != "skill-system-workflow-script" || script.Capability != "workflow.stage.script" || script.SkillVersionID != "" || packageValue.Nodes[1].SkillBinding.SkillVersionID != "skill-version-system-content-classifier-1.0.0" || packageValue.Nodes[6].SkillBinding.Mode != WorkflowSkillBindingTagRoute {
+	if script.Mode != WorkflowSkillBindingManualBeforeRun || script.SkillID != "skill-system-workflow-script" || script.Capability != "workflow.stage.script" || script.SkillVersionID != "" || packageValue.Nodes[2].SkillBinding.SkillVersionID != "skill-version-system-content-classifier-1.0.0" || packageValue.Nodes[12].SkillBinding.Mode != WorkflowSkillBindingTagRoute {
 		t.Fatalf("template refs are not frozen: %+v", packageValue.Nodes)
 	}
-	video := packageValue.Nodes[10]
+	video := packageValue.Nodes[20]
 	foundRenditions := false
 	for _, binding := range video.InputBindings {
 		if binding.BindingName == "asset_rendition" && binding.ArtifactType == "asset_rendition" && len(binding.FromNodeKeys) == 3 {
@@ -232,7 +292,7 @@ func TestSystemProductionWorkflowIsVisibleAndCopyable(t *testing.T) {
 		t.Fatalf("items=%+v err=%v", items, err)
 	}
 	copied, err := CopyWorkflowToProject("user-1", systemProductionWorkflowID, "project-1", "标准生产流（项目版）")
-	if err != nil || copied.Workflow.OwnerType != model.WorkflowOwnerProject || copied.Version.Status != model.WorkflowVersionDraft || len(copied.Package.Nodes) != 12 {
+	if err != nil || copied.Workflow.OwnerType != model.WorkflowOwnerProject || copied.Version.Status != model.WorkflowVersionDraft || len(copied.Package.Nodes) != 24 {
 		t.Fatalf("copied=%+v err=%v", copied, err)
 	}
 }
@@ -256,11 +316,11 @@ func TestSystemProductionWorkflowPreflightFreezesEveryNode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if detail.Run.Status != model.WorkflowExecutionAwaitingConfirmation || !detail.Preview.Executable || len(detail.Nodes) != 12 || len(detail.Preview.Nodes) != 12 || detail.Run.EstimatedCredits != 18 {
+	if detail.Run.Status != model.WorkflowExecutionAwaitingConfirmation || !detail.Preview.Executable || len(detail.Nodes) != 24 || len(detail.Preview.Nodes) != 24 || detail.Run.EstimatedCredits != 18 {
 		t.Fatalf("detail=%+v", detail)
 	}
 	for _, node := range detail.Preview.Nodes {
-		if node.BlockCode != "" || (node.AgentVersionID == "" && node.SkillVersionID == "") || node.EstimatedCredits < 0 {
+		if node.BlockCode != "" || (node.AgentVersionID == "" && node.SkillVersionID == "" && node.AdapterID == "") || node.EstimatedCredits < 0 {
 			t.Fatalf("node=%+v", node)
 		}
 	}
