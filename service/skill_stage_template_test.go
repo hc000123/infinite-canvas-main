@@ -36,7 +36,7 @@ func TestSkillStageTemplatesBuildInvocablePackages(t *testing.T) {
 			var snapshot map[string]any
 			_ = json.Unmarshal(encoded, &snapshot)
 			fixedAdapter, _ := snapshot["fixedAdapter"].(map[string]any)
-			if snapshot["templateVersion"] != "1.0.0" || fixedAdapter["contentHash"] == "" {
+			if snapshot["templateVersion"] != "1.0.0" || fixedAdapter["contentHash"] == "" || fixedAdapter["transformKind"] == "" {
 				t.Fatalf("template snapshot=%s", encoded)
 			}
 			pkg, err := BuildImportedSkillPackage(item.Key, map[string]string{"SKILL.md": "# Test\n\nPreserve source facts."})

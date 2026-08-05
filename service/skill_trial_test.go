@@ -63,6 +63,48 @@ func TestTrialImportedSkillUsesFrozenStageSnapshotAfterDefinitionChanges(t *test
 	}
 }
 
+func TestTrialImportedSkillUsesHistoricalTemplateAfterRegistryUpgrade(t *testing.T) {
+	setupInvocationServiceTest(t)
+	snapshot, _ := ParseSkillFolder("剧本优化", []SkillFolderFile{{Path: "SKILL.md", Data: []byte("# 保留台词")}})
+	created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: WorkflowSkillStageScript, Snapshot: snapshot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalTemplates := registeredSkillStageTemplates
+	originalCurrent := currentSkillStageTemplateVersions
+	originalTransforms := workflowAdapterTransformRegistry
+	t.Cleanup(func() {
+		registeredSkillStageTemplates = originalTemplates
+		currentSkillStageTemplateVersions = originalCurrent
+		workflowAdapterTransformRegistry = originalTransforms
+	})
+	currentTemplate, _ := ResolveSkillStageTemplate(WorkflowSkillStageScript)
+	upgraded := currentTemplate
+	upgraded.TemplateVersion = "2.0.0"
+	upgraded.FixedAdapter = WorkflowAdapterRef{AdapterID: "stage-script-normalize", AdapterVersion: "2.0.0", TransformKind: "stage-script-normalize-v2"}
+	registeredSkillStageTemplates = append(append([]SkillStageTemplate(nil), registeredSkillStageTemplates...), upgraded)
+	currentSkillStageTemplateVersions = cloneStringMap(currentSkillStageTemplateVersions)
+	currentSkillStageTemplateVersions[WorkflowSkillStageScript] = upgraded.TemplateVersion
+	workflowAdapterTransformRegistry = cloneWorkflowAdapterTransforms(workflowAdapterTransformRegistry)
+	workflowAdapterTransformRegistry[upgraded.FixedAdapter.TransformKind] = func(bindings []ResolvedArtifactBinding) (json.RawMessage, error) {
+		return json.Marshal(map[string]string{"productionScript": "v2:" + strings.TrimSpace(bindings[0].Artifact.Payload["productionScript"].(string))})
+	}
+	listed, err := ResolveSkillStageTemplate(WorkflowSkillStageScript)
+	if err != nil || listed.TemplateVersion != "2.0.0" || listed.FixedAdapter.AdapterVersion != "2.0.0" || listed.FixedAdapter.TransformKind != "stage-script-normalize-v2" {
+		t.Fatalf("current template=%+v err=%v", listed, err)
+	}
+	restore := useSkillEvaluationExecutor(t, fakeSkillExecutor{output: `{"productionScript":"  历史版本  "}`})
+	defer restore()
+	result, err := TrialSkill("admin-1", created.Version.ID, SkillTrialInput{InputText: "原稿", ConfirmAPICost: true})
+	if err != nil || result.StageKey != WorkflowSkillStageScript || result.Evaluation.Status != "passed" || result.Standard["productionScript"] != "历史版本" {
+		t.Fatalf("historical result=%+v err=%v", result, err)
+	}
+	resolved, err := ResolveImportedSkillStageSnapshot(created.Version)
+	if err != nil || resolved.TemplateVersion != "1.0.0" || resolved.FixedAdapter.AdapterVersion != "1.0.0" || resolved.FixedAdapter.TransformKind == upgraded.FixedAdapter.TransformKind || resolved.FixedAdapter.ContentHash == listed.FixedAdapter.ContentHash {
+		t.Fatalf("historical template=%+v err=%v", resolved, err)
+	}
+}
+
 func TestTrialImportedSkillRejectsDamagedOrMismatchedStageSnapshot(t *testing.T) {
 	for _, test := range []struct {
 		name   string
@@ -86,6 +128,15 @@ func TestTrialImportedSkillRejectsDamagedOrMismatchedStageSnapshot(t *testing.T)
 			version.ImportMetadataJSON = string(encoded)
 			return version
 		}},
+		{name: "adapter behavior mismatch", want: "冻结", mutate: func(version model.SkillVersion) model.SkillVersion {
+			var metadata map[string]any
+			_ = json.Unmarshal([]byte(version.ImportMetadataJSON), &metadata)
+			adapter, _ := metadata["fixedAdapter"].(map[string]any)
+			adapter["transformKind"] = "missing-transform-v9"
+			encoded, _ := json.Marshal(metadata)
+			version.ImportMetadataJSON = string(encoded)
+			return version
+		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			setupInvocationServiceTest(t)
@@ -104,6 +155,22 @@ func TestTrialImportedSkillRejectsDamagedOrMismatchedStageSnapshot(t *testing.T)
 			}
 		})
 	}
+}
+
+func cloneStringMap(source map[string]string) map[string]string {
+	result := make(map[string]string, len(source))
+	for key, value := range source {
+		result[key] = value
+	}
+	return result
+}
+
+func cloneWorkflowAdapterTransforms(source map[string]WorkflowAdapterTransform) map[string]WorkflowAdapterTransform {
+	result := make(map[string]WorkflowAdapterTransform, len(source))
+	for key, value := range source {
+		result[key] = value
+	}
+	return result
 }
 
 func TestTrialImageSkillUsesImageRequestAndConvertsEveryOutput(t *testing.T) {

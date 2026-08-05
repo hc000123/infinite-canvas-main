@@ -15,6 +15,7 @@ const workflowAdapterExtensionKey = "workflow.adapter"
 type WorkflowAdapterDefinition struct {
 	ID             string                   `json:"adapterId"`
 	Version        string                   `json:"adapterVersion"`
+	TransformKind  string                   `json:"transformKind"`
 	ContentHash    string                   `json:"contentHash"`
 	InputContracts []ArtifactInputSpec      `json:"inputContracts"`
 	Output         ArtifactOutputSpec       `json:"output"`
@@ -27,19 +28,18 @@ type WorkflowAdapterTransform func([]ResolvedArtifactBinding) (json.RawMessage, 
 type workflowAdapterSnapshot struct {
 	AdapterID      string              `json:"adapterId"`
 	AdapterVersion string              `json:"adapterVersion"`
+	TransformKind  string              `json:"transformKind"`
 	ContentHash    string              `json:"contentHash"`
 	InputContracts []ArtifactInputSpec `json:"inputContracts"`
 	Output         ArtifactOutputSpec  `json:"output"`
 	Rules          json.RawMessage     `json:"rules"`
 }
 
-func registeredWorkflowAdapters() []WorkflowAdapterDefinition {
-	legacy, err := normalizeWorkflowAdapterDefinition(WorkflowAdapterDefinition{
-		ID: "production-script-envelope", Version: "1.0.0",
-		InputContracts: []ArtifactInputSpec{{BindingName: "production_script", ArtifactType: "production_script", Required: true, Min: 1, Max: 1, SchemaConstraint: ">=1.0 <2.0"}},
-		Output:         ArtifactOutputSpec{BindingName: "production_script", ArtifactType: "production_script", Min: 1, Max: 1, SchemaVersion: "1.0.0"},
-		Rules:          json.RawMessage(`{"mapping":{"productionScript":"$.productionScript"},"lossPolicy":"preserve_source"}`),
-		Transform: func(bindings []ResolvedArtifactBinding) (json.RawMessage, error) {
+var workflowAdapterTransformRegistry = buildWorkflowAdapterTransformRegistry()
+
+func buildWorkflowAdapterTransformRegistry() map[string]WorkflowAdapterTransform {
+	result := map[string]WorkflowAdapterTransform{
+		"production-script-envelope-v1": func(bindings []ResolvedArtifactBinding) (json.RawMessage, error) {
 			if len(bindings) != 1 {
 				return nil, errors.New("Adapter 要求一个 production_script 输入")
 			}
@@ -49,12 +49,35 @@ func registeredWorkflowAdapters() []WorkflowAdapterDefinition {
 			}
 			return json.Marshal(map[string]string{"productionScript": value})
 		},
+	}
+	stageKeys := append([]string(nil), systemSkillSeedStageKeys...)
+	for _, seed := range capabilitySkillSeeds() {
+		stageKeys = append(stageKeys, seed.Key)
+	}
+	for _, key := range stageKeys {
+		stageKey := key
+		result["stage-"+stageKey+"-normalize-v1"] = func(bindings []ResolvedArtifactBinding) (json.RawMessage, error) {
+			if len(bindings) != 1 {
+				return nil, errors.New("System Adapter 要求一个阶段输出")
+			}
+			return normalizeSkillStagePayloadV1(stageKey, bindings[0].Artifact.Payload)
+		}
+	}
+	return result
+}
+
+func registeredWorkflowAdapters() []WorkflowAdapterDefinition {
+	legacy, err := normalizeWorkflowAdapterDefinition(WorkflowAdapterDefinition{
+		ID: "production-script-envelope", Version: "1.0.0", TransformKind: "production-script-envelope-v1",
+		InputContracts: []ArtifactInputSpec{{BindingName: "production_script", ArtifactType: "production_script", Required: true, Min: 1, Max: 1, SchemaConstraint: ">=1.0 <2.0"}},
+		Output:         ArtifactOutputSpec{BindingName: "production_script", ArtifactType: "production_script", Min: 1, Max: 1, SchemaVersion: "1.0.0"},
+		Rules:          json.RawMessage(`{"mapping":{"productionScript":"$.productionScript"},"lossPolicy":"preserve_source"}`),
 	})
 	if err != nil {
 		return nil
 	}
 	result := []WorkflowAdapterDefinition{legacy}
-	for _, template := range ListSkillStageTemplates() {
+	for _, template := range registeredSkillStageTemplates {
 		definition, err := normalizeWorkflowAdapterDefinition(stageWorkflowAdapter(template))
 		if err != nil {
 			return nil
@@ -67,20 +90,14 @@ func registeredWorkflowAdapters() []WorkflowAdapterDefinition {
 func stageWorkflowAdapter(template SkillStageTemplate) WorkflowAdapterDefinition {
 	bindingName := template.OutputType
 	return WorkflowAdapterDefinition{
-		ID: template.FixedAdapter.AdapterID, Version: template.FixedAdapter.AdapterVersion,
+		ID: template.FixedAdapter.AdapterID, Version: template.FixedAdapter.AdapterVersion, TransformKind: template.FixedAdapter.TransformKind,
 		InputContracts: []ArtifactInputSpec{{BindingName: bindingName, ArtifactType: template.OutputType, Required: true, Min: template.OutputMin, Max: template.OutputMax, SchemaConstraint: ">=1.0 <2.0"}},
 		Output:         ArtifactOutputSpec{BindingName: bindingName, ArtifactType: template.OutputType, Min: template.OutputMin, Max: template.OutputMax, SchemaVersion: coreArtifactSchemaVersion},
 		Rules:          json.RawMessage(fmt.Sprintf(`{"stageKey":%q,"policy":"structure_only","contentMutation":"forbidden"}`, template.Key)),
-		Transform: func(bindings []ResolvedArtifactBinding) (json.RawMessage, error) {
-			if len(bindings) != 1 {
-				return nil, errors.New("System Adapter 要求一个阶段输出")
-			}
-			return normalizeSkillStagePayload(template.Key, bindings[0].Artifact.Payload)
-		},
 	}
 }
 
-func normalizeSkillStagePayload(stageKey string, source map[string]any) (json.RawMessage, error) {
+func normalizeSkillStagePayloadV1(stageKey string, source map[string]any) (json.RawMessage, error) {
 	raw, err := json.Marshal(source)
 	if err != nil {
 		return nil, errors.New("Skill 输出无法序列化")
@@ -169,10 +186,13 @@ func ConvertSkillStageOutput(template SkillStageTemplate, structured map[string]
 }
 
 func ResolveWorkflowAdapter(ref WorkflowAdapterRef) (WorkflowAdapterDefinition, error) {
-	id, version, contentHash := strings.ToLower(strings.TrimSpace(ref.AdapterID)), strings.TrimSpace(ref.AdapterVersion), strings.TrimSpace(ref.ContentHash)
+	id, version, transformKind, contentHash := strings.ToLower(strings.TrimSpace(ref.AdapterID)), strings.TrimSpace(ref.AdapterVersion), strings.TrimSpace(ref.TransformKind), strings.TrimSpace(ref.ContentHash)
 	for _, definition := range registeredWorkflowAdapters() {
 		if definition.ID != id || definition.Version != version {
 			continue
+		}
+		if transformKind != "" && definition.TransformKind != transformKind {
+			return WorkflowAdapterDefinition{}, safeMessageError{message: "Workflow Adapter 冻结行为实现不匹配"}
 		}
 		if contentHash != "" && definition.ContentHash != contentHash {
 			return WorkflowAdapterDefinition{}, safeMessageError{message: "Workflow Adapter 冻结哈希不匹配"}
@@ -188,8 +208,13 @@ func ResolveWorkflowAdapter(ref WorkflowAdapterRef) (WorkflowAdapterDefinition, 
 func normalizeWorkflowAdapterDefinition(value WorkflowAdapterDefinition) (WorkflowAdapterDefinition, error) {
 	value.ID = strings.ToLower(strings.TrimSpace(value.ID))
 	value.Version = strings.TrimSpace(value.Version)
-	if !skillManifestTokenPattern.MatchString(value.ID) || !skillSemanticVersionRegexp.MatchString(value.Version) || value.Transform == nil {
+	value.TransformKind = strings.ToLower(strings.TrimSpace(value.TransformKind))
+	registeredTransform, registered := workflowAdapterTransformRegistry[value.TransformKind]
+	if !skillManifestTokenPattern.MatchString(value.ID) || !skillSemanticVersionRegexp.MatchString(value.Version) || !skillManifestTokenPattern.MatchString(value.TransformKind) || !registered {
 		return value, errors.New("Workflow Adapter 定义无效")
+	}
+	if value.Transform == nil {
+		value.Transform = registeredTransform
 	}
 	inputs, err := normalizeArtifactInputSpecs(value.InputContracts)
 	if err != nil || len(inputs) == 0 {
@@ -207,7 +232,7 @@ func normalizeWorkflowAdapterDefinition(value WorkflowAdapterDefinition) (Workfl
 		return value, errors.New("Workflow Adapter 规则无效")
 	}
 	value.InputContracts, value.Output, value.Rules = inputs, outputs[0], json.RawMessage(rules)
-	withoutHash := workflowAdapterSnapshot{AdapterID: value.ID, AdapterVersion: value.Version, InputContracts: value.InputContracts, Output: value.Output, Rules: value.Rules}
+	withoutHash := workflowAdapterSnapshot{AdapterID: value.ID, AdapterVersion: value.Version, TransformKind: value.TransformKind, InputContracts: value.InputContracts, Output: value.Output, Rules: value.Rules}
 	canonical, err := marshalInvocationCanonical(withoutHash)
 	if err != nil {
 		return value, err
@@ -217,7 +242,7 @@ func normalizeWorkflowAdapterDefinition(value WorkflowAdapterDefinition) (Workfl
 }
 
 func workflowAdapterSnapshotValue(value WorkflowAdapterDefinition) workflowAdapterSnapshot {
-	return workflowAdapterSnapshot{AdapterID: value.ID, AdapterVersion: value.Version, ContentHash: value.ContentHash, InputContracts: value.InputContracts, Output: value.Output, Rules: value.Rules}
+	return workflowAdapterSnapshot{AdapterID: value.ID, AdapterVersion: value.Version, TransformKind: value.TransformKind, ContentHash: value.ContentHash, InputContracts: value.InputContracts, Output: value.Output, Rules: value.Rules}
 }
 
 func workflowAdapterSnapshotJSON(value WorkflowAdapterDefinition) (json.RawMessage, error) {

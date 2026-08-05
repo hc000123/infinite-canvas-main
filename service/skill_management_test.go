@@ -39,7 +39,7 @@ func TestImportOwnedSkillFolderCreatesStagePackageAndSourceSnapshot(t *testing.T
 		t.Fatalf("import metadata=%s", created.Version.ImportMetadataJSON)
 	}
 	fixedAdapter, _ := importMetadata["fixedAdapter"].(map[string]any)
-	if importMetadata["folderName"] != "script-folder" || importMetadata["metadata"] == nil || importMetadata["stageKey"] != WorkflowSkillStageScript || importMetadata["stageTemplateVersion"] != "1.0.0" || fixedAdapter["adapterId"] == "" || fixedAdapter["adapterVersion"] == "" || fixedAdapter["contentHash"] == "" {
+	if importMetadata["folderName"] != "script-folder" || importMetadata["metadata"] == nil || importMetadata["stageKey"] != WorkflowSkillStageScript || importMetadata["stageTemplateVersion"] != "1.0.0" || fixedAdapter["adapterId"] == "" || fixedAdapter["adapterVersion"] == "" || fixedAdapter["transformKind"] == "" || fixedAdapter["contentHash"] == "" {
 		t.Fatalf("import metadata=%s", created.Version.ImportMetadataJSON)
 	}
 	files, err := GetManagedSkillSourceFiles("admin-1", created.Version.ID, true)
