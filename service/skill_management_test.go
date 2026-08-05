@@ -1,11 +1,71 @@
 package service
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/basketikun/infinite-canvas/model"
 	"github.com/basketikun/infinite-canvas/repository"
 )
+
+func TestImportOwnedSkillFolderCreatesStagePackageAndSourceSnapshot(t *testing.T) {
+	setupInvocationServiceTest(t)
+	if err := EnsureCoreArtifactSchemas(); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := ParseSkillFolder("script-folder", []SkillFolderFile{
+		{Path: "SKILL.md", Data: []byte("---\nname: Seedance 剧本整理\ndescription: 保留剧情\nversion: 1.4.0\n---\n# Rules")},
+		{Path: "rules/preserve.md", Data: []byte("保留全部台词")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: WorkflowSkillStageScript, Snapshot: snapshot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Skill.Name != "Seedance 剧本整理" || created.Skill.Summary != "保留剧情" || created.Skill.StageKey != WorkflowSkillStageScript || created.Version.Version != "1.4.0" {
+		t.Fatalf("created=%+v", created)
+	}
+	if created.Version.SourceKind != "folder_import" || created.Version.SourceHash != snapshot.SourceHash || len(created.Version.SourceArchiveBlob) == 0 || created.Package.Files["rules/preserve.md"] == "" {
+		t.Fatalf("version=%+v package=%+v", created.Version, created.Package)
+	}
+	if created.Package.Manifest.Capabilities[0] != "workflow.stage.script" {
+		t.Fatalf("manifest=%+v", created.Package.Manifest)
+	}
+	files, err := GetManagedSkillSourceFiles("admin-1", created.Version.ID, true)
+	if err != nil || len(files) != 2 {
+		t.Fatalf("files=%+v err=%v", files, err)
+	}
+	content, err := GetManagedSkillSourceText("admin-1", created.Version.ID, "rules/preserve.md", true)
+	if err != nil || content != "保留全部台词" {
+		t.Fatalf("content=%q err=%v", content, err)
+	}
+}
+
+func TestImportOwnedSkillFolderVersionInheritsStageAndRejectsDuplicateContent(t *testing.T) {
+	setupInvocationServiceTest(t)
+	if err := EnsureCoreArtifactSchemas(); err != nil {
+		t.Fatal(err)
+	}
+	first, _ := ParseSkillFolder("script", []SkillFolderFile{{Path: "SKILL.md", Data: []byte("# V1")}})
+	created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: WorkflowSkillStageScript, Version: "2.0.0", Snapshot: first})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, _ := ParseSkillFolder("script", []SkillFolderFile{{Path: "SKILL.md", Data: []byte("# V2")}})
+	version, err := ImportOwnedSkillFolderVersion("admin-1", true, created.Skill.ID, "", second)
+	if err != nil || version.Version != "2.0.1" {
+		t.Fatalf("version=%+v err=%v", version, err)
+	}
+	pkg, err := DecodeSkillPackage(version)
+	if err != nil || !containsSkillToken(pkg.Manifest.Capabilities, "workflow.stage.script") {
+		t.Fatalf("pkg=%+v err=%v", pkg, err)
+	}
+	if _, err := ImportOwnedSkillFolderVersion("admin-1", true, created.Skill.ID, "2.0.2", second); err == nil || !strings.Contains(err.Error(), "相同内容") {
+		t.Fatalf("duplicate err=%v", err)
+	}
+}
 
 func TestProjectSkillManagementEnforcesOwnerAndLifecycle(t *testing.T) {
 	setupInvocationServiceTest(t)

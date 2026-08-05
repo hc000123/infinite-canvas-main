@@ -6,6 +6,8 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
+	"io"
 	"mime"
 	"net/http"
 	"path"
@@ -14,6 +16,9 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/Masterminds/semver/v3"
+	"github.com/basketikun/infinite-canvas/model"
+	"github.com/basketikun/infinite-canvas/repository"
 	"gopkg.in/yaml.v3"
 )
 
@@ -51,6 +56,16 @@ type SkillFolderSnapshot struct {
 	FileIndex  []SkillFolderFileIndex
 	Archive    []byte
 	SourceHash string
+}
+
+type SkillFolderImportInput struct {
+	OwnerType model.SkillOwnerType
+	ProjectID string
+	StageKey  string
+	Name      string
+	Summary   string
+	Version   string
+	Snapshot  SkillFolderSnapshot
 }
 
 type normalizedSkillFolderFile struct {
@@ -210,4 +225,202 @@ func parseSkillFolderMetadata(content string) (SkillFolderMetadata, error) {
 	metadata.Description = strings.TrimSpace(metadata.Description)
 	metadata.Version = strings.TrimSpace(metadata.Version)
 	return metadata, nil
+}
+
+func ImportManagedSkillFolder(userID string, isAdmin bool, input SkillFolderImportInput) (ResolvedSkill, error) {
+	if !isAdmin && input.OwnerType == model.SkillOwnerSystem {
+		return ResolvedSkill{}, safeMessageError{message: "只有管理员可以导入 System Skill"}
+	}
+	template, err := ResolveSkillStageTemplate(input.StageKey)
+	if err != nil {
+		return ResolvedSkill{}, err
+	}
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		name = strings.TrimSpace(input.Snapshot.Metadata.Name)
+	}
+	if name == "" {
+		name = strings.TrimSpace(input.Snapshot.FolderName)
+	}
+	if name == "" {
+		return ResolvedSkill{}, safeMessageError{message: "缺少 Skill 名称"}
+	}
+	summary := strings.TrimSpace(input.Summary)
+	if summary == "" {
+		summary = strings.TrimSpace(input.Snapshot.Metadata.Description)
+	}
+	versionName := strings.TrimSpace(input.Version)
+	if versionName == "" {
+		versionName = strings.TrimSpace(input.Snapshot.Metadata.Version)
+	}
+	if versionName == "" {
+		versionName = "1.0.0"
+	}
+	packageValue, err := BuildImportedSkillPackage(template.Key, input.Snapshot.TextFiles)
+	if err != nil {
+		return ResolvedSkill{}, err
+	}
+	projectID := strings.TrimSpace(input.ProjectID)
+	ownerUserID := ""
+	if input.OwnerType == model.SkillOwnerSystem {
+		projectID = ""
+	} else if input.OwnerType == model.SkillOwnerProject && projectID != "" {
+		ownerUserID = strings.TrimSpace(userID)
+	} else {
+		return ResolvedSkill{}, safeMessageError{message: "项目 Skill 必须指定项目"}
+	}
+	if !skillSemanticVersionRegexp.MatchString(versionName) {
+		return ResolvedSkill{}, safeMessageError{message: "Skill 版本必须使用 x.y.z"}
+	}
+	stamp := now()
+	skill := model.SkillDefinition{
+		ID: newID("skill"), Name: name, Summary: summary, OwnerType: input.OwnerType, OwnerUserID: ownerUserID,
+		OwnerProjectID: projectID, StageKey: template.Key, Enabled: true, CreatedAt: stamp, UpdatedAt: stamp,
+	}
+	version := importedSkillVersion(newID("skillversion"), skill.ID, versionName, userID, stamp, packageValue, input.Snapshot)
+	if err := repository.CreateSkillAggregate(skill, version); err != nil {
+		return ResolvedSkill{}, err
+	}
+	if err := repository.CreateSkillAuditLog(skillAudit(userID, "import_folder", skill, version.ID, stamp)); err != nil {
+		return ResolvedSkill{}, err
+	}
+	return ResolvedSkill{Skill: skill, Version: version, Package: packageValue}, nil
+}
+
+func ImportOwnedSkillFolderVersion(userID string, isAdmin bool, skillID, versionName string, snapshot SkillFolderSnapshot) (model.SkillVersion, error) {
+	skill, err := editableSkill(userID, isAdmin, skillID)
+	if err != nil {
+		return model.SkillVersion{}, err
+	}
+	if skill.StageKey == "" {
+		return model.SkillVersion{}, safeMessageError{message: "当前 Skill 没有所属阶段，不能导入文件夹版本"}
+	}
+	versions, err := repository.ListSkillVersions(skill.ID)
+	if err != nil {
+		return model.SkillVersion{}, err
+	}
+	for _, existing := range versions {
+		if existing.SourceHash != "" && existing.SourceHash == snapshot.SourceHash {
+			return model.SkillVersion{}, safeMessageError{message: "相同内容已经导入，无需重复创建版本"}
+		}
+	}
+	versionName = strings.TrimSpace(versionName)
+	if versionName == "" {
+		versionName = strings.TrimSpace(snapshot.Metadata.Version)
+	}
+	if versionName == "" {
+		versionName = nextImportedSkillVersion(versions)
+	}
+	if !skillSemanticVersionRegexp.MatchString(versionName) {
+		return model.SkillVersion{}, safeMessageError{message: "Skill 版本必须使用 x.y.z"}
+	}
+	for _, existing := range versions {
+		if existing.Version == versionName {
+			return model.SkillVersion{}, safeMessageError{message: "Skill 版本号已存在"}
+		}
+	}
+	packageValue, err := BuildImportedSkillPackage(skill.StageKey, snapshot.TextFiles)
+	if err != nil {
+		return model.SkillVersion{}, err
+	}
+	stamp := now()
+	version := importedSkillVersion(newID("skillversion"), skill.ID, versionName, userID, stamp, packageValue, snapshot)
+	if err := repository.CreateSkillVersion(version); err != nil {
+		return model.SkillVersion{}, err
+	}
+	if err := repository.CreateSkillAuditLog(skillAudit(userID, "import_folder_version", skill, version.ID, stamp)); err != nil {
+		return model.SkillVersion{}, err
+	}
+	return version, nil
+}
+
+func importedSkillVersion(id, skillID, versionName, userID, stamp string, packageValue SkillPackage, snapshot SkillFolderSnapshot) model.SkillVersion {
+	version := skillVersionFromPackage(id, skillID, versionName, userID, stamp, packageValue)
+	fileIndex, _ := json.Marshal(snapshot.FileIndex)
+	metadata, _ := json.Marshal(map[string]any{"folderName": snapshot.FolderName, "metadata": snapshot.Metadata})
+	version.SourceKind = "folder_import"
+	version.SourceHash = snapshot.SourceHash
+	version.SourceArchiveBlob = append([]byte(nil), snapshot.Archive...)
+	version.SourceFileIndexJSON = string(fileIndex)
+	version.ImportMetadataJSON = string(metadata)
+	return version
+}
+
+func nextImportedSkillVersion(versions []model.SkillVersion) string {
+	var highest *semver.Version
+	for _, item := range versions {
+		parsed, err := semver.NewVersion(item.Version)
+		if err == nil && (highest == nil || parsed.GreaterThan(highest)) {
+			highest = parsed
+		}
+	}
+	if highest == nil {
+		return "1.0.0"
+	}
+	next := highest.IncPatch()
+	return next.String()
+}
+
+func GetManagedSkillSourceFiles(userID, versionID string, isAdmin bool) ([]SkillFolderFileIndex, error) {
+	version, _, err := GetManagedSkillVersionPackage(userID, versionID, isAdmin)
+	if err != nil {
+		return nil, err
+	}
+	if version.SourceKind != "folder_import" || len(version.SourceArchiveBlob) == 0 {
+		return nil, safeMessageError{message: "当前 Skill 版本不是文件夹导入版本"}
+	}
+	var files []SkillFolderFileIndex
+	if json.Unmarshal([]byte(version.SourceFileIndexJSON), &files) != nil {
+		return nil, safeMessageError{message: "Skill 文件索引损坏"}
+	}
+	return files, nil
+}
+
+func GetManagedSkillSourceText(userID, versionID, filePath string, isAdmin bool) (string, error) {
+	version, _, err := GetManagedSkillVersionPackage(userID, versionID, isAdmin)
+	if err != nil {
+		return "", err
+	}
+	filePath, err = normalizeImportedSkillPath(filePath)
+	if err != nil {
+		return "", err
+	}
+	files, err := GetManagedSkillSourceFiles(userID, versionID, isAdmin)
+	if err != nil {
+		return "", err
+	}
+	wantHash := ""
+	for _, item := range files {
+		if item.Path == filePath && item.Text {
+			wantHash = item.Hash
+			break
+		}
+	}
+	if wantHash == "" {
+		return "", safeMessageError{message: "Skill 文本文件不存在或不可预览"}
+	}
+	reader, err := zip.NewReader(bytes.NewReader(version.SourceArchiveBlob), int64(len(version.SourceArchiveBlob)))
+	if err != nil {
+		return "", safeMessageError{message: "Skill 文件快照损坏"}
+	}
+	for _, file := range reader.File {
+		if file.Name != filePath {
+			continue
+		}
+		opened, err := file.Open()
+		if err != nil {
+			return "", err
+		}
+		content, readErr := io.ReadAll(io.LimitReader(opened, skillFolderMaxFileBytes+1))
+		_ = opened.Close()
+		if readErr != nil || len(content) > skillFolderMaxFileBytes || !utf8.Valid(content) {
+			return "", safeMessageError{message: "Skill 文本文件损坏"}
+		}
+		digest := sha256.Sum256(content)
+		if "sha256:"+hex.EncodeToString(digest[:]) != wantHash {
+			return "", safeMessageError{message: "Skill 文件哈希不一致"}
+		}
+		return string(content), nil
+	}
+	return "", safeMessageError{message: "Skill 文本文件不存在"}
 }
