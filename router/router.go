@@ -403,6 +403,12 @@ func New() *gin.Engine {
 	skillAdmin.POST("/skill-versions/:id/evaluations", func(c *gin.Context) {
 		handler.AdminEvaluateSkillVersion(c.Writer, c.Request, c.Param("id"))
 	})
+	skillAdmin.POST("/skill-versions/:id/trials", func(c *gin.Context) {
+		handler.AdminTrialSkillVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	skillAdmin.GET("/skill-trials/:id", func(c *gin.Context) {
+		handler.AdminSkillTrial(c.Writer, c.Request, c.Param("id"))
+	})
 	skillAdmin.GET("/skill-evaluations/:id", func(c *gin.Context) {
 		handler.AdminSkillEvaluation(c.Writer, c.Request, c.Param("id"))
 	})

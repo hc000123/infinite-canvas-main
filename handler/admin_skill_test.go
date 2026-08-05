@@ -72,6 +72,25 @@ func TestAdminSkillStageTemplates(t *testing.T) {
 	}
 }
 
+func TestAdminStandaloneSkillTrialDoesNotRequireWorkflowRun(t *testing.T) {
+	setupWorkflowHandlerTestDB(t)
+	if err := service.EnsureCoreArtifactSchemas(); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, _ := service.ParseSkillFolder("剧本优化", []service.SkillFolderFile{{Path: "SKILL.md", Data: []byte("# Rules")}})
+	created, err := service.ImportManagedSkillFolder("admin-1", true, service.SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: "script", Snapshot: snapshot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/admin/skill-versions/"+created.Version.ID+"/trials", strings.NewReader(`{}`))
+	request = request.WithContext(service.WithUser(context.Background(), model.AuthUser{ID: "admin-1", Role: model.UserRoleAdmin}))
+	recorder := httptest.NewRecorder()
+	AdminTrialSkillVersion(recorder, request, created.Version.ID)
+	if !strings.Contains(recorder.Body.String(), `"code":1`) || !strings.Contains(recorder.Body.String(), "输入") || strings.Contains(recorder.Body.String(), "workflowRunId") {
+		t.Fatalf("body=%s", recorder.Body.String())
+	}
+}
+
 func TestPublishedSkillVersionCannotBePatched(t *testing.T) {
 	setupWorkflowHandlerTestDB(t)
 	if err := service.EnsureSkillSeeds(); err != nil {

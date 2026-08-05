@@ -116,3 +116,62 @@ func TestPublishWorkflowRejectsUnknownAdapterVersion(t *testing.T) {
 		t.Fatal("unknown adapter was published")
 	}
 }
+
+func TestStageAdapterPreservesScriptContentApartFromOuterWhitespace(t *testing.T) {
+	setupInvocationServiceTest(t)
+	if err := EnsureCoreArtifactSchemas(); err != nil {
+		t.Fatal(err)
+	}
+	template, err := ResolveSkillStageTemplate(WorkflowSkillStageScript)
+	if err != nil {
+		t.Fatal(err)
+	}
+	converted, diff, err := ConvertSkillStageOutput(template, map[string]any{"productionScript": "  原台词\n动作不改  "})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]any
+	if json.Unmarshal(converted, &payload) != nil || payload["productionScript"] != "原台词\n动作不改" {
+		t.Fatalf("payload=%s", converted)
+	}
+	if diff["contentChanged"] != false || diff["structureChanged"] != true {
+		t.Fatalf("diff=%+v", diff)
+	}
+}
+
+func TestStageAdapterAddsOnlyMissingStableAssetAndStoryboardIDs(t *testing.T) {
+	setupInvocationServiceTest(t)
+	if err := EnsureCoreArtifactSchemas(); err != nil {
+		t.Fatal(err)
+	}
+	assetTemplate, _ := ResolveSkillStageTemplate(WorkflowSkillStageArt)
+	assetRaw := map[string]any{"items": []any{
+		map[string]any{"kind": "character", "name": "林秋", "sourceEvidence": []any{"林秋进门"}, "coreFacts": []any{"年轻女性"}},
+		map[string]any{"assetId": "PROP-CUSTOM", "kind": "prop", "name": "钥匙", "sourceEvidence": []any{"手里有钥匙"}, "coreFacts": []any{"金属"}},
+	}}
+	converted, _, err := ConvertSkillStageOutput(assetTemplate, assetRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var asset map[string]any
+	_ = json.Unmarshal(converted, &asset)
+	items := asset["items"].([]any)
+	if items[0].(map[string]any)["assetId"] != "CHAR-001" || items[1].(map[string]any)["assetId"] != "PROP-CUSTOM" {
+		t.Fatalf("asset=%s", converted)
+	}
+
+	storyboardTemplate, _ := ResolveSkillStageTemplate(WorkflowSkillStageStoryboard)
+	storyboardRaw := map[string]any{"shots": []any{map[string]any{
+		"sourceScript": "原文", "shotDraft": map[string]any{"shotSize": "中景", "camera": "平视", "movement": "固定", "action": "进门", "performance": "紧张", "dialogue": "", "durationSeconds": 6.0, "continuityMode": "continuous"},
+	}}}
+	converted, _, err = ConvertSkillStageOutput(storyboardTemplate, storyboardRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var storyboard map[string]any
+	_ = json.Unmarshal(converted, &storyboard)
+	shot := storyboard["shots"].([]any)[0].(map[string]any)
+	if shot["shotId"] != "shot-001" || shot["sceneKey"] != "scene-001" || shot["sourceScript"] != "原文" {
+		t.Fatalf("storyboard=%s", converted)
+	}
+}

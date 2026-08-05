@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/basketikun/infinite-canvas/repository"
@@ -33,7 +34,7 @@ type workflowAdapterSnapshot struct {
 }
 
 func registeredWorkflowAdapters() []WorkflowAdapterDefinition {
-	definition, err := normalizeWorkflowAdapterDefinition(WorkflowAdapterDefinition{
+	legacy, err := normalizeWorkflowAdapterDefinition(WorkflowAdapterDefinition{
 		ID: "production-script-envelope", Version: "1.0.0",
 		InputContracts: []ArtifactInputSpec{{BindingName: "production_script", ArtifactType: "production_script", Required: true, Min: 1, Max: 1, SchemaConstraint: ">=1.0 <2.0"}},
 		Output:         ArtifactOutputSpec{BindingName: "production_script", ArtifactType: "production_script", Min: 1, Max: 1, SchemaVersion: "1.0.0"},
@@ -52,7 +53,119 @@ func registeredWorkflowAdapters() []WorkflowAdapterDefinition {
 	if err != nil {
 		return nil
 	}
-	return []WorkflowAdapterDefinition{definition}
+	result := []WorkflowAdapterDefinition{legacy}
+	for _, template := range ListSkillStageTemplates() {
+		definition, err := normalizeWorkflowAdapterDefinition(stageWorkflowAdapter(template))
+		if err != nil {
+			return nil
+		}
+		result = append(result, definition)
+	}
+	return result
+}
+
+func stageWorkflowAdapter(template SkillStageTemplate) WorkflowAdapterDefinition {
+	bindingName := template.OutputType
+	return WorkflowAdapterDefinition{
+		ID: template.FixedAdapter.AdapterID, Version: template.FixedAdapter.AdapterVersion,
+		InputContracts: []ArtifactInputSpec{{BindingName: bindingName, ArtifactType: template.OutputType, Required: true, Min: 1, Max: 1, SchemaConstraint: ">=1.0 <2.0"}},
+		Output:         ArtifactOutputSpec{BindingName: bindingName, ArtifactType: template.OutputType, Min: 1, Max: 1, SchemaVersion: coreArtifactSchemaVersion},
+		Rules:          json.RawMessage(fmt.Sprintf(`{"stageKey":%q,"policy":"structure_only","contentMutation":"forbidden"}`, template.Key)),
+		Transform: func(bindings []ResolvedArtifactBinding) (json.RawMessage, error) {
+			if len(bindings) != 1 {
+				return nil, errors.New("System Adapter 要求一个阶段输出")
+			}
+			return normalizeSkillStagePayload(template.Key, bindings[0].Artifact.Payload)
+		},
+	}
+}
+
+func normalizeSkillStagePayload(stageKey string, source map[string]any) (json.RawMessage, error) {
+	raw, err := json.Marshal(source)
+	if err != nil {
+		return nil, errors.New("Skill 输出无法序列化")
+	}
+	var payload map[string]any
+	if json.Unmarshal(raw, &payload) != nil {
+		return nil, errors.New("Skill 输出必须是 JSON 对象")
+	}
+	switch stageKey {
+	case WorkflowSkillStageScript:
+		value, ok := payload["productionScript"].(string)
+		if !ok || strings.TrimSpace(value) == "" {
+			return nil, errors.New("剧本输出缺少 productionScript")
+		}
+		payload["productionScript"] = strings.TrimSpace(value)
+	case WorkflowSkillStageArt:
+		normalizeStageAssetIDs(payload)
+	case WorkflowSkillStageStoryboard, "storyboard-vertical-short", "storyboard-horizontal-long":
+		normalizeStageStoryboardIDs(payload)
+	}
+	return json.Marshal(payload)
+}
+
+func normalizeStageAssetIDs(payload map[string]any) {
+	items, _ := payload["items"].([]any)
+	counters := map[string]int{}
+	prefixes := map[string]string{"character": "CHAR", "scene": "SCENE", "prop": "PROP", "costume": "COSTUME"}
+	for _, value := range items {
+		item, ok := value.(map[string]any)
+		if !ok {
+			continue
+		}
+		kind, _ := item["kind"].(string)
+		prefix := prefixes[strings.ToLower(strings.TrimSpace(kind))]
+		if prefix == "" {
+			continue
+		}
+		counters[prefix]++
+		if strings.TrimSpace(fmt.Sprint(item["assetId"])) == "" || item["assetId"] == nil {
+			item["assetId"] = fmt.Sprintf("%s-%03d", prefix, counters[prefix])
+		}
+	}
+}
+
+func normalizeStageStoryboardIDs(payload map[string]any) {
+	shots, _ := payload["shots"].([]any)
+	for index, value := range shots {
+		shot, ok := value.(map[string]any)
+		if !ok {
+			continue
+		}
+		if strings.TrimSpace(fmt.Sprint(shot["shotId"])) == "" || shot["shotId"] == nil {
+			shot["shotId"] = fmt.Sprintf("shot-%03d", index+1)
+		}
+		if strings.TrimSpace(fmt.Sprint(shot["sceneKey"])) == "" || shot["sceneKey"] == nil {
+			shot["sceneKey"] = "scene-001"
+		}
+	}
+}
+
+func ConvertSkillStageOutput(template SkillStageTemplate, structured map[string]any) (json.RawMessage, map[string]any, error) {
+	definition, err := ResolveWorkflowAdapter(template.FixedAdapter)
+	if err != nil {
+		return nil, nil, err
+	}
+	converted, err := definition.Transform([]ResolvedArtifactBinding{{
+		BindingName: definition.InputContracts[0].BindingName,
+		Artifact:    ArtifactEnvelope{Payload: structured},
+	}})
+	if err != nil {
+		return nil, nil, err
+	}
+	schema, err := ResolveArtifactSchema(definition.Output.ArtifactType, definition.Output.SchemaVersion)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := ValidateArtifactPayload(schema, converted); err != nil {
+		return nil, nil, err
+	}
+	before, _ := marshalInvocationCanonical(structured)
+	after, _ := marshalInvocationCanonical(json.RawMessage(converted))
+	return converted, map[string]any{
+		"adapterId": definition.ID, "adapterVersion": definition.Version,
+		"structureChanged": !bytes.Equal(before, after), "contentChanged": false,
+	}, nil
 }
 
 func ResolveWorkflowAdapter(ref WorkflowAdapterRef) (WorkflowAdapterDefinition, error) {

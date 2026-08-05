@@ -264,6 +264,33 @@ func AdminEvaluateSkillVersion(w http.ResponseWriter, r *http.Request, id string
 	OK(w, result)
 }
 
+func AdminTrialSkillVersion(w http.ResponseWriter, r *http.Request, id string) {
+	admin, ok := skillAdmin(r)
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	var input service.SkillTrialInput
+	if !decodeWorkflowBody(w, r, &input, 1<<20) {
+		return
+	}
+	result, err := service.TrialOwnedSkillVersion(admin.ID, true, id, input)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
+func AdminSkillTrial(w http.ResponseWriter, _ *http.Request, id string) {
+	result, err := service.GetSkillTrialResult(id)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
 func AdminSkillEvaluation(w http.ResponseWriter, _ *http.Request, id string) {
 	result, err := service.GetSkillEvaluationResult(id)
 	if err != nil {

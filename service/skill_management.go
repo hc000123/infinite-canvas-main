@@ -146,6 +146,13 @@ func EvaluateOwnedSkillVersion(userID string, isAdmin bool, versionID string, in
 	return EvaluateSkill(userID, versionID, input)
 }
 
+func TrialOwnedSkillVersion(userID string, isAdmin bool, versionID string, input SkillTrialInput) (SkillTrialResult, error) {
+	if _, _, err := editableSkillVersion(userID, isAdmin, versionID); err != nil {
+		return SkillTrialResult{}, err
+	}
+	return TrialSkill(userID, versionID, input)
+}
+
 func PublishOwnedSkillVersion(userID string, isAdmin bool, versionID string) (ResolvedSkill, error) {
 	if _, _, err := editableSkillVersion(userID, isAdmin, versionID); err != nil {
 		return ResolvedSkill{}, err
