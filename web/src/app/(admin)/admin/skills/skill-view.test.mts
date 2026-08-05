@@ -73,3 +73,10 @@ test("new version import compares against the selected version", () => {
     const page = fs.readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
     assert.match(page, /previousVersionId=\{folderImportMode === "version" \? activeVersionId : undefined\}/);
 });
+
+test("folder-imported admin versions keep technical contracts read-only", () => {
+    const page = fs.readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
+    assert.match(page, /const importedFolderVersion = activeVersion\?\.sourceKind === "folder_import";/);
+    assert.match(page, /readOnly=\{activeVersion\?\.status !== "draft" \|\| importedFolderVersion\}/);
+    assert.match(page, /activeVersion\?\.status === "draft" && !importedFolderVersion/);
+});

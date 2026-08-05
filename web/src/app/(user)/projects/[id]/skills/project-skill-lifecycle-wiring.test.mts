@@ -20,3 +20,9 @@ test("archived project Skill versions are view-only", () => {
 test("project new version import compares against the selected version", () => {
     assert.match(page, /previousVersionId=\{folderImportMode === "version" \? activeVersionId : undefined\}/);
 });
+
+test("folder-imported project versions keep technical contracts read-only", () => {
+    assert.match(page, /const importedFolderVersion = activeVersion\?\.sourceKind === "folder_import";/);
+    assert.match(page, /readOnly=\{!editable \|\| activeVersion\?\.status !== "draft" \|\| importedFolderVersion\}/);
+    assert.match(page, /editable && activeVersion\?\.status === "draft" && !importedFolderVersion/);
+});
