@@ -75,9 +75,21 @@ func TrialSkill(userID, versionID string, input SkillTrialInput) (SkillTrialResu
 	}
 	inputSnapshot := map[string]any{"inputText": inputText, "inputArtifacts": snapshots, "parameters": parameterValue}
 	inputSnapshotJSON, _ := marshalInvocationCanonical(inputSnapshot)
-	userPromptJSON, _ := json.Marshal(map[string]any{"text": inputText, "artifacts": artifacts})
-	systemPrompt := "你正在执行一次独立 Skill 试跑。严格遵循 Skill 文件，只输出契约要求的 JSON，不要输出解释。\n\n"
-	raw, standard, diff, gates, duration, imageManifest := executeSkillTrial(executor, skill, version, packageValue, template, bindings, parameters, inputText, systemPrompt, string(userPromptJSON))
+	coreSnapshot, err := skillTrialCoreSchemaSnapshot(packageValue)
+	if err != nil {
+		return SkillTrialResult{}, err
+	}
+	promptInputs := make([]invocationPromptInput, 0, len(bindings))
+	ordinals := map[string]int{}
+	for _, binding := range bindings {
+		promptInputs = append(promptInputs, invocationPromptInput{BindingName: binding.BindingName, Ordinal: ordinals[binding.BindingName], Artifact: binding.Artifact})
+		ordinals[binding.BindingName]++
+	}
+	systemPrompt, userPrompt, err := buildSkillExecutionPrompts(packageValue, version.SourceKind, coreSnapshot, map[string]any{"text": inputText, "parameters": parameterValue, "inputs": promptInputs})
+	if err != nil {
+		return SkillTrialResult{}, err
+	}
+	raw, standard, diff, gates, duration, imageManifest := executeSkillTrial(executor, skill, version, packageValue, template, bindings, parameters, inputText, systemPrompt, userPrompt)
 	status, errorMessage := "passed", ""
 	if !gates.Passed {
 		status = "failed"
@@ -102,6 +114,18 @@ func TrialSkill(userID, versionID string, input SkillTrialInput) (SkillTrialResu
 	return SkillTrialResult{Evaluation: evaluation, StageKey: template.Key, Raw: raw, Standard: standard, Diff: diff, Gates: gates.Issues}, nil
 }
 
+func skillTrialCoreSchemaSnapshot(packageValue SkillPackage) ([]byte, error) {
+	outputs := make([]map[string]any, 0, len(packageValue.OutputContract.ArtifactOutputs))
+	for _, spec := range packageValue.OutputContract.ArtifactOutputs {
+		schema, err := ResolveArtifactSchema(spec.ArtifactType, coreArtifactSchemaVersion)
+		if err != nil {
+			return nil, err
+		}
+		outputs = append(outputs, map[string]any{"spec": spec, "schema": schema})
+	}
+	return marshalInvocationCanonical(map[string]any{"outputs": outputs})
+}
+
 func executeSkillTrial(executor AgentRunExecutor, skill model.SkillDefinition, version model.SkillVersion, packageValue SkillPackage, template SkillStageTemplate, bindings []ResolvedArtifactBinding, parameters json.RawMessage, inputText, systemPrompt, userPrompt string) (map[string]any, map[string]any, map[string]any, WorkflowGateReport, int64, string) {
 	modelName := workflowSkillEvaluationModel(executor)
 	run := model.AgentRun{Executor: executor.Kind(), ExecutionKind: packageValue.Manifest.ExecutorKind, Model: modelName, TimeoutSeconds: 600, ImageManifestJSON: `{"items":[]}`}
@@ -123,7 +147,7 @@ func executeSkillTrial(executor AgentRunExecutor, skill model.SkillDefinition, v
 			requestJSON, run.ImageManifestJSON, expectedImageOutputs, err = buildSkillTrialImageRequest(parameters, packageValue, bindings, inputText, modelName)
 		}
 	} else {
-		requestJSON, err = buildAgentRunChatRequest(CreateAgentRunInput{SystemPrompt: systemPrompt + SkillPackageInstructions(packageValue.Files), UserPrompt: userPrompt}, modelName)
+		requestJSON, err = buildAgentRunChatRequest(CreateAgentRunInput{SystemPrompt: systemPrompt, UserPrompt: userPrompt}, modelName)
 	}
 	if err != nil {
 		report := newWorkflowGateReport()
@@ -132,7 +156,9 @@ func executeSkillTrial(executor AgentRunExecutor, skill model.SkillDefinition, v
 	}
 	run.RequestJSON = string(requestJSON)
 	started := time.Now()
-	call := executor.Call(context.Background(), run)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(run.TimeoutSeconds)*time.Second)
+	defer cancel()
+	call := executor.Call(ctx, run)
 	duration := time.Since(started).Milliseconds()
 	report := newWorkflowGateReport()
 	if call.message != "" {
