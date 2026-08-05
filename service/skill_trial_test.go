@@ -195,7 +195,7 @@ func TestTrialImportedSkillRejectsStageSnapshotFromDifferentValidPackage(t *test
 	if err := repository.SaveSkillVersion(tampered); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := TrialSkill("admin-1", script.Version.ID, SkillTrialInput{InputText: "原稿", ConfirmAPICost: true}); err == nil || !strings.Contains(err.Error(), "SkillPackage") {
+	if _, err := TrialSkill("admin-1", script.Version.ID, SkillTrialInput{InputText: "原稿", ConfirmAPICost: true}); err == nil || !strings.Contains(err.Error(), "冻结") {
 		t.Fatalf("cross-package snapshot err=%v", err)
 	}
 }
