@@ -5,7 +5,21 @@ import type { SkillSourceFile } from "@/services/api/admin-skills";
 
 export type SkillFolderMetadata = { name: string; summary: string; version: string };
 export type SkillFolderDiff = Record<"added" | "modified" | "deleted" | "unchanged", string[]>;
-export type SkillFolderSubmitState = { fileCount: number; hasSkill: boolean; updating: boolean; stageKey: string; name: string; baselineUnavailable?: boolean };
+export type SkillFolderSubmitState = {
+    fileCount: number;
+    hasSkill: boolean;
+    updating: boolean;
+    stageKey: string;
+    name: string;
+    preparing: boolean;
+    hasPreviousVersion: boolean;
+    previousFilesLoading: boolean;
+    hasComparableBaseline: boolean;
+    diffing: boolean;
+    diffReady: boolean;
+    baselineUnavailable: boolean;
+    diffUnavailable: boolean;
+};
 
 type DropEntry = DropFileEntry | DropDirectoryEntry;
 type DropFileEntry = { isFile: true; isDirectory: false; name: string; file: (success: (file: File) => void, error?: (error: DOMException) => void) => void };
@@ -29,8 +43,11 @@ export function parseSkillFolderMetadata(content: string, folderName: string, de
     }
 }
 
-export function canSubmitSkillFolderImport({ fileCount, hasSkill, updating, stageKey, name }: SkillFolderSubmitState) {
-    return fileCount > 0 && hasSkill && (updating || Boolean(stageKey && name.trim()));
+export function canSubmitSkillFolderImport(state: SkillFolderSubmitState) {
+    if (state.preparing || state.fileCount < 1 || !state.hasSkill || (!state.updating && !(state.stageKey && state.name.trim()))) return false;
+    if (state.updating && state.hasPreviousVersion && state.previousFilesLoading) return false;
+    if (state.updating && state.hasComparableBaseline && !state.baselineUnavailable && !state.diffUnavailable && (state.diffing || !state.diffReady)) return false;
+    return true;
 }
 
 export function createLatestRequestGuard() {

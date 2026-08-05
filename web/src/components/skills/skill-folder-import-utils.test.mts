@@ -22,9 +22,16 @@ test("reads SKILL.md frontmatter and applies folder defaults", () => {
 });
 
 test("allows import when the previous version has no comparable snapshot", () => {
-    assert.equal(canSubmitSkillFolderImport({ fileCount: 1, hasSkill: true, updating: true, stageKey: "", name: "", baselineUnavailable: true }), true);
-    assert.equal(canSubmitSkillFolderImport({ fileCount: 1, hasSkill: true, updating: false, stageKey: "script", name: "Skill", baselineUnavailable: true }), true);
-    assert.equal(canSubmitSkillFolderImport({ fileCount: 1, hasSkill: true, updating: false, stageKey: "", name: "Skill", baselineUnavailable: false }), false);
+    const valid = { fileCount: 1, hasSkill: true, updating: true, stageKey: "", name: "", preparing: false, hasPreviousVersion: true, previousFilesLoading: false, hasComparableBaseline: false, diffing: false, diffReady: false, baselineUnavailable: false, diffUnavailable: false };
+    assert.equal(canSubmitSkillFolderImport({ ...valid, preparing: true }), false);
+    assert.equal(canSubmitSkillFolderImport({ ...valid, previousFilesLoading: true }), false);
+    assert.equal(canSubmitSkillFolderImport({ ...valid, baselineUnavailable: true }), true);
+    assert.equal(canSubmitSkillFolderImport({ ...valid, hasComparableBaseline: true, diffing: true }), false);
+    assert.equal(canSubmitSkillFolderImport({ ...valid, hasComparableBaseline: true, diffReady: false }), false);
+    assert.equal(canSubmitSkillFolderImport({ ...valid, hasComparableBaseline: true, diffReady: true }), true);
+    assert.equal(canSubmitSkillFolderImport({ ...valid, hasComparableBaseline: true, diffUnavailable: true }), true);
+    assert.equal(canSubmitSkillFolderImport({ ...valid, updating: false, stageKey: "script", name: "Skill", hasPreviousVersion: false }), true);
+    assert.equal(canSubmitSkillFolderImport({ ...valid, updating: false, stageKey: "", name: "Skill", hasPreviousVersion: false }), false);
 });
 
 test("latest request guard ignores stale completion and invalidated work", async () => {

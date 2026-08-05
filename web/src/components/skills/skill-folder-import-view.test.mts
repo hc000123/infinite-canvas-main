@@ -18,3 +18,10 @@ test("closing folder import invalidates requests and clears transient loading st
     assert.ok(closeEffect.includes("setReading(false)"));
     assert.ok(closeEffect.includes("setDiffing(false)"));
 });
+
+test("starting file selection and recursive drop clears stale confirmation before preparing", () => {
+    assert.ok(source.includes("setPreparing(true)"));
+    assert.ok(source.includes("preparing,"));
+    assert.match(source, /handleDrop[\s\S]+beginPreparing\(true\)[\s\S]+readDroppedSkillFolder/);
+    assert.match(source, /onChange=\{\(event\) => \{ const request = beginPreparing\(false\)/);
+});
