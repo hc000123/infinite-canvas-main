@@ -183,7 +183,7 @@ export default function AdminSkillsPage() {
                 )}
             </Flex>
 
-            <SkillFolderImport open={Boolean(folderImportMode)} token={token} skillId={folderImportMode === "version" ? activeItem?.skill.id : undefined} onCancel={() => setFolderImportMode("")} onImported={async (skillId, versionId) => { setFolderImportMode(""); await invalidateAll(); if (skillId) setActiveSkillId(skillId); if (versionId) setActiveVersionId(versionId); }} />
+            <SkillFolderImport open={Boolean(folderImportMode)} token={token} skillId={folderImportMode === "version" ? activeItem?.skill.id : undefined} previousVersionId={folderImportMode === "version" ? activeVersionId : undefined} onCancel={() => setFolderImportMode("")} onImported={async (skillId, versionId) => { setFolderImportMode(""); await invalidateAll(); if (skillId) setActiveSkillId(skillId); if (versionId) setActiveVersionId(versionId); }} />
             <SkillTrialPanel open={trialOpen} token={token} versionId={activeVersionId} onCancel={() => setTrialOpen(false)} onCompleted={async () => { await invalidateAll(); }} />
 
             <Modal title="编辑 Skill 名称" open={definitionOpen} onCancel={() => setDefinitionOpen(false)} onOk={() => definitionMutation.mutate()} confirmLoading={definitionMutation.isPending} okButtonProps={{ disabled: !definitionForm.name.trim() }}>

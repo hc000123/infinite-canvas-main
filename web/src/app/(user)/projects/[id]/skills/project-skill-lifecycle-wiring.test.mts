@@ -14,3 +14,7 @@ test("project Skill management uses the shared folder-first lifecycle", () => {
 test("archived project Skill versions are view-only", () => {
     assert.match(page, /activeVersion\.status === "archived"/);
 });
+
+test("project new version import compares against the selected version", () => {
+    assert.match(page, /previousVersionId=\{folderImportMode === "version" \? activeVersionId : undefined\}/);
+});

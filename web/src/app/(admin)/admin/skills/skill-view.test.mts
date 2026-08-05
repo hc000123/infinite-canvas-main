@@ -68,3 +68,8 @@ test("skill center is generic and exposes manifest filters", () => {
     for (const text of ["导入 Skill 文件夹", "导入新版本", "独立试运行", "设为可用", "技术详情与底层契约"]) assert.ok(page.includes(text), `missing folder-first action ${text}`);
     assert.equal(page.includes("工作流 Run ID"), false);
 });
+
+test("new version import compares against the selected version", () => {
+    const page = fs.readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
+    assert.match(page, /previousVersionId=\{folderImportMode === "version" \? activeVersionId : undefined\}/);
+});

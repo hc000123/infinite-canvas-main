@@ -8,11 +8,14 @@ test("folder import preserves complete relative paths and parallel file entries"
     const rule = new File(["preserve"], "dialogue.md", { type: "text/markdown" });
     Object.defineProperty(skill, "webkitRelativePath", { value: "Seedance/SKILL.md" });
     Object.defineProperty(rule, "webkitRelativePath", { value: "Seedance/rules/dialogue.md" });
-    const form = buildSkillFolderFormData([skill, rule], { ownerType: "system", stageKey: "script" });
+    const form = buildSkillFolderFormData([skill, rule], { ownerType: "system", stageKey: "script", name: "\u5267\u672c Skill", summary: "\u6574\u7406\u5267\u672c", version: "2.0.0" });
     assert.deepEqual(form.getAll("paths"), ["Seedance/SKILL.md", "Seedance/rules/dialogue.md"]);
     assert.equal(form.getAll("files").length, 2);
     assert.equal(form.get("folderName"), "Seedance");
     assert.equal(form.get("stageKey"), "script");
+    assert.equal(form.get("name"), "\u5267\u672c Skill");
+    assert.equal(form.get("summary"), "\u6574\u7406\u5267\u672c");
+    assert.equal(form.get("version"), "2.0.0");
 });
 
 test("folder import rejects a selection without root SKILL.md", () => {
