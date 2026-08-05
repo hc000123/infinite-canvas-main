@@ -136,9 +136,9 @@ export type SkillEvaluationResult = {
     baseline: Record<string, unknown>;
     diff: Record<string, unknown>;
 };
-export type SkillStageTemplate = { key: string; label: string; description: string; executorKind: string; capability: string; inputTypes: string[]; outputType: string; fixedAdapter: { adapterId: string; adapterVersion: string } };
+export type SkillStageTemplate = { key: string; label: string; description: string; executorKind: string; capability: string; inputTypes: string[]; outputType: string; outputMin: number; outputMax: number; fixedAdapter: { adapterId: string; adapterVersion: string } };
 export type SkillSourceFile = { path: string; mimeType: string; hash: string; size: number; text: boolean };
-export type SkillTrialInput = { inputText: string; inputArtifacts: Array<{ bindingName: string; artifactId: string; contentHash: string }>; confirmApiCost: boolean };
+export type SkillTrialInput = { inputText: string; inputArtifacts: Array<{ bindingName: string; artifactId: string; contentHash: string }>; parameters: Record<string, unknown>; confirmApiCost: boolean };
 export type SkillTrialResult = { evaluation: SkillEvaluation; stageKey: string; raw: Record<string, unknown>; standard: Record<string, unknown>; diff: Record<string, unknown>; gates: Array<{ code: string; message: string; itemId?: string; blocking: boolean }> };
 export type SkillDraftInput = { version: string; package: SkillPackage };
 export type CreateSkillInput = SkillDraftInput & Pick<SkillDefinition, "name" | "summary" | "ownerType" | "ownerProjectId">;

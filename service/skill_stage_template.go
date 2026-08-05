@@ -10,6 +10,8 @@ type SkillStageTemplate struct {
 	Capability   string             `json:"capability"`
 	InputTypes   []string           `json:"inputTypes"`
 	OutputType   string             `json:"outputType"`
+	OutputMin    int                `json:"outputMin"`
+	OutputMax    int                `json:"outputMax"`
 	FixedAdapter WorkflowAdapterRef `json:"fixedAdapter"`
 }
 
@@ -27,9 +29,13 @@ func ListSkillStageTemplates() []SkillStageTemplate {
 	for _, key := range systemSkillSeedStageKeys {
 		artifacts := workflowSkillSeedArtifacts[key]
 		label := workflowStageTemplateLabels[key]
+		outputMax := 1
+		if key == WorkflowSkillStageAssets {
+			outputMax = 300
+		}
 		result = append(result, SkillStageTemplate{
 			Key: key, Label: label[0], Description: label[1], ExecutorKind: "text_model",
-			Capability: "workflow.stage." + key, InputTypes: append([]string(nil), artifacts.Inputs...), OutputType: artifacts.Outputs[0],
+			Capability: "workflow.stage." + key, InputTypes: append([]string(nil), artifacts.Inputs...), OutputType: artifacts.Outputs[0], OutputMin: 1, OutputMax: outputMax,
 			FixedAdapter: WorkflowAdapterRef{AdapterID: "stage-" + key + "-normalize", AdapterVersion: "1.0.0"},
 		})
 	}
@@ -44,7 +50,7 @@ func ListSkillStageTemplates() []SkillStageTemplate {
 		}
 		result = append(result, SkillStageTemplate{
 			Key: seed.Key, Label: seed.Name, Description: seed.Summary, ExecutorKind: executorKind,
-			Capability: seed.Capabilities[0], InputTypes: inputs, OutputType: seed.Output.ArtifactType,
+			Capability: seed.Capabilities[0], InputTypes: inputs, OutputType: seed.Output.ArtifactType, OutputMin: seed.Output.Min, OutputMax: seed.Output.Max,
 			FixedAdapter: WorkflowAdapterRef{AdapterID: "stage-" + seed.Key + "-normalize", AdapterVersion: "1.0.0"},
 		})
 	}

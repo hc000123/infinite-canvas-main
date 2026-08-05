@@ -68,8 +68,8 @@ func stageWorkflowAdapter(template SkillStageTemplate) WorkflowAdapterDefinition
 	bindingName := template.OutputType
 	return WorkflowAdapterDefinition{
 		ID: template.FixedAdapter.AdapterID, Version: template.FixedAdapter.AdapterVersion,
-		InputContracts: []ArtifactInputSpec{{BindingName: bindingName, ArtifactType: template.OutputType, Required: true, Min: 1, Max: 1, SchemaConstraint: ">=1.0 <2.0"}},
-		Output:         ArtifactOutputSpec{BindingName: bindingName, ArtifactType: template.OutputType, Min: 1, Max: 1, SchemaVersion: coreArtifactSchemaVersion},
+		InputContracts: []ArtifactInputSpec{{BindingName: bindingName, ArtifactType: template.OutputType, Required: true, Min: template.OutputMin, Max: template.OutputMax, SchemaConstraint: ">=1.0 <2.0"}},
+		Output:         ArtifactOutputSpec{BindingName: bindingName, ArtifactType: template.OutputType, Min: template.OutputMin, Max: template.OutputMax, SchemaVersion: coreArtifactSchemaVersion},
 		Rules:          json.RawMessage(fmt.Sprintf(`{"stageKey":%q,"policy":"structure_only","contentMutation":"forbidden"}`, template.Key)),
 		Transform: func(bindings []ResolvedArtifactBinding) (json.RawMessage, error) {
 			if len(bindings) != 1 {
@@ -193,8 +193,11 @@ func normalizeWorkflowAdapterDefinition(value WorkflowAdapterDefinition) (Workfl
 		return value, errors.New("Workflow Adapter 输入契约无效")
 	}
 	outputs, err := normalizeArtifactOutputSpecs([]ArtifactOutputSpec{value.Output})
-	if err != nil || len(outputs) != 1 || outputs[0].Min != 1 || outputs[0].Max != 1 {
+	if err != nil || len(outputs) != 1 || outputs[0].Min < 1 {
 		return value, errors.New("Workflow Adapter 输出契约无效")
+	}
+	if len(inputs) != 1 || inputs[0].BindingName != outputs[0].BindingName || inputs[0].ArtifactType != outputs[0].ArtifactType || inputs[0].Min != outputs[0].Min || inputs[0].Max != outputs[0].Max {
+		return value, errors.New("Workflow Adapter 必须使用一对一 Artifact 契约")
 	}
 	rules, _, err := canonicalRawObject(value.Rules)
 	if err != nil {
@@ -298,58 +301,79 @@ func validateWorkflowAdapterNodeContracts(definition WorkflowAdapterDefinition, 
 }
 
 func ExecuteWorkflowAdapter(userID, projectID, episodeID string, definition WorkflowAdapterDefinition, refs []ArtifactRefInput) (ArtifactEnvelope, error) {
+	outputs, err := ExecuteWorkflowAdapterOutputs(userID, projectID, episodeID, definition, refs)
+	if err != nil {
+		return ArtifactEnvelope{}, err
+	}
+	if len(outputs) != 1 {
+		return ArtifactEnvelope{}, safeMessageError{message: "Workflow Adapter 产生了多个 Artifact"}
+	}
+	return outputs[0], nil
+}
+
+func ExecuteWorkflowAdapterOutputs(userID, projectID, episodeID string, definition WorkflowAdapterDefinition, refs []ArtifactRefInput) ([]ArtifactEnvelope, error) {
 	normalized, err := normalizeWorkflowAdapterDefinition(definition)
 	if err != nil || normalized.ContentHash != definition.ContentHash {
-		return ArtifactEnvelope{}, safeMessageError{message: "Workflow Adapter 定义哈希不一致"}
+		return nil, safeMessageError{message: "Workflow Adapter 定义哈希不一致"}
 	}
 	envelopes, snapshots, err := ResolveArtifactRefs(userID, refs)
 	if err != nil {
-		return ArtifactEnvelope{}, err
+		return nil, err
 	}
 	bindings := make([]ResolvedArtifactBinding, len(envelopes))
 	for index := range envelopes {
 		approved, err := invocationArtifactApproved(userID, envelopes[index].Artifact)
 		if err != nil {
-			return ArtifactEnvelope{}, err
+			return nil, err
 		}
 		bindings[index] = ResolvedArtifactBinding{BindingName: snapshots[index].BindingName, Artifact: envelopes[index], Snapshot: snapshots[index], Approved: approved}
 	}
 	if err := validateWorkflowAdapterBindings(normalized, bindings); err != nil {
-		return ArtifactEnvelope{}, err
-	}
-	payload, err := normalized.Transform(bindings)
-	if err != nil {
-		return ArtifactEnvelope{}, err
+		return nil, err
 	}
 	metadata, err := json.Marshal(workflowAdapterSnapshotValue(normalized))
 	if err != nil {
-		return ArtifactEnvelope{}, err
+		return nil, err
 	}
-	items, outputs, err := buildArtifacts(userID, []CreateArtifactInput{{
-		ArtifactType: normalized.Output.ArtifactType, SchemaVersion: normalized.Output.SchemaVersion,
-		ProjectID: projectID, EpisodeID: episodeID, ParentArtifactRefs: refs, Payload: payload,
-		Extensions: map[string]json.RawMessage{workflowAdapterExtensionKey: metadata},
-	}}, false)
-	if err != nil {
-		return ArtifactEnvelope{}, err
-	}
-	coordinate, _ := marshalInvocationCanonical(struct {
-		UserID, ProjectID, EpisodeID, AdapterHash string
-		Refs                                      []ArtifactRefInput
-	}{strings.TrimSpace(userID), strings.TrimSpace(projectID), strings.TrimSpace(episodeID), normalized.ContentHash, refs})
-	items[0].ID = deterministicInvocationID("artifact-adapter", string(coordinate))
-	outputs[0].Artifact.ID = items[0].ID
-	if _, err := repository.CreateArtifact(items[0]); err == nil {
-		return outputs[0], nil
-	}
-	stored, ok, lookupErr := repository.GetUserArtifact(userID, items[0].ID)
-	if lookupErr != nil || !ok || stored.ContentHash != items[0].ContentHash {
-		if lookupErr != nil {
-			return ArtifactEnvelope{}, lookupErr
+	outputs := make([]ArtifactEnvelope, 0, len(bindings))
+	for index, binding := range bindings {
+		payload, err := normalized.Transform([]ResolvedArtifactBinding{binding})
+		if err != nil {
+			return nil, err
 		}
-		return ArtifactEnvelope{}, errors.New("Workflow Adapter 派生 Artifact 冲突")
+		parentRefs := []ArtifactRefInput{refs[index]}
+		items, built, err := buildArtifacts(userID, []CreateArtifactInput{{
+			ArtifactType: normalized.Output.ArtifactType, SchemaVersion: normalized.Output.SchemaVersion,
+			ProjectID: projectID, EpisodeID: episodeID, ParentArtifactRefs: parentRefs, Payload: payload,
+			Extensions: map[string]json.RawMessage{workflowAdapterExtensionKey: metadata},
+		}}, false)
+		if err != nil {
+			return nil, err
+		}
+		coordinate, _ := marshalInvocationCanonical(struct {
+			UserID, ProjectID, EpisodeID, AdapterHash string
+			Refs                                      []ArtifactRefInput
+		}{strings.TrimSpace(userID), strings.TrimSpace(projectID), strings.TrimSpace(episodeID), normalized.ContentHash, parentRefs})
+		items[0].ID = deterministicInvocationID("artifact-adapter", string(coordinate))
+		built[0].Artifact.ID = items[0].ID
+		if _, err := repository.CreateArtifact(items[0]); err == nil {
+			outputs = append(outputs, built[0])
+			continue
+		}
+		stored, ok, lookupErr := repository.GetUserArtifact(userID, items[0].ID)
+		if lookupErr != nil || !ok || stored.ContentHash != items[0].ContentHash {
+			if lookupErr != nil {
+				return nil, lookupErr
+			}
+			return nil, errors.New("Workflow Adapter 派生 Artifact 冲突")
+		}
+		output, err := artifactEnvelopeFromModel(stored)
+		if err != nil {
+			return nil, err
+		}
+		outputs = append(outputs, output)
 	}
-	return artifactEnvelopeFromModel(stored)
+	return outputs, nil
 }
 
 func workflowAdapterArtifactApproved(userID string, artifactID string, extensionsJSON string) (bool, error) {

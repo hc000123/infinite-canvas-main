@@ -294,10 +294,18 @@ func resolveAgentRunChannelForCapability(input CreateAgentRunInput, capability s
 			return resolvedAgentRunChannel{}, err
 		}
 		public := normalizeSettings(settings).Public.ModelChannel
-		modelName = strings.TrimSpace(public.DefaultTextModel)
+		if capability == "image" {
+			modelName = strings.TrimSpace(public.DefaultImageModel)
+		} else {
+			modelName = strings.TrimSpace(public.DefaultTextModel)
+		}
 	}
 	if modelName == "" {
-		return resolvedAgentRunChannel{}, safeMessageError{message: "缺少文本模型"}
+		label := "文本"
+		if capability == "image" {
+			label = "图片"
+		}
+		return resolvedAgentRunChannel{}, safeMessageError{message: "缺少" + label + "模型"}
 	}
 	channelID := strings.TrimSpace(input.ChannelID)
 	fallbackIDs := []string{}

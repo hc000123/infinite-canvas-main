@@ -135,10 +135,19 @@
 - 冒烟期间修复提示词页 Zustand selector 返回新数组造成的 React 无限更新，并修复 Docker 构建未复制 `web/patches` 导致 Bun 安装阶段失败的问题；两项均补充自动回归测试。
 - 未触发真实图片、视频或文本模型扣费调用；正式云端发布后仍需验证真实域名、HTTPS、持久盘 / 外部数据库、公开素材公网拉取及生产模型渠道预检。
 
+### 外部 Skill 文件夹导入与阶段运行
+
+- 管理后台和项目 Skill 中心都可直接导入一个完整 Skill 文件夹；导入时只选所属阶段，系统自动生成 Capability、Artifact 输入 / 输出、Schema、执行器和固定转换契约，源文件以只读快照保存并可逐个浏览。
+- 同一 Definition 可继续载入新文件夹版本；通过独立试跑后才可设为可用、推荐，并可停用不再使用的 Definition。项目级 Skill 只对所属项目可见，管理员可管理系统 Skill。
+- 独立试跑不需要 Workflow Run ID，结果分别保存并展示“模型原始输出 / 标准产物 / 转换差异 / 质量问题”。文本 Skill 使用文本执行器；图片 Skill 使用正式 `/images/generations` 请求和输出映射，可直接粘贴资产 Brief，也可设置 `n / size / quality / background / output_format` 参数。
+- 每个内容 Skill 后都串联不可编辑、不可删除的系统转换规则。转换规则只裁剪剧本外层空白，或为资产 / 分镜补稳定 ID，不摘要、润色、改写内容；当 Skill 输出多个 Artifact 时会逐个一对一转换并保留独立血缘。
+- 系统标准 Workflow 升级为不可变 `2.4.0`：12 个内容 Skill 节点 + 12 个锁定转换节点。编辑器将转换节点折叠为“系统转换规则”，制作人员只选择内容 Skill 版本。
+- 人工验收：分别从管理后台和项目页导入文件夹，查看源文件，运行文本与图片 Skill，检查四栏结果，再完成发布 / 推荐 / 停用。在 Workflow、画布、生图和直接 API 中选择同一精确 Version ID，确认 ContentHash 与输入 / 输出契约一致；再用多资产 Brief 输出确认转换后数量不变。
+
 ### Workflow / Skill / 画布总控架构收口
 
 - 项目剧本导入与已有剧本优化现在直接创建 `source_text → Skill Invocation → production_script`，不再创建固定剧本 Agent Plan；Skill 版本、输入 Artifact、模型、额度、质量门、人工审核和 Apply 轨迹仍完整冻结。
-- 系统“标准 AIGC 生产 Workflow”升级为不可变 `2.3.0`，12 个生产节点全部委托 Skill Invocation；剧本节点改为运行前选择精确版本，Workflow 启动不再依赖岗位 Agent 种子，项目编辑器只能新增 Skill 节点，历史 Agent 节点保持只读。
+- 系统“标准 AIGC 生产 Workflow”当前为不可变 `2.4.0`，共 12 个内容 Skill 节点和 12 个固定转换节点；剧本节点改为运行前选择精确版本，Workflow 启动不再依赖岗位 Agent 种子，项目编辑器只能新增 Skill 节点，历史 Agent 节点保持只读。
 - 服务启动只注册唯一系统 Agent `agent-system-canvas-orchestrator` / `agent-version-system-canvas-orchestrator-1.0.0`。它使用 `catalog_plan`，发布包没有固定步骤，每次计划必须在运行时提供 1–12 个 Skill Step。
 - 画布对话移除 Agent 下拉，固定显示“画布总控”。总控只能基于当前用户可见且符合访问策略的 Skill Catalog 返回直接回答或临时计划；直接回答不创建 Artifact / Agent Plan。已保存计划卡也不再携带可变 Agent ID / 名称，恢复后仍只读取固定总控。
 - 临时计划会拒绝未知 Skill Version、重复 Step Key、超限步骤、首步不接收 `source_text` 或相邻 Artifact 契约不兼容；客户端只接受模型给出的 Step Key、Skill Version、参数和理由，其余 ID、Capability、Binding 与输出类型全部从真实 Catalog 重建。
@@ -157,7 +166,7 @@
 ### Workflow Skill 运行前版本、Adapter 与项目管理
 
 - 动态剧本已注册为可选 `skill-system-workflow-script@3.2.0`，与 `3.1.0` 共用稳定 Definition 和 `source_text → production_script` 契约；推荐版本保持不变，不会自动替换其他 Workflow 或已冻结运行。
-- 标准 Workflow `2.3.0` 的剧本节点改为 `manual_before_run`。候选项同时按 Capability、候选 Skill ID、必需输入、输入 Artifact 与输出 Artifact 过滤；预检后冻结精确 Version ID 与内容哈希，之后切换推荐版本不影响当前运行。
+- 标准 Workflow `2.4.0` 的剧本节点使用 `manual_before_run`。候选项同时按 Capability、候选 Skill ID、必需输入、输入 Artifact 与输出 Artifact 过滤；预检后冻结精确 Version ID 与内容哈希，之后切换推荐版本不影响当前运行。
 - 新增确定性、精确版本化的 Workflow Adapter。Adapter 不调用模型、不摘要或改写业务内容，只按声明契约生成派生 Artifact；路由预览与执行 Revision 冻结规则快照，输出保留全部父引用和 `workflow.adapter` metadata，相同输入重试得到相同 ID 与内容哈希。
 - 项目 Workflow 页新增“管理 Skill”入口，`/projects/:id/skills` 可查看只读 System Skill、复制为独立 Project Draft，并完成新建、编辑、校验 / 评测、发布、推荐、归档、停用和安全删除。服务端拒绝删除被评测、绑定、发布或运行引用的记录，并直接显示原因。
 - Workflow、画布总控和直接 API 继续共用同一个 Skill Options / Exact Resolution Registry；自动回归已验证同一 Version ID、ContentHash、Manifest 与输入 / 输出 Binding 在三个入口一致，其他用户或项目无法看到或解析 Project Skill。
@@ -263,7 +272,7 @@ git diff --check
 - 每次运行先创建不可变 `source_text` Artifact，再直接建立 Invocation 并完成预检；确认时展示冻结的 Skill 精确版本、预计 Credits 和服务端确认要求。执行产物以待审核 `production_script` Artifact 返回，未批准前不会写入本地分集。
 - 导入页和已有分集只显示兼容 Skill 版本选择器，不再显示固定 Agent 选择器。旧 Agent 设置抽屉、快速 Agent、Workflow 执行面板、脚本直调 Runner 和 `projectWorkflowSelections` 持久化状态已移除。
 - 待审文本如果被手工修改，将拒绝继续批准原 Artifact 哈希，必须重新运行，避免把修改稿伪装成原 Skill 产物；批准 Invocation 后才同步本地分集与视频工作流剧本。
-- 历史隔离浏览器验收曾覆盖 `source_text` 与 Agent Plan；当前入口已替换为直接 Skill Invocation，系统 Workflow 也已升级为 12 个 Skill 节点的 `2.3.0`，需要按本页顶部新清单重新做真实页面确认。
+- 历史隔离浏览器验收曾覆盖 `source_text` 与 Agent Plan；当前入口已替换为直接 Skill Invocation，系统 Workflow 已升级为由 12 个内容 Skill 和 12 个固定转换节点组成的 `2.4.0`，需要按本页顶部新清单重新做真实页面确认。
 - 当前隔离环境没有可用文本模型，Skill Invocation 预检按设计立即返回“没有可用文本模型”，因此本轮不宣称真实模型生产稿效果通过。确定性单元测试已覆盖冻结坐标、确认、轮询到待审、人工审核完成和篡改阻断；配置生产文本模型后仍需用固定剧本复测实际文稿质量。
 - 本阶段自动门禁已通过：`go test ./... -count=1`、前端 773 项测试、`npm run typecheck`、`npm run build` 和 `git diff --check`。
 
@@ -271,12 +280,12 @@ git diff --check
 
 - 新增 6 个系统 Skill 推荐发布版：内容标签分类、角色资产设定图 Brief、场景资产主参考图 Brief、道具资产结构图 Brief、竖屏短剧分镜和横屏中长剧分镜。每个包均包含 `SKILL.md`、领域规则、输出模板、通过 Core Artifact Schema 的示例、独立 Manifest、输入 / 输出契约、质量门和系统评测。
 - 内容分类从已批准 `production_script` 产出带原文证据和置信度的 `content_profile`；三类资产 Brief 共用 `asset_catalog` 事实但以独立 Skill 生成不同图片格式，不声称图片已经生成；两类分镜共同消费剧本、资产目录和内容标签。
-- 系统“标准 AIGC 生产 Workflow”当前为不可变 `2.3.0`：`剧本整理 → 内容分类 / 资产提取 → 角色 / 场景 / 道具 Brief → 角色 / 场景 / 道具成图 / 分镜路由 → 视频提示词 → 交付审计`，共 12 个 Skill 节点。剧本节点运行前手选精确版本；三类 Brief 与三类资产成图分别可并行；分镜节点继续使用 `tag_route`，`9:16 + short_drama` 冻结竖屏短剧 Skill，`16:9 + long_form` 冻结横屏中长剧 Skill。
+- 系统“标准 AIGC 生产 Workflow”当前为不可变 `2.4.0`：`剧本整理 → 内容分类 / 资产提取 → 角色 / 场景 / 道具 Brief → 角色 / 场景 / 道具成图 / 分镜路由 → 视频提示词 → 交付审计`，共 12 个内容 Skill 节点和 12 个固定转换节点。剧本节点运行前手选精确版本；三类 Brief 与三类资产成图分别可并行；分镜节点继续使用 `tag_route`，`9:16 + short_drama` 冻结竖屏短剧 Skill，`16:9 + long_form` 冻结横屏中长剧 Skill。
 - 确定性端到端测试已实际完成 12 个 Invocation：逐节点冻结 Skill 版本、父 Artifact ID / hash、Schema 与业务质量门、人工审核、积分扣费、刷新坐标和最终 `delivery_report`；所有正式节点均未创建 Agent Plan。
-- 历史隔离浏览器验收已确认内容分类、三类 Brief、两类分镜和三类资产成图能力均有推荐发布版；当时页面显示 v2.1.0。当前 `2.3.0` 保留同一 12 节点与分镜标签路由，但全部改为 Skill 节点，并将剧本节点改为运行前手选，需要按顶部清单重新确认页面。
-- 完整自动门禁已通过：Go 全包测试、前端 777 项测试、TypeScript 类型检查、Next.js 生产构建、能力种子 / 路由 / 12 节点专项测试和 `git diff --check`。
+- 历史隔离浏览器验收已确认内容分类、三类 Brief、两类分镜和三类资产成图能力均有推荐发布版；当时页面显示 v2.1.0。当前 `2.4.0` 保留 12 个内容 Skill 节点与分镜标签路由，并在每个内容节点后增加锁定转换节点；需要按顶部清单重新确认页面。
+- 历史完整自动门禁已通过：Go 全包测试、前端 777 项测试、TypeScript 类型检查、Next.js 生产构建、能力种子 / 路由 / 12 个内容节点专项测试和 `git diff --check`；本轮 `2.4.0` 和文件夹导入的定向验收记录在本页顶部新清单。
 - 当前边界：内容分类结果会进入分镜 Skill 输入，但当前分镜版本选择仍在预检时根据制作参数冻结，不会在同一次预检中读取尚未生成的分类结果重新路由；需要 deferred preflight 才能完成二次路由。
-- 人工验收：在 Skill 中心逐一查看新增能力包的文件、契约和评测；复制 v2.3.0 Workflow，选择剧本版本后分别以 `9:16 + short_drama`、`16:9 + long_form` 预检，确认剧本与分镜冻结版本符合选择和路由；配置真实文本和图片模型后，用同一固定剧本完成一次内容与视觉效果复测。
+- 人工验收：在 Skill 中心逐一查看新增能力包的文件、契约和评测；复制 v2.4.0 Workflow，选择剧本版本后分别以 `9:16 + short_drama`、`16:9 + long_form` 预检，确认剧本与分镜冻结版本符合选择和路由；配置真实文本和图片模型后，用同一固定剧本完成一次内容与视觉效果复测。
 
 ### 图片执行器与资产成图 Runtime Phase 9
 

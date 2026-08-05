@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -41,6 +42,55 @@ func TestTrialSkillRunsWithoutWorkflowAndPersistsRawAndStandardResults(t *testin
 	if json.Unmarshal([]byte(stored.ResultJSON), &storedResult) != nil || storedResult["raw"] == nil || storedResult["standard"] == nil {
 		t.Fatalf("stored result=%s", stored.ResultJSON)
 	}
+}
+
+func TestTrialImageSkillUsesImageRequestAndConvertsEveryOutput(t *testing.T) {
+	setupInvocationServiceTest(t)
+	setupImageInvocationSettings(t, true)
+	snapshot, _ := ParseSkillFolder("角色资产成图", []SkillFolderFile{{Path: "SKILL.md", Data: []byte("# 生成角色四视图")}})
+	created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: "asset-rendition-character", Snapshot: snapshot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	executor := &recordingSkillExecutor{output: `{"outputs":[{"bindingName":"asset_rendition","ordinal":0,"payload":{"assetId":"trial-input","renditionId":"rendition-1","mediaType":"image","mediaRef":"/api/uploaded-assets/runtime/image/one.png","generationMetadata":{}}},{"bindingName":"asset_rendition","ordinal":1,"payload":{"assetId":"trial-input","renditionId":"rendition-2","mediaType":"image","mediaRef":"/api/uploaded-assets/runtime/image/two.png","generationMetadata":{}}}]}`}
+	restore := useSkillEvaluationExecutor(t, executor)
+	defer restore()
+	result, err := TrialSkill("admin-1", created.Version.ID, SkillTrialInput{InputText: "同一位成年女性角色四视图", Parameters: json.RawMessage(`{"n":2,"size":"1024x1024"}`), ConfirmAPICost: true})
+	if err != nil || result.Evaluation.Status != "passed" {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	if executor.run.ExecutionKind != "image_model" || executor.run.Model != "image-test" || executor.run.ChannelID != "image-channel" {
+		t.Fatalf("run=%+v", executor.run)
+	}
+	var request map[string]any
+	if json.Unmarshal([]byte(executor.run.RequestJSON), &request) != nil || request["model"] != "image-test" || request["n"] != float64(2) || request["messages"] != nil {
+		t.Fatalf("image request=%s", executor.run.RequestJSON)
+	}
+	var manifest struct {
+		AssetID  string `json:"assetId"`
+		Ordinals []int  `json:"ordinals"`
+	}
+	if json.Unmarshal([]byte(executor.run.ImageManifestJSON), &manifest) != nil || manifest.AssetID != "trial-input" || len(manifest.Ordinals) != 2 {
+		t.Fatalf("manifest=%s", executor.run.ImageManifestJSON)
+	}
+	outputs, _ := result.Standard["outputs"].([]any)
+	if len(outputs) != 2 || result.Diff["contentChanged"] != false {
+		t.Fatalf("standard=%+v diff=%+v", result.Standard, result.Diff)
+	}
+}
+
+type recordingSkillExecutor struct {
+	output string
+	run    model.AgentRun
+}
+
+func (*recordingSkillExecutor) Kind() string                         { return AgentRunExecutorAPI }
+func (*recordingSkillExecutor) Available(context.Context) error      { return nil }
+func (*recordingSkillExecutor) ReserveCredits(*model.AgentRun) error { return nil }
+func (*recordingSkillExecutor) RefundCredits(*model.AgentRun) error  { return nil }
+func (executor *recordingSkillExecutor) Call(_ context.Context, run model.AgentRun) agentRunCallResult {
+	executor.run = run
+	return agentRunCallResult{rawOutput: executor.output, structuredJSON: executor.output}
 }
 
 func TestTrialSkillRequiresInputAndExplicitAPICostConfirmation(t *testing.T) {

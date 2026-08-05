@@ -8,6 +8,8 @@ import { useMemo, useRef, useState } from "react";
 import { fetchAdminSkillStageTemplates, importAdminSkillFolder, importAdminSkillFolderVersion, type SkillStageTemplate } from "@/services/api/admin-skills";
 import { fetchProjectSkillStageTemplates, importProjectSkillFolder, importProjectSkillFolderVersion } from "@/services/api/project-skills";
 
+type SkillFolderImportResult = { skill?: { id: string }; version?: { id: string } | string; id?: string };
+
 export function SkillFolderImport({ open, token, scope = "admin", projectId, skillId, onCancel, onImported }: { open: boolean; token: string; scope?: "admin" | "project"; projectId?: string; skillId?: string; onCancel: () => void; onImported: (skillId?: string, versionId?: string) => void }) {
     const { message } = App.useApp();
     const inputRef = useRef<HTMLInputElement>(null);
@@ -21,16 +23,15 @@ export function SkillFolderImport({ open, token, scope = "admin", projectId, ski
         const path = file.webkitRelativePath || file.name;
         return path === "SKILL.md" || path === `${folderName}/SKILL.md`;
     }), [files, folderName]);
-    const mutation = useMutation({
-        mutationFn: () => updating
+    const mutation = useMutation<SkillFolderImportResult>({
+        mutationFn: (): Promise<SkillFolderImportResult> => updating
             ? scope === "admin" ? importAdminSkillFolderVersion(token, skillId!, files) : importProjectSkillFolderVersion(token, skillId!, files)
             : scope === "admin" ? importAdminSkillFolder(token, files, { ownerType: "system", stageKey }) : importProjectSkillFolder(token, files, { ownerType: "project", projectId, stageKey }),
         onSuccess: (result) => {
-            const value = result as { skill?: { id: string }; version?: { id: string }; id?: string };
             message.success(updating ? "新版本已载入，请先试跑" : "Skill 文件夹已载入，请先试跑");
             setFiles([]);
             setStageKey("");
-            onImported(value.skill?.id, value.version?.id || value.id);
+            onImported(result.skill?.id, typeof result.version === "object" ? result.version.id : result.id);
         },
         onError: (error) => message.error(error instanceof Error ? error.message : "导入失败"),
     });
@@ -49,4 +50,4 @@ export function SkillFolderImport({ open, token, scope = "admin", projectId, ski
 }
 
 function stageOption(item: SkillStageTemplate) { return { value: item.key, label: `${item.label} · ${item.outputType}` }; }
-function StageSummary({ item }: { item: SkillStageTemplate }) { return <div className="mt-3 rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3"><Flex align="center" gap={8}><FolderOpenOutlined /><Typography.Text strong>{item.label}</Typography.Text><Tag>{item.executorKind === "image_model" ? "图片" : "文本"}</Tag></Flex><Typography.Text type="secondary" className="mt-2 block text-xs">{item.description}</Typography.Text><Typography.Text type="secondary" className="mt-2 block text-xs">{item.inputTypes.join(" + ")} → {item.outputType}</Typography.Text></div>; }
+function StageSummary({ item }: { item: SkillStageTemplate }) { return <div className="mt-3 rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3"><Flex align="center" gap={8}><FolderOpenOutlined /><Typography.Text strong>{item.label}</Typography.Text><Tag>{item.executorKind === "image_model" ? "图片" : "文本"}</Tag></Flex><Typography.Text type="secondary" className="mt-2 block text-xs">{item.description}</Typography.Text><Typography.Text type="secondary" className="mt-2 block text-xs">{item.inputTypes.join(" + ")} → {item.outputType} × {item.outputMin}{item.outputMax > item.outputMin ? `–${item.outputMax}` : ""}</Typography.Text></div>; }

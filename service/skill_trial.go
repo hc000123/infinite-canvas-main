@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 type SkillTrialInput struct {
 	InputText      string             `json:"inputText"`
 	InputArtifacts []ArtifactRefInput `json:"inputArtifacts"`
+	Parameters     json.RawMessage    `json:"parameters"`
 	ConfirmAPICost bool               `json:"confirmApiCost"`
 }
 
@@ -46,6 +49,10 @@ func TrialSkill(userID, versionID string, input SkillTrialInput) (SkillTrialResu
 	if err != nil {
 		return SkillTrialResult{}, err
 	}
+	bindings := make([]ResolvedArtifactBinding, len(artifacts))
+	for index := range artifacts {
+		bindings[index] = ResolvedArtifactBinding{BindingName: snapshots[index].BindingName, Artifact: artifacts[index], Snapshot: snapshots[index]}
+	}
 	executor, err := skillEvaluationExecutorFactory()
 	if err != nil {
 		return SkillTrialResult{}, err
@@ -53,11 +60,19 @@ func TrialSkill(userID, versionID string, input SkillTrialInput) (SkillTrialResu
 	if executor.Kind() == AgentRunExecutorAPI && !input.ConfirmAPICost {
 		return SkillTrialResult{}, safeMessageError{message: "API 试跑会产生上游费用，必须显式确认"}
 	}
-	inputSnapshot := map[string]any{"inputText": inputText, "inputArtifacts": snapshots}
+	parameters := input.Parameters
+	if len(parameters) == 0 {
+		parameters = json.RawMessage(`{}`)
+	}
+	var parameterValue map[string]any
+	if json.Unmarshal(parameters, &parameterValue) != nil {
+		return SkillTrialResult{}, safeMessageError{message: "试跑参数必须是 JSON 对象"}
+	}
+	inputSnapshot := map[string]any{"inputText": inputText, "inputArtifacts": snapshots, "parameters": parameterValue}
 	inputSnapshotJSON, _ := marshalInvocationCanonical(inputSnapshot)
 	userPromptJSON, _ := json.Marshal(map[string]any{"text": inputText, "artifacts": artifacts})
 	systemPrompt := "你正在执行一次独立 Skill 试跑。严格遵循 Skill 文件，只输出契约要求的 JSON，不要输出解释。\n\n"
-	raw, standard, diff, gates, duration := executeSkillTrial(executor, skill, version, packageValue, template, systemPrompt, string(userPromptJSON))
+	raw, standard, diff, gates, duration, imageManifest := executeSkillTrial(executor, skill, version, packageValue, template, bindings, parameters, inputText, systemPrompt, string(userPromptJSON))
 	status, errorMessage := "passed", ""
 	if !gates.Passed {
 		status = "failed"
@@ -72,7 +87,7 @@ func TrialSkill(userID, versionID string, input SkillTrialInput) (SkillTrialResu
 	evaluation := model.SkillEvaluation{
 		ID: newID("skilleval"), SkillVersionID: version.ID, ContentHash: version.ContentHash,
 		InputHash: workflowContentHash(inputSnapshotJSON), InputSnapshotJSON: string(inputSnapshotJSON),
-		ImageManifestJSON: `{"items":[]}`, ResultJSON: string(resultJSON), DiffJSON: string(diffJSON), GateJSON: string(gateJSON),
+		ImageManifestJSON: imageManifest, ResultJSON: string(resultJSON), DiffJSON: string(diffJSON), GateJSON: string(gateJSON),
 		Status: status, ErrorMessage: errorMessage, DurationMs: duration, CreatedBy: userID, CreatedAt: stamp, UpdatedAt: stamp,
 	}
 	summary, _ := json.Marshal(map[string]any{"evaluationId": evaluation.ID, "status": evaluation.Status, "contentHash": evaluation.ContentHash, "durationMs": evaluation.DurationMs, "standalone": true})
@@ -82,23 +97,33 @@ func TrialSkill(userID, versionID string, input SkillTrialInput) (SkillTrialResu
 	return SkillTrialResult{Evaluation: evaluation, StageKey: template.Key, Raw: raw, Standard: standard, Diff: diff, Gates: gates.Issues}, nil
 }
 
-func executeSkillTrial(executor AgentRunExecutor, skill model.SkillDefinition, version model.SkillVersion, packageValue SkillPackage, template SkillStageTemplate, systemPrompt, userPrompt string) (map[string]any, map[string]any, map[string]any, WorkflowGateReport, int64) {
+func executeSkillTrial(executor AgentRunExecutor, skill model.SkillDefinition, version model.SkillVersion, packageValue SkillPackage, template SkillStageTemplate, bindings []ResolvedArtifactBinding, parameters json.RawMessage, inputText, systemPrompt, userPrompt string) (map[string]any, map[string]any, map[string]any, WorkflowGateReport, int64, string) {
 	modelName := workflowSkillEvaluationModel(executor)
 	run := model.AgentRun{Executor: executor.Kind(), ExecutionKind: packageValue.Manifest.ExecutorKind, Model: modelName, TimeoutSeconds: 600, ImageManifestJSON: `{"items":[]}`}
 	if executor.Kind() == AgentRunExecutorAPI {
-		resolved, err := resolveAgentRunChannel(CreateAgentRunInput{})
+		resolved, err := resolveAgentRunChannelForCapability(CreateAgentRunInput{}, agentRunModelCapability(packageValue.Manifest.ExecutorKind))
 		if err != nil {
 			report := newWorkflowGateReport()
 			report.add("execution_target", err.Error(), "")
-			return map[string]any{}, map[string]any{}, map[string]any{"structureChanged": false, "contentChanged": false}, report.finish(), 0
+			return map[string]any{}, map[string]any{}, map[string]any{"structureChanged": false, "contentChanged": false}, report.finish(), 0, run.ImageManifestJSON
 		}
-		modelName, run.Model, run.ChannelID = resolved.ModelName, resolved.ModelName, resolved.Channel.ID
+		modelName, run.Model, run.ChannelID, run.Provider, run.Protocol = resolved.ModelName, resolved.ModelName, resolved.Channel.ID, resolved.Channel.Name, resolved.Channel.Protocol
 	}
-	requestJSON, err := buildAgentRunChatRequest(CreateAgentRunInput{SystemPrompt: systemPrompt + SkillPackageInstructions(packageValue.Files), UserPrompt: userPrompt}, modelName)
+	expectedImageOutputs := 0
+	var requestJSON []byte
+	var err error
+	if packageValue.Manifest.ExecutorKind == "image_model" {
+		bindings, err = skillTrialImageBindings(packageValue, bindings, inputText)
+		if err == nil {
+			requestJSON, run.ImageManifestJSON, expectedImageOutputs, err = buildSkillTrialImageRequest(parameters, packageValue, bindings, inputText, modelName)
+		}
+	} else {
+		requestJSON, err = buildAgentRunChatRequest(CreateAgentRunInput{SystemPrompt: systemPrompt + SkillPackageInstructions(packageValue.Files), UserPrompt: userPrompt}, modelName)
+	}
 	if err != nil {
 		report := newWorkflowGateReport()
 		report.add("request", err.Error(), "")
-		return map[string]any{}, map[string]any{}, map[string]any{"structureChanged": false, "contentChanged": false}, report.finish(), 0
+		return map[string]any{}, map[string]any{}, map[string]any{"structureChanged": false, "contentChanged": false}, report.finish(), 0, run.ImageManifestJSON
 	}
 	run.RequestJSON = string(requestJSON)
 	started := time.Now()
@@ -107,24 +132,104 @@ func executeSkillTrial(executor AgentRunExecutor, skill model.SkillDefinition, v
 	report := newWorkflowGateReport()
 	if call.message != "" {
 		report.add("execution", call.message, "")
-		return map[string]any{}, map[string]any{}, map[string]any{"structureChanged": false, "contentChanged": false}, report.finish(), duration
+		return map[string]any{}, map[string]any{}, map[string]any{"structureChanged": false, "contentChanged": false}, report.finish(), duration, run.ImageManifestJSON
 	}
 	content := workflowAgentRunContent(model.AgentRun{RawOutput: call.rawOutput, StructuredDraftJSON: call.structuredJSON})
 	var raw map[string]any
 	if json.Unmarshal(content, &raw) != nil {
 		report.add("invalid_json", "Skill 没有返回可用的 JSON 对象", "")
-		return map[string]any{}, map[string]any{}, map[string]any{"structureChanged": false, "contentChanged": false}, report.finish(), duration
+		return map[string]any{}, map[string]any{}, map[string]any{"structureChanged": false, "contentChanged": false}, report.finish(), duration, run.ImageManifestJSON
 	}
-	converted, diff, err := ConvertSkillStageOutput(template, raw)
+	declared, err := parseInvocationDeclaredOutputs(string(content), packageValue.OutputContract.ArtifactOutputs)
 	if err != nil {
-		report.add("fixed_adapter", "固定转换失败："+err.Error(), "")
-		return raw, map[string]any{}, map[string]any{"structureChanged": false, "contentChanged": false}, report.finish(), duration
+		report.add("declared_output", "Skill 输出数量或 binding 无效："+err.Error(), "")
+		return raw, map[string]any{}, map[string]any{"structureChanged": false, "contentChanged": false}, report.finish(), duration, run.ImageManifestJSON
 	}
-	appendSkillSchemaIssues(converted, packageValue.OutputContract, &report)
+	if expectedImageOutputs > 0 && len(declared) != expectedImageOutputs {
+		report.add("image_output_count", "图片模型返回数量与试跑请求不一致", "")
+	}
+	standardOutputs, diffOutputs := make([]any, 0, len(declared)), make([]any, 0, len(declared))
+	structureChanged := false
+	for _, output := range declared {
+		itemID := fmt.Sprintf("%s#%d", output.bindingName, output.ordinal)
+		if output.validationError != nil {
+			report.add("output_payload", output.validationError.Error(), itemID)
+			continue
+		}
+		converted, itemDiff, convertErr := ConvertSkillStageOutput(template, output.payload)
+		if convertErr != nil {
+			report.add("fixed_adapter", "固定转换失败："+convertErr.Error(), itemID)
+			continue
+		}
+		appendSkillSchemaIssues(converted, packageValue.OutputContract, &report)
+		var payload map[string]any
+		_ = json.Unmarshal(converted, &payload)
+		standardOutputs = append(standardOutputs, map[string]any{"bindingName": output.bindingName, "ordinal": output.ordinal, "payload": payload})
+		itemDiff["bindingName"], itemDiff["ordinal"] = output.bindingName, output.ordinal
+		diffOutputs = append(diffOutputs, itemDiff)
+		if changed, _ := itemDiff["structureChanged"].(bool); changed {
+			structureChanged = true
+		}
+	}
 	report = report.finish()
-	var standard map[string]any
-	_ = json.Unmarshal(converted, &standard)
-	return raw, standard, diff, report, duration
+	standard, diff := formatSkillTrialOutputs(packageValue.OutputContract.ArtifactOutputs, standardOutputs, diffOutputs, structureChanged)
+	return raw, standard, diff, report, duration, run.ImageManifestJSON
+}
+
+func skillTrialImageBindings(packageValue SkillPackage, bindings []ResolvedArtifactBinding, inputText string) ([]ResolvedArtifactBinding, error) {
+	if len(bindings) > 0 {
+		return bindings, nil
+	}
+	if len(packageValue.InputContract.ArtifactInputs) != 1 || packageValue.InputContract.ArtifactInputs[0].ArtifactType != "asset_brief" || strings.TrimSpace(inputText) == "" {
+		return nil, safeMessageError{message: "图片 Skill 试跑需要 asset_brief Artifact 或一段资产 Brief 文本"}
+	}
+	spec := packageValue.InputContract.ArtifactInputs[0]
+	artifact := ArtifactEnvelope{Artifact: model.Artifact{ID: "trial-input", ArtifactType: "asset_brief", SchemaVersion: coreArtifactSchemaVersion}, Payload: map[string]any{"assetId": "trial-input", "brief": strings.TrimSpace(inputText), "format": "trial"}}
+	return []ResolvedArtifactBinding{{BindingName: spec.BindingName, Artifact: artifact}}, nil
+}
+
+func buildSkillTrialImageRequest(parameters json.RawMessage, packageValue SkillPackage, bindings []ResolvedArtifactBinding, inputText, modelName string) ([]byte, string, int, error) {
+	count, requestJSON, err := freezeInvocationImageRequest(parameters, packageValue, bindings, modelName)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	var request map[string]any
+	if json.Unmarshal([]byte(requestJSON), &request) != nil {
+		return nil, "", 0, errors.New("图片试跑请求无效")
+	}
+	if text := strings.TrimSpace(inputText); text != "" {
+		request["prompt"] = strings.TrimSpace(fmt.Sprint(request["prompt"])) + "\n\n【试跑补充输入】\n" + text
+	}
+	encoded, err := marshalInvocationCanonical(request)
+	if err != nil {
+		return nil, "", 0, err
+	}
+	assetID := ""
+	for _, binding := range bindings {
+		if binding.Artifact.Artifact.ArtifactType == "asset_brief" {
+			assetID, _ = binding.Artifact.Payload["assetId"].(string)
+			break
+		}
+	}
+	output := packageValue.OutputContract.ArtifactOutputs[0]
+	ordinals := make([]int, count)
+	for index := range ordinals {
+		ordinals[index] = index
+	}
+	manifest, err := marshalInvocationCanonical(map[string]any{"assetId": assetID, "bindingName": output.BindingName, "ordinals": ordinals})
+	return encoded, string(manifest), count, err
+}
+
+func formatSkillTrialOutputs(specs []ArtifactOutputSpec, outputs, diffs []any, structureChanged bool) (map[string]any, map[string]any) {
+	if len(specs) == 1 && specs[0].Max == 1 && len(outputs) == 1 {
+		output, _ := outputs[0].(map[string]any)
+		payload, _ := output["payload"].(map[string]any)
+		diff, _ := diffs[0].(map[string]any)
+		delete(diff, "bindingName")
+		delete(diff, "ordinal")
+		return payload, diff
+	}
+	return map[string]any{"outputs": outputs}, map[string]any{"outputs": diffs, "structureChanged": structureChanged, "contentChanged": false}
 }
 
 func GetSkillTrialResult(id string) (SkillTrialResult, error) {

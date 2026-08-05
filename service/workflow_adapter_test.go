@@ -175,3 +175,27 @@ func TestStageAdapterAddsOnlyMissingStableAssetAndStoryboardIDs(t *testing.T) {
 		t.Fatalf("storyboard=%s", converted)
 	}
 }
+
+func TestStageAdapterConvertsMultipleArtifactsOneToOne(t *testing.T) {
+	setupInvocationServiceTest(t)
+	first := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "asset_brief", `{"assetId":"character-001","brief":"角色正面","format":"character-four-view"}`)
+	second := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "asset_brief", `{"assetId":"character-002","brief":"角色侧面","format":"character-four-view"}`)
+	adapter, err := ResolveWorkflowAdapter(WorkflowAdapterRef{AdapterID: "stage-asset-brief-character-normalize", AdapterVersion: "1.0.0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	refs := []ArtifactRefInput{
+		{BindingName: "asset_brief", ArtifactID: first.Artifact.ID, ContentHash: first.Artifact.ContentHash},
+		{BindingName: "asset_brief", ArtifactID: second.Artifact.ID, ContentHash: second.Artifact.ContentHash},
+	}
+	outputs, err := ExecuteWorkflowAdapterOutputs("user-1", "project-1", "episode-1", adapter, refs)
+	if err != nil || len(outputs) != 2 {
+		t.Fatalf("outputs=%+v err=%v", outputs, err)
+	}
+	if !reflect.DeepEqual(outputs[0].ParentArtifactIds, []string{first.Artifact.ID}) || !reflect.DeepEqual(outputs[1].ParentArtifactIds, []string{second.Artifact.ID}) {
+		t.Fatalf("one-to-one lineage lost: %+v", outputs)
+	}
+	if outputs[0].Payload["assetId"] != "character-001" || outputs[1].Payload["assetId"] != "character-002" {
+		t.Fatalf("payloads=%+v", outputs)
+	}
+}

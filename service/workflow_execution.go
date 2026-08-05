@@ -235,11 +235,15 @@ func startReadyWorkflowNodes(detail *WorkflowExecutionDetail) error {
 			if err != nil {
 				return err
 			}
-			output, err := ExecuteWorkflowAdapter(detail.Run.UserID, detail.Run.ProjectID, detail.Run.EpisodeID, adapter, refs)
+			outputs, err := ExecuteWorkflowAdapterOutputs(detail.Run.UserID, detail.Run.ProjectID, detail.Run.EpisodeID, adapter, refs)
 			if err != nil {
 				node.Status, node.ErrorCode, node.ErrorMessage = model.WorkflowNodeExecutionFailed, "adapter_execution_failed", err.Error()
 			} else {
-				raw, _ := json.Marshal([]ArtifactRefInput{{BindingName: adapter.Output.BindingName, ArtifactID: output.Artifact.ID, ContentHash: output.Artifact.ContentHash}})
+				outputRefs := make([]ArtifactRefInput, 0, len(outputs))
+				for _, output := range outputs {
+					outputRefs = append(outputRefs, ArtifactRefInput{BindingName: adapter.Output.BindingName, ArtifactID: output.Artifact.ID, ContentHash: output.Artifact.ContentHash})
+				}
+				raw, _ := json.Marshal(outputRefs)
 				node.OutputArtifactRefsJSON, node.Status = string(raw), model.WorkflowNodeExecutionCompleted
 			}
 			node.UpdatedAt = now()

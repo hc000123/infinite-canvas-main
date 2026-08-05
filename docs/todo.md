@@ -31,11 +31,11 @@
 - Phase 2 Artifact + Invocation Runtime：已实现，待用户确认。Skill 可独立预检、冻结版本与契约、运行、审核和幂等 Apply，所有产物统一进入不可变 Artifact 血缘。
 - Phase 3 正式视频 Workflow 迁移：已实现，待用户确认。视频工作流阶段已改为统一 Invocation / Artifact 执行真相，旧阶段表只保留工作台投影。
 - Phase 4 Agent Plan Runtime：作为画布总控临时计划与历史兼容底座保留，继续提供版本冻结、确认、逐步审核和幂等 Apply；固定岗位 Agent 不再进入正式生产链。
-- Phase 5 Workflow Composer：已收口为 Skill-only。项目 Workflow 中心的新节点只允许 Skill；固定 / 标签 / 运行前手选路由、条件、重试、审批、契约校验、路由预览、版本发布和执行控制台保持不变。标准生产 Workflow 已升级为 `2.3.0`，剧本节点在运行前选择并冻结精确版本；确定性 Adapter 只转换 Artifact 外壳和契约，不改写上游 Skill 内容。
+- Phase 5 Workflow Composer：已收口为 Skill-only。项目 Workflow 中心的新节点只允许 Skill；固定 / 标签 / 运行前手选路由、条件、重试、审批、契约校验、路由预览、版本发布和执行控制台保持不变。标准生产 Workflow 已升级为 `2.4.0`，由 12 个内容 Skill 节点和 12 个不可替换的固定转换节点组成；剧本节点在运行前选择并冻结精确版本，转换节点只补阶段契约必需结构，不摘要、润色或改写上游 Skill 内容。
 - Phase 6 画布和图片入口：生图工作台与画布节点继续直接调用 Skill；画布对话固定使用唯一“画布总控”，基于受限 Skill Catalog 决定直接回答或生成可编辑 Temporary Plan。普通回答不建 Plan，计划必须先通过版本、步数和 Artifact 契约校验。
 - Phase 7 项目剧本入口迁移：已改为 `source_text → Skill Invocation → production_script → 人工审核`，制作人员按分集选择兼容的剧本 Skill 精确版本，不再经过系统剧本 Agent 或 Agent Plan；动态剧本能力已作为可选 `skill-system-workflow-script@3.2.0` 发布，不会自动替换其他版本。
 - Phase 8 内容分类、资产 Brief 变体与分镜路由：已实现，自动验收和隔离浏览器验收通过，待用户确认。新增内容标签分类、角色 / 场景 / 道具独立 Brief、竖屏短剧 / 横屏中长剧分镜 6 个可独立发布 Skill，按画幅和长短剧参数自动冻结分镜 Skill。
-- Phase 9 图片执行器与资产成图：已实现，协议级完整验收通过，待真实图片模型效果确认。新增角色 / 场景 / 道具 3 个独立 `asset_rendition` Skill、图片模型执行策略、媒体归档、失败重试及多来源 Workflow 聚合；系统生产 Workflow 当前为 12 个 Skill 节点的 `2.3.0`，三类资产成图可并行并统一进入视频提示词节点。图片页、画布、Workflow 与 API 共用同一 Invocation / Artifact Runtime。
+- Phase 9 图片执行器与资产成图：已实现，协议级完整验收通过，待真实图片模型效果确认。新增角色 / 场景 / 道具 3 个独立 `asset_rendition` Skill、图片模型执行策略、媒体归档、失败重试及多来源 Workflow 聚合；系统生产 Workflow 当前为 `2.4.0`，包含 12 个内容 Skill 和 12 个固定转换节点，三类资产成图可并行并统一进入视频提示词节点。图片页、画布、Workflow 与 API 共用同一 Invocation / Artifact Runtime。
 
 下一阶段增加分类结果参与二次路由的 deferred preflight，并在可用生产文本与图片模型通道下复测固定剧本的完整内容及视觉效果；继续扩展角色 / 场景 / 道具的成图格式版本，并审计旧 workbench 中残留的硬编码 preset / prompt 职责。
 
