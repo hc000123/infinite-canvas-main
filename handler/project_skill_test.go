@@ -80,6 +80,28 @@ func TestProjectSkillFolderImportSourceAndStandaloneTrialRoutes(t *testing.T) {
 	if created.Skill.OwnerType != model.SkillOwnerProject || created.Skill.OwnerProjectID != "project-folder" || created.Skill.StageKey != "script" || created.Skill.Name != "确认后项目 Skill" || created.Skill.Summary != "确认后用途" || created.Version.Version != "2.5.0" {
 		t.Fatalf("created=%+v", created)
 	}
+	var versionBody bytes.Buffer
+	versionWriter := multipart.NewWriter(&versionBody)
+	_ = versionWriter.WriteField("folderName", "Script")
+	_ = versionWriter.WriteField("version", "")
+	_ = versionWriter.WriteField("paths", "Script/SKILL.md")
+	versionPart, _ := versionWriter.CreateFormFile("files", "SKILL.md")
+	_, _ = versionPart.Write([]byte("---\nversion: 8.8.8\n---\n# V2"))
+	_ = versionWriter.Close()
+	versionRequest := httptest.NewRequest(http.MethodPost, "/api/v1/skills/"+created.Skill.ID+"/import-version", &versionBody)
+	versionRequest.Header.Set("Authorization", "Bearer "+ownerToken)
+	versionRequest.Header.Set("Content-Type", versionWriter.FormDataContentType())
+	versionRecorder := httptest.NewRecorder()
+	app.ServeHTTP(versionRecorder, versionRequest)
+	var versionResponse invocationHTTPResponse
+	if json.Unmarshal(versionRecorder.Body.Bytes(), &versionResponse) != nil || versionResponse.Code != 0 {
+		t.Fatalf("version import=%s", versionRecorder.Body.String())
+	}
+	var importedVersion model.SkillVersion
+	decodeInvocationHTTPData(t, versionResponse, &importedVersion)
+	if importedVersion.Version != "2.5.1" {
+		t.Fatalf("version=%+v", importedVersion)
+	}
 	source := invocationHTTPCall(t, app, http.MethodGet, "/api/v1/skill-versions/"+created.Version.ID+"/source-files", ownerToken, nil)
 	if source.Code != 0 || !strings.Contains(source.Raw, "SKILL.md") {
 		t.Fatalf("source=%s", source.Raw)

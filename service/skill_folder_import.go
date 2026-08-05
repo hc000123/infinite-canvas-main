@@ -59,13 +59,15 @@ type SkillFolderSnapshot struct {
 }
 
 type SkillFolderImportInput struct {
-	OwnerType model.SkillOwnerType
-	ProjectID string
-	StageKey  string
-	Name      string
-	Summary   string
-	Version   string
-	Snapshot  SkillFolderSnapshot
+	OwnerType       model.SkillOwnerType
+	ProjectID       string
+	StageKey        string
+	Name            string
+	Summary         string
+	SummaryProvided bool
+	Version         string
+	VersionProvided bool
+	Snapshot        SkillFolderSnapshot
 }
 
 type normalizedSkillFolderFile struct {
@@ -246,11 +248,11 @@ func ImportManagedSkillFolder(userID string, isAdmin bool, input SkillFolderImpo
 		return ResolvedSkill{}, safeMessageError{message: "缺少 Skill 名称"}
 	}
 	summary := strings.TrimSpace(input.Summary)
-	if summary == "" {
+	if !input.SummaryProvided && summary == "" {
 		summary = strings.TrimSpace(input.Snapshot.Metadata.Description)
 	}
 	versionName := strings.TrimSpace(input.Version)
-	if versionName == "" {
+	if !input.VersionProvided && versionName == "" {
 		versionName = strings.TrimSpace(input.Snapshot.Metadata.Version)
 	}
 	if versionName == "" {
@@ -287,7 +289,7 @@ func ImportManagedSkillFolder(userID string, isAdmin bool, input SkillFolderImpo
 	return ResolvedSkill{Skill: skill, Version: version, Package: packageValue}, nil
 }
 
-func ImportOwnedSkillFolderVersion(userID string, isAdmin bool, skillID, versionName string, snapshot SkillFolderSnapshot) (model.SkillVersion, error) {
+func ImportOwnedSkillFolderVersion(userID string, isAdmin bool, skillID, versionName string, versionProvided bool, snapshot SkillFolderSnapshot) (model.SkillVersion, error) {
 	skill, err := editableSkill(userID, isAdmin, skillID)
 	if err != nil {
 		return model.SkillVersion{}, err
@@ -305,7 +307,7 @@ func ImportOwnedSkillFolderVersion(userID string, isAdmin bool, skillID, version
 		}
 	}
 	versionName = strings.TrimSpace(versionName)
-	if versionName == "" {
+	if !versionProvided && versionName == "" {
 		versionName = strings.TrimSpace(snapshot.Metadata.Version)
 	}
 	if versionName == "" {

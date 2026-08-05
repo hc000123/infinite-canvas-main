@@ -69,7 +69,8 @@ func AdminImportSkillFolder(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := service.ImportManagedSkillFolder(admin.ID, true, service.SkillFolderImportInput{
 		OwnerType: model.SkillOwnerType(values.Get("ownerType")), ProjectID: values.Get("projectId"), StageKey: values.Get("stageKey"),
-		Name: values.Get("name"), Summary: values.Get("summary"), Version: values.Get("version"), Snapshot: snapshot,
+		Name: values.Get("name"), Summary: values.Get("summary"), SummaryProvided: values.Has("summary"),
+		Version: values.Get("version"), VersionProvided: values.Has("version"), Snapshot: snapshot,
 	})
 	if err != nil {
 		FailError(w, err)
@@ -88,7 +89,7 @@ func AdminImportSkillFolderVersion(w http.ResponseWriter, r *http.Request, skill
 	if !ok {
 		return
 	}
-	result, err := service.ImportOwnedSkillFolderVersion(admin.ID, true, skillID, values.Get("version"), snapshot)
+	result, err := service.ImportOwnedSkillFolderVersion(admin.ID, true, skillID, values.Get("version"), values.Has("version"), snapshot)
 	if err != nil {
 		FailError(w, err)
 		return
@@ -167,6 +168,11 @@ func (values mapValues) Get(key string) string {
 		return ""
 	}
 	return values[key][0]
+}
+
+func (values mapValues) Has(key string) bool {
+	_, ok := values[key]
+	return ok
 }
 
 func AdminUpdateSkill(w http.ResponseWriter, r *http.Request, id string) {

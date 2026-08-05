@@ -5,6 +5,7 @@ import type { SkillSourceFile } from "@/services/api/admin-skills";
 
 export type SkillFolderMetadata = { name: string; summary: string; version: string };
 export type SkillFolderDiff = Record<"added" | "modified" | "deleted" | "unchanged", string[]>;
+export type SkillFolderSubmitState = { fileCount: number; hasSkill: boolean; updating: boolean; stageKey: string; name: string; baselineUnavailable?: boolean };
 
 type DropEntry = DropFileEntry | DropDirectoryEntry;
 type DropFileEntry = { isFile: true; isDirectory: false; name: string; file: (success: (file: File) => void, error?: (error: DOMException) => void) => void };
@@ -12,6 +13,7 @@ type DropDirectoryEntry = { isFile: false; isDirectory: true; name: string; crea
 type DropItem = { webkitGetAsEntry: () => unknown };
 
 export function parseSkillFolderMetadata(content: string, folderName: string, defaultVersion = "1.0.0"): SkillFolderMetadata {
+    content = content.replace(/^\uFEFF/, "");
     const match = content.match(/^---[\t ]*\r?\n([\s\S]*?)\r?\n(?:---|\.\.\.)[\t ]*(?:\r?\n|$)/);
     if (!match) return { name: folderName, summary: "", version: defaultVersion };
     try {
@@ -25,6 +27,29 @@ export function parseSkillFolderMetadata(content: string, folderName: string, de
     } catch {
         throw new Error("SKILL.md frontmatter YAML 格式无效");
     }
+}
+
+export function canSubmitSkillFolderImport({ fileCount, hasSkill, updating, stageKey, name }: SkillFolderSubmitState) {
+    return fileCount > 0 && hasSkill && (updating || Boolean(stageKey && name.trim()));
+}
+
+export function createLatestRequestGuard() {
+    let latest = 0;
+    const begin = () => {
+        const request = ++latest;
+        return { isCurrent: () => request === latest };
+    };
+    return {
+        begin,
+        invalidate: () => { latest += 1; },
+        run: async <T>(work: Promise<T>, apply: (value: T) => void) => {
+            const request = begin();
+            const value = await work;
+            if (!request.isCurrent()) return false;
+            apply(value);
+            return true;
+        },
+    };
 }
 
 export async function readSkillFolderMetadata(files: File[], defaultVersion = "1.0.0") {

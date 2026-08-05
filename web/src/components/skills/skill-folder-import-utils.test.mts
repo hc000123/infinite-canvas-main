@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 
-import { diffSkillFolderFiles, parseSkillFolderMetadata, readDroppedSkillFolder } from "./skill-folder-import-utils.ts";
+import { canSubmitSkillFolderImport, createLatestRequestGuard, diffSkillFolderFiles, parseSkillFolderMetadata, readDroppedSkillFolder } from "./skill-folder-import-utils.ts";
 
 function folderFile(content: string, name: string, path: string) {
     const file = new File([content], name);
@@ -18,6 +18,31 @@ test("reads SKILL.md frontmatter and applies folder defaults", () => {
     });
     assert.deepEqual(parseSkillFolderMetadata("# Skill", "script-tools"), { name: "script-tools", summary: "", version: "1.0.0" });
     assert.deepEqual(parseSkillFolderMetadata("---\ndescription: \u6d4b\u8bd5\n---", "script-tools", ""), { name: "script-tools", summary: "\u6d4b\u8bd5", version: "" });
+    assert.deepEqual(parseSkillFolderMetadata("\uFEFF---\nname: BOM Skill\ndescription: BOM \u8bf4\u660e\nversion: 4.0.0\n---\n# Skill", "fallback"), { name: "BOM Skill", summary: "BOM \u8bf4\u660e", version: "4.0.0" });
+});
+
+test("allows import when the previous version has no comparable snapshot", () => {
+    assert.equal(canSubmitSkillFolderImport({ fileCount: 1, hasSkill: true, updating: true, stageKey: "", name: "", baselineUnavailable: true }), true);
+    assert.equal(canSubmitSkillFolderImport({ fileCount: 1, hasSkill: true, updating: false, stageKey: "script", name: "Skill", baselineUnavailable: true }), true);
+    assert.equal(canSubmitSkillFolderImport({ fileCount: 1, hasSkill: true, updating: false, stageKey: "", name: "Skill", baselineUnavailable: false }), false);
+});
+
+test("latest request guard ignores stale completion and invalidated work", async () => {
+    const guard = createLatestRequestGuard();
+    const applied: string[] = [];
+    let finishA!: (value: string) => void;
+    let finishC!: (value: string) => void;
+    const a = guard.run(new Promise<string>((resolve) => { finishA = resolve; }), (value) => applied.push(value));
+    const b = guard.run(Promise.resolve("B"), (value) => applied.push(value));
+    assert.equal(await b, true);
+    finishA("A");
+    assert.equal(await a, false);
+    const c = guard.run(new Promise<string>((resolve) => { finishC = resolve; }), (value) => applied.push(value));
+    guard.invalidate();
+    finishC("C");
+    assert.equal(await c, false);
+    assert.equal(await guard.run(Promise.resolve("D"), (value) => applied.push(value)), true);
+    assert.deepEqual(applied, ["B", "D"]);
 });
 
 test("classifies added, modified, deleted, and unchanged folder files", async () => {

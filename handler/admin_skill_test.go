@@ -21,7 +21,7 @@ func TestAdminSkillFolderImportAndSourcePreview(t *testing.T) {
 	}
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
-	for key, value := range map[string]string{"ownerType": "system", "stageKey": "script", "folderName": "Seedance", "name": "确认后系统 Skill", "summary": "确认后系统用途", "version": "2.6.0"} {
+	for key, value := range map[string]string{"ownerType": "system", "stageKey": "script", "folderName": "Seedance", "name": "确认后系统 Skill", "summary": "", "version": ""} {
 		_ = writer.WriteField(key, value)
 	}
 	for path, content := range map[string]string{"Seedance/SKILL.md": "---\nname: frontmatter 原名\ndescription: frontmatter 原说明\nversion: 9.9.9\n---\n# Rules", "Seedance/rules/preserve.md": "保留全部台词"} {
@@ -47,8 +47,27 @@ func TestAdminSkillFolderImportAndSourcePreview(t *testing.T) {
 			Version model.SkillVersion    `json:"version"`
 		} `json:"data"`
 	}
-	if json.Unmarshal(recorder.Body.Bytes(), &response) != nil || response.Data.Version.ID == "" || response.Data.Skill.Name != "确认后系统 Skill" || response.Data.Skill.Summary != "确认后系统用途" || response.Data.Version.Version != "2.6.0" {
+	if json.Unmarshal(recorder.Body.Bytes(), &response) != nil || response.Data.Version.ID == "" || response.Data.Skill.Name != "确认后系统 Skill" || response.Data.Skill.Summary != "" || response.Data.Version.Version != "1.0.0" {
 		t.Fatalf("body=%s", recorder.Body.String())
+	}
+	var versionBody bytes.Buffer
+	versionWriter := multipart.NewWriter(&versionBody)
+	_ = versionWriter.WriteField("folderName", "Seedance")
+	_ = versionWriter.WriteField("version", "")
+	_ = versionWriter.WriteField("paths", "Seedance/SKILL.md")
+	versionPart, _ := versionWriter.CreateFormFile("files", "SKILL.md")
+	_, _ = versionPart.Write([]byte("---\nversion: 8.8.8\n---\n# V2"))
+	_ = versionWriter.Close()
+	versionRequest := httptest.NewRequest(http.MethodPost, "/api/v1/admin/skills/"+response.Data.Skill.ID+"/import-version", &versionBody)
+	versionRequest.Header.Set("Content-Type", versionWriter.FormDataContentType())
+	versionRequest = versionRequest.WithContext(request.Context())
+	versionRecorder := httptest.NewRecorder()
+	AdminImportSkillFolderVersion(versionRecorder, versionRequest, response.Data.Skill.ID)
+	var versionResponse struct {
+		Data model.SkillVersion `json:"data"`
+	}
+	if json.Unmarshal(versionRecorder.Body.Bytes(), &versionResponse) != nil || versionResponse.Data.Version != "1.0.1" {
+		t.Fatalf("version body=%s", versionRecorder.Body.String())
 	}
 	indexRecorder := httptest.NewRecorder()
 	AdminSkillSourceFiles(indexRecorder, request, response.Data.Version.ID)

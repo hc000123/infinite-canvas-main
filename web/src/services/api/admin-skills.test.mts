@@ -22,3 +22,15 @@ test("folder import rejects a selection without root SKILL.md", () => {
     const file = new File(["rule"], "rule.md", { type: "text/markdown" });
     assert.throws(() => buildSkillFolderFormData([file], { ownerType: "system", stageKey: "script" }), /SKILL\.md/);
 });
+
+test("folder import preserves explicitly empty confirmation fields", () => {
+    const skill = new File(["# Skill"], "SKILL.md");
+    const form = buildSkillFolderFormData([skill], { ownerType: "system", stageKey: "script", name: "Skill", summary: "", version: "" });
+    assert.equal(form.has("summary"), true);
+    assert.equal(form.get("summary"), "");
+    assert.equal(form.has("version"), true);
+    assert.equal(form.get("version"), "");
+    const omitted = buildSkillFolderFormData([skill], { ownerType: "system", stageKey: "script" });
+    assert.equal(omitted.has("summary"), false);
+    assert.equal(omitted.has("version"), false);
+});

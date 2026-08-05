@@ -20,7 +20,7 @@ export function buildSkillFolderFormData(files: File[], fields: SkillFolderImpor
     if (!relativePaths.includes("SKILL.md")) throw new Error("文件夹根目录必须包含 SKILL.md");
     const form = new FormData();
     form.set("folderName", folderName || "Skill");
-    for (const [key, value] of Object.entries(fields)) if (value) form.set(key, value);
+    for (const [key, value] of Object.entries(fields)) if (value !== undefined) form.set(key, value);
     files.forEach((file, index) => {
         form.append("paths", paths[index]);
         form.append("files", file, file.name);

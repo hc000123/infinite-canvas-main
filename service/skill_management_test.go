@@ -63,7 +63,7 @@ func TestImportOwnedSkillFolderVersionInheritsStageAndRejectsDuplicateContent(t 
 		t.Fatal(err)
 	}
 	second, _ := ParseSkillFolder("script", []SkillFolderFile{{Path: "SKILL.md", Data: []byte("# V2")}})
-	version, err := ImportOwnedSkillFolderVersion("admin-1", true, created.Skill.ID, "", second)
+	version, err := ImportOwnedSkillFolderVersion("admin-1", true, created.Skill.ID, "", false, second)
 	if err != nil || version.Version != "2.0.1" {
 		t.Fatalf("version=%+v err=%v", version, err)
 	}
@@ -71,8 +71,34 @@ func TestImportOwnedSkillFolderVersionInheritsStageAndRejectsDuplicateContent(t 
 	if err != nil || !containsSkillToken(pkg.Manifest.Capabilities, "workflow.stage.script") {
 		t.Fatalf("pkg=%+v err=%v", pkg, err)
 	}
-	if _, err := ImportOwnedSkillFolderVersion("admin-1", true, created.Skill.ID, "2.0.2", second); err == nil || !strings.Contains(err.Error(), "相同内容") {
+	if _, err := ImportOwnedSkillFolderVersion("admin-1", true, created.Skill.ID, "2.0.2", true, second); err == nil || !strings.Contains(err.Error(), "相同内容") {
 		t.Fatalf("duplicate err=%v", err)
+	}
+}
+
+func TestSkillFolderImportDistinguishesMissingAndExplicitEmptyMetadata(t *testing.T) {
+	setupInvocationServiceTest(t)
+	if err := EnsureCoreArtifactSchemas(); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, _ := ParseSkillFolder("script", []SkillFolderFile{{Path: "SKILL.md", Data: []byte("---\nname: Frontmatter\ndescription: Frontmatter summary\nversion: 3.0.0\n---\n# V1")}})
+	fallback, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: WorkflowSkillStageScript, Snapshot: snapshot})
+	if err != nil || fallback.Skill.Summary != "Frontmatter summary" || fallback.Version.Version != "3.0.0" {
+		t.Fatalf("fallback=%+v err=%v", fallback, err)
+	}
+	explicit, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: WorkflowSkillStageScript, Name: "Confirmed", Summary: "", SummaryProvided: true, Version: "", VersionProvided: true, Snapshot: snapshot})
+	if err != nil || explicit.Skill.Summary != "" || explicit.Version.Version != "1.0.0" {
+		t.Fatalf("explicit=%+v err=%v", explicit, err)
+	}
+	metadataNext, _ := ParseSkillFolder("script", []SkillFolderFile{{Path: "SKILL.md", Data: []byte("---\nversion: 4.0.0\n---\n# metadata V2")}})
+	metadataVersion, err := ImportOwnedSkillFolderVersion("admin-1", true, fallback.Skill.ID, "", false, metadataNext)
+	if err != nil || metadataVersion.Version != "4.0.0" {
+		t.Fatalf("metadata version=%+v err=%v", metadataVersion, err)
+	}
+	next, _ := ParseSkillFolder("script", []SkillFolderFile{{Path: "SKILL.md", Data: []byte("---\nversion: 9.0.0\n---\n# V2")}})
+	version, err := ImportOwnedSkillFolderVersion("admin-1", true, explicit.Skill.ID, "", true, next)
+	if err != nil || version.Version != "1.0.1" {
+		t.Fatalf("version=%+v err=%v", version, err)
 	}
 }
 

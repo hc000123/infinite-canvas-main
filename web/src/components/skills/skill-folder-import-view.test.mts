@@ -11,3 +11,10 @@ test("folder import exposes editable metadata and real folder drop", () => {
 test("new version import fetches and renders the selected version diff", () => {
     for (const text of ["previousVersionId", "fetchAdminSkillSourceFiles", "fetchProjectSkillSourceFiles", "diffSkillFolderFiles", "新增", "修改", "删除", "文件内容无变化"]) assert.ok(source.includes(text), `missing ${text}`);
 });
+
+test("closing folder import invalidates requests and clears transient loading state", () => {
+    const closeEffect = source.slice(source.indexOf("if (open) return;"), source.indexOf("}, [open]);"));
+    assert.ok(closeEffect.includes("requestGuard.current.invalidate()"));
+    assert.ok(closeEffect.includes("setReading(false)"));
+    assert.ok(closeEffect.includes("setDiffing(false)"));
+});
