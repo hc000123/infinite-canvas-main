@@ -11,6 +11,7 @@ import (
 	"mime"
 	"net/http"
 	"path"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -30,6 +31,8 @@ const (
 )
 
 var skillFolderArchiveTime = time.Date(1980, time.January, 1, 0, 0, 0, 0, time.UTC)
+var skillFolderFrontmatterOpen = regexp.MustCompile(`^---[\t ]*(?:\r?\n|$)`)
+var skillFolderFrontmatterBlock = regexp.MustCompile(`(?s)^---[\t ]*\r?\n(.*?)\r?\n(?:---|\.\.\.)[\t ]*(?:\r?\n|$)`)
 
 type SkillFolderFile struct {
 	Path string
@@ -213,15 +216,15 @@ func skillFolderTextFile(filePath string) bool {
 
 func parseSkillFolderMetadata(content string) (SkillFolderMetadata, error) {
 	content = strings.TrimPrefix(content, "\ufeff")
-	if !strings.HasPrefix(content, "---\n") {
+	if !skillFolderFrontmatterOpen.MatchString(content) {
 		return SkillFolderMetadata{}, nil
 	}
-	end := strings.Index(content[4:], "\n---")
-	if end < 0 {
+	match := skillFolderFrontmatterBlock.FindStringSubmatch(content)
+	if len(match) != 2 {
 		return SkillFolderMetadata{}, safeMessageError{message: "SKILL.md frontmatter 格式错误"}
 	}
 	var metadata SkillFolderMetadata
-	if err := yaml.Unmarshal([]byte(content[4:4+end]), &metadata); err != nil {
+	if err := yaml.Unmarshal([]byte(match[1]), &metadata); err != nil {
 		return SkillFolderMetadata{}, safeMessageError{message: "SKILL.md frontmatter 格式错误"}
 	}
 	metadata.Name = strings.TrimSpace(metadata.Name)
@@ -285,10 +288,7 @@ func ImportManagedSkillFolder(userID string, isAdmin bool, input SkillFolderImpo
 		OwnerProjectID: projectID, StageKey: template.Key, Enabled: true, CreatedAt: stamp, UpdatedAt: stamp,
 	}
 	version := importedSkillVersion(newID("skillversion"), skill.ID, versionName, userID, stamp, packageValue, input.Snapshot, template)
-	if err := repository.CreateSkillAggregate(skill, version); err != nil {
-		return ResolvedSkill{}, err
-	}
-	if err := repository.CreateSkillAuditLog(skillAudit(userID, "import_folder", skill, version.ID, stamp)); err != nil {
+	if err := repository.CreateSkillAggregateWithAudit(skill, version, skillAudit(userID, "import_folder", skill, version.ID, stamp)); err != nil {
 		return ResolvedSkill{}, err
 	}
 	return ResolvedSkill{Skill: skill, Version: version, Package: packageValue}, nil
@@ -340,10 +340,17 @@ func ImportOwnedSkillFolderVersion(userID string, isAdmin bool, skillID, version
 	}
 	stamp := now()
 	version := importedSkillVersion(newID("skillversion"), skill.ID, versionName, userID, stamp, packageValue, snapshot, template)
-	if err := repository.CreateSkillVersion(version); err != nil {
-		return model.SkillVersion{}, err
-	}
-	if err := repository.CreateSkillAuditLog(skillAudit(userID, "import_folder_version", skill, version.ID, stamp)); err != nil {
+	if err := repository.CreateSkillVersionWithAudit(version, skillAudit(userID, "import_folder_version", skill, version.ID, stamp)); err != nil {
+		if current, listErr := repository.ListSkillVersions(skill.ID); listErr == nil {
+			for _, existing := range current {
+				if existing.SourceHash == snapshot.SourceHash {
+					return model.SkillVersion{}, safeMessageError{message: "相同内容已经导入，无需重复创建版本"}
+				}
+				if existing.Version == versionName {
+					return model.SkillVersion{}, safeMessageError{message: "Skill 版本号已存在"}
+				}
+			}
+		}
 		return model.SkillVersion{}, err
 	}
 	return version, nil
@@ -363,6 +370,7 @@ func importedSkillVersion(id, skillID, versionName, userID, stamp string, packag
 	}{snapshot.FolderName, snapshot.Metadata, template.Key, template.TemplateVersion, template.FixedAdapter, packageValue.OutputContract.SchemaVersion, importedSkillRawSchemaHash(packageValue.OutputContract.Schema)})
 	version.SourceKind = "folder_import"
 	version.SourceHash = snapshot.SourceHash
+	version.SourceIdentity = &version.SourceHash
 	version.SourceArchiveBlob = append([]byte(nil), snapshot.Archive...)
 	version.SourceFileIndexJSON = string(fileIndex)
 	version.ImportMetadataJSON = string(metadata)
