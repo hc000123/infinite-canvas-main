@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/basketikun/infinite-canvas/model"
 	"github.com/basketikun/infinite-canvas/repository"
 )
 
@@ -47,16 +48,7 @@ func buildWorkflowAdapterTransformRegistry() map[string]WorkflowAdapterTransform
 			if !ok || strings.TrimSpace(value) == "" {
 				return nil, errors.New("production_script 缺少 productionScript")
 			}
-			payload, err := json.Marshal(bindings[0].Artifact.Payload)
-			if err != nil {
-				return nil, errors.New("production_script 无法序列化")
-			}
-			var cloned map[string]any
-			if json.Unmarshal(payload, &cloned) != nil {
-				return nil, errors.New("production_script 必须是 JSON 对象")
-			}
-			cloned["productionScript"] = strings.TrimSpace(value)
-			return json.Marshal(cloned)
+			return json.Marshal(map[string]string{"productionScript": value})
 		},
 	}
 	stageKeys := append([]string(nil), systemSkillSeedStageKeys...)
@@ -400,41 +392,89 @@ func ExecuteWorkflowAdapterOutputs(userID, projectID, episodeID string, definiti
 		}
 		payloads[index] = payload
 	}
-	outputs := make([]ArtifactEnvelope, 0, len(bindings))
+	createInputs := make([]CreateArtifactInput, len(payloads))
 	for index, payload := range payloads {
 		parentRefs := []ArtifactRefInput{refs[index]}
-		items, built, err := buildArtifacts(userID, []CreateArtifactInput{{
+		createInputs[index] = CreateArtifactInput{
 			ArtifactType: normalized.Output.ArtifactType, SchemaVersion: normalized.Output.SchemaVersion,
 			ProjectID: projectID, EpisodeID: episodeID, ParentArtifactRefs: parentRefs, Payload: payload,
 			Extensions: map[string]json.RawMessage{workflowAdapterExtensionKey: metadata},
-		}}, false)
-		if err != nil {
-			return nil, err
 		}
-		coordinate, _ := marshalInvocationCanonical(struct {
+	}
+	items, _, err := buildArtifacts(userID, createInputs, false)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, len(items))
+	for index := range items {
+		parentRefs := []ArtifactRefInput{refs[index]}
+		coordinate, err := marshalInvocationCanonical(struct {
 			UserID, ProjectID, EpisodeID, AdapterHash string
 			Refs                                      []ArtifactRefInput
 		}{strings.TrimSpace(userID), strings.TrimSpace(projectID), strings.TrimSpace(episodeID), normalized.ContentHash, parentRefs})
-		items[0].ID = deterministicInvocationID("artifact-adapter", string(coordinate))
-		built[0].Artifact.ID = items[0].ID
-		if _, err := repository.CreateArtifact(items[0]); err == nil {
-			outputs = append(outputs, built[0])
-			continue
-		}
-		stored, ok, lookupErr := repository.GetUserArtifact(userID, items[0].ID)
-		if lookupErr != nil || !ok || stored.ContentHash != items[0].ContentHash {
-			if lookupErr != nil {
-				return nil, lookupErr
-			}
-			return nil, errors.New("Workflow Adapter 派生 Artifact 冲突")
-		}
-		output, err := artifactEnvelopeFromModel(stored)
 		if err != nil {
 			return nil, err
 		}
-		outputs = append(outputs, output)
+		ids[index] = deterministicInvocationID("artifact-adapter", string(coordinate))
+		items[index].ID = ids[index]
+	}
+	stored, err := repository.GetUserArtifactsByIDs(userID, ids)
+	if err != nil {
+		return nil, err
+	}
+	missing := make([]model.Artifact, 0, len(items))
+	expectedIndexes := make(map[string]int, len(items))
+	for index, item := range items {
+		if previous, duplicate := expectedIndexes[item.ID]; duplicate {
+			if items[previous].ContentHash != item.ContentHash {
+				return nil, errors.New("Workflow Adapter 派生 Artifact 冲突")
+			}
+			continue
+		}
+		expectedIndexes[item.ID] = index
+		if existing, ok := stored[item.ID]; ok {
+			if existing.ContentHash != item.ContentHash {
+				return nil, errors.New("Workflow Adapter 派生 Artifact 冲突")
+			}
+			continue
+		}
+		missing = append(missing, item)
+	}
+	if len(missing) > 0 {
+		if err := repository.CreateArtifacts(missing); err != nil {
+			stored, err = repository.GetUserArtifactsByIDs(userID, ids)
+			if err != nil || !workflowAdapterArtifactsMatch(items, stored) {
+				return nil, errors.New("Workflow Adapter 派生 Artifact 创建失败")
+			}
+		} else {
+			stored, err = repository.GetUserArtifactsByIDs(userID, ids)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	if !workflowAdapterArtifactsMatch(items, stored) {
+		return nil, errors.New("Workflow Adapter 派生 Artifact 冲突")
+	}
+	outputs := make([]ArtifactEnvelope, len(items))
+	for index, item := range items {
+		output, err := artifactEnvelopeFromModel(stored[item.ID])
+		if err != nil {
+			return nil, err
+		}
+		outputs[index] = output
 	}
 	return outputs, nil
+}
+
+func workflowAdapterArtifactsMatch(expected []model.Artifact, stored map[string]model.Artifact) bool {
+	for _, item := range expected {
+		value, ok := stored[item.ID]
+		if !ok || value.ContentHash != item.ContentHash {
+			return false
+		}
+	}
+	return true
 }
 
 func workflowAdapterArtifactApproved(userID string, artifactID string, extensionsJSON string) (bool, error) {

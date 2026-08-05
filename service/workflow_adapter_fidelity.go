@@ -29,7 +29,9 @@ func workflowAdapterContentFidelity(transformKind string, before any, after json
 	}
 	reasons := []string{}
 	switch strings.ToLower(strings.TrimSpace(transformKind)) {
-	case "production-script-envelope-v1", "stage-script-normalize-v1":
+	case "production-script-envelope-v1":
+		compareLegacyProductionScriptV1(beforeValue, afterValue, &reasons)
+	case "stage-script-normalize-v1":
 		compareProductionScriptV1(beforeValue, afterValue, &reasons)
 	case "stage-art-normalize-v1":
 		compareAssetNormalizationV1(beforeValue, afterValue, &reasons)
@@ -43,6 +45,23 @@ func workflowAdapterContentFidelity(transformKind string, before any, after json
 		"contentChanged":       len(reasons) > 0,
 		"contentChangeReasons": reasons,
 	}, nil
+}
+
+func compareLegacyProductionScriptV1(before, after any, reasons *[]string) {
+	left, leftOK := before.(map[string]any)
+	right, rightOK := after.(map[string]any)
+	if !leftOK || !rightOK {
+		addContentFidelityReason(reasons, "$ 必须保持 legacy production script envelope")
+		return
+	}
+	original, originalOK := left["productionScript"].(string)
+	converted, convertedOK := right["productionScript"].(string)
+	if !originalOK || !convertedOK || converted != original {
+		addContentFidelityReason(reasons, "$.productionScript 未精确保留原始字符串")
+	}
+	if len(right) != 1 {
+		addContentFidelityReason(reasons, "$ legacy envelope 只能输出 productionScript")
+	}
 }
 
 func decodeContentFidelityJSON(raw []byte) (any, error) {

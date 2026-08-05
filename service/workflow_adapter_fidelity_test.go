@@ -60,6 +60,12 @@ func TestWorkflowAdapterContentFidelityRejectsMutationsWithPathReason(t *testing
 		wantPath            string
 	}{
 		{
+			name: "legacy script trim", transformKind: "production-script-envelope-v1",
+			before:   map[string]any{"productionScript": "  原台词  ", "legacyExtra": "应丢弃"},
+			after:    map[string]any{"productionScript": "原台词"},
+			wantPath: "$.productionScript",
+		},
+		{
 			name: "dialogue changed", transformKind: "stage-storyboard-normalize-v1",
 			before:   map[string]any{"shots": []any{map[string]any{"shotId": "shot-001", "sceneKey": "scene-001", "shotDraft": map[string]any{"dialogue": "原台词"}}}},
 			after:    map[string]any{"shots": []any{map[string]any{"shotId": "shot-001", "sceneKey": "scene-001", "shotDraft": map[string]any{"dialogue": "篡改台词"}}}},

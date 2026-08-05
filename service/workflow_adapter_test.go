@@ -5,7 +5,30 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/basketikun/infinite-canvas/repository"
 )
+
+func TestLegacyProductionScriptAdapterPreservesFrozenEnvelopeBehavior(t *testing.T) {
+	setupInvocationServiceTest(t)
+	adapter, err := ResolveWorkflowAdapter(WorkflowAdapterRef{AdapterID: "production-script-envelope", AdapterVersion: "1.0.0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := map[string]any{"productionScript": "  原台词\n动作  ", "legacyExtra": "应丢弃"}
+	converted, err := adapter.Transform([]ResolvedArtifactBinding{{Artifact: ArtifactEnvelope{Payload: source}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]any
+	if json.Unmarshal(converted, &payload) != nil || len(payload) != 1 || payload["productionScript"] != source["productionScript"] {
+		t.Fatalf("legacy output drifted: %s", converted)
+	}
+	diff, err := workflowAdapterContentFidelity(adapter.TransformKind, source, converted)
+	if err != nil || diff["contentChanged"] != false {
+		t.Fatalf("legacy fidelity diff=%+v err=%v", diff, err)
+	}
+}
 
 func TestWorkflowAdapterCreatesDeterministicDerivedArtifact(t *testing.T) {
 	setupInvocationServiceTest(t)
@@ -255,4 +278,77 @@ func TestStageAdapterConvertsMultipleArtifactsOneToOne(t *testing.T) {
 	if outputs[0].Payload["assetId"] != "character-001" || outputs[1].Payload["assetId"] != "character-002" {
 		t.Fatalf("payloads=%+v", outputs)
 	}
+}
+
+func TestExecuteWorkflowAdapterOutputsPreflightsAllConflictsBeforeAtomicInsert(t *testing.T) {
+	setupInvocationServiceTest(t)
+	first := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "asset_brief", `{"assetId":"character-001","brief":"角色正面","format":"character-four-view"}`)
+	second := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "asset_brief", `{"assetId":"character-002","brief":"角色侧面","format":"character-four-view"}`)
+	adapter, err := ResolveWorkflowAdapter(WorkflowAdapterRef{AdapterID: "stage-asset-brief-character-normalize", AdapterVersion: "1.0.0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	refs := []ArtifactRefInput{
+		{BindingName: "asset_brief", ArtifactID: first.Artifact.ID, ContentHash: first.Artifact.ContentHash},
+		{BindingName: "asset_brief", ArtifactID: second.Artifact.ID, ContentHash: second.Artifact.ContentHash},
+	}
+	firstID := workflowAdapterArtifactIDForTest(t, "user-1", "project-1", "episode-1", adapter, refs[:1])
+	secondID := workflowAdapterArtifactIDForTest(t, "user-1", "project-1", "episode-1", adapter, refs[1:])
+	conflicts, _, err := buildArtifacts("user-1", []CreateArtifactInput{{
+		ArtifactType: "asset_brief", SchemaVersion: coreArtifactSchemaVersion, ProjectID: "project-1", EpisodeID: "episode-1",
+		ParentArtifactRefs: refs[1:], Payload: json.RawMessage(`{"assetId":"character-002","brief":"预置冲突","format":"character-four-view"}`),
+	}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conflicts[0].ID = secondID
+	if _, err := repository.CreateArtifact(conflicts[0]); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ExecuteWorkflowAdapterOutputs("user-1", "project-1", "episode-1", adapter, refs); err == nil || !strings.Contains(err.Error(), "冲突") {
+		t.Fatalf("err=%v", err)
+	}
+	if _, found, err := repository.GetUserArtifact("user-1", firstID); err != nil || found {
+		t.Fatalf("first derived artifact persisted before conflict: found=%v err=%v", found, err)
+	}
+}
+
+func TestExecuteWorkflowAdapterOutputsCreatesBatchAndRetriesIdempotently(t *testing.T) {
+	setupInvocationServiceTest(t)
+	first := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "asset_brief", `{"assetId":"character-001","brief":"角色正面","format":"character-four-view"}`)
+	second := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "asset_brief", `{"assetId":"character-002","brief":"角色侧面","format":"character-four-view"}`)
+	adapter, err := ResolveWorkflowAdapter(WorkflowAdapterRef{AdapterID: "stage-asset-brief-character-normalize", AdapterVersion: "1.0.0"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	refs := []ArtifactRefInput{
+		{BindingName: "asset_brief", ArtifactID: first.Artifact.ID, ContentHash: first.Artifact.ContentHash},
+		{BindingName: "asset_brief", ArtifactID: second.Artifact.ID, ContentHash: second.Artifact.ContentHash},
+	}
+	firstRun, err := ExecuteWorkflowAdapterOutputs("user-1", "project-1", "episode-1", adapter, refs)
+	if err != nil || len(firstRun) != 2 {
+		t.Fatalf("first=%+v err=%v", firstRun, err)
+	}
+	secondRun, err := ExecuteWorkflowAdapterOutputs("user-1", "project-1", "episode-1", adapter, refs)
+	if err != nil || len(secondRun) != 2 {
+		t.Fatalf("second=%+v err=%v", secondRun, err)
+	}
+	for index := range firstRun {
+		wantID := workflowAdapterArtifactIDForTest(t, "user-1", "project-1", "episode-1", adapter, refs[index:index+1])
+		if firstRun[index].Artifact.ID != wantID || secondRun[index].Artifact.ID != wantID || firstRun[index].Artifact.ContentHash != secondRun[index].Artifact.ContentHash {
+			t.Fatalf("index %d first=%+v second=%+v", index, firstRun[index], secondRun[index])
+		}
+	}
+}
+
+func workflowAdapterArtifactIDForTest(t *testing.T, userID, projectID, episodeID string, adapter WorkflowAdapterDefinition, refs []ArtifactRefInput) string {
+	t.Helper()
+	coordinate, err := marshalInvocationCanonical(struct {
+		UserID, ProjectID, EpisodeID, AdapterHash string
+		Refs                                      []ArtifactRefInput
+	}{userID, projectID, episodeID, adapter.ContentHash, refs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return deterministicInvocationID("artifact-adapter", string(coordinate))
 }
