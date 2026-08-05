@@ -22,9 +22,19 @@ func TestWorkflowAdapterContentFidelityAllowsOnlyDeclaredV1Changes(t *testing.T)
 			after:  map[string]any{"items": []any{map[string]any{"assetId": "CHAR-001", "kind": "character", "name": "林秋"}, map[string]any{"assetId": "PROP-CUSTOM", "kind": "prop", "name": "钥匙"}}},
 		},
 		{
+			name: "blank asset id to expected stable id", transformKind: "stage-art-normalize-v1",
+			before: map[string]any{"items": []any{map[string]any{"assetId": "  ", "kind": "scene", "name": "客厅"}}},
+			after:  map[string]any{"items": []any{map[string]any{"assetId": "SCENE-001", "kind": "scene", "name": "客厅"}}},
+		},
+		{
 			name: "missing storyboard ids", transformKind: "stage-storyboard-normalize-v1",
 			before: map[string]any{"shots": []any{map[string]any{"sourceScript": "进门", "shotDraft": map[string]any{"dialogue": "我回来了"}}}},
 			after:  map[string]any{"shots": []any{map[string]any{"shotId": "shot-001", "sceneKey": "scene-001", "sourceScript": "进门", "shotDraft": map[string]any{"dialogue": "我回来了"}}}},
+		},
+		{
+			name: "null and blank storyboard ids to expected stable ids", transformKind: "stage-storyboard-normalize-v1",
+			before: map[string]any{"shots": []any{map[string]any{"shotId": nil, "sceneKey": "  ", "sourceScript": "进门"}}},
+			after:  map[string]any{"shots": []any{map[string]any{"shotId": "shot-001", "sceneKey": "scene-001", "sourceScript": "进门"}}},
 		},
 		{
 			name: "other adapter exact equality", transformKind: "stage-asset-brief-character-normalize-v1",
@@ -79,6 +89,40 @@ func TestWorkflowAdapterContentFidelityRejectsMutationsWithPathReason(t *testing
 			after:    map[string]any{"shots": []any{map[string]any{"shotId": "shot-001", "sceneKey": "scene-custom", "sourceScript": "进门"}}},
 			wantPath: "$.shots[0].shotId",
 		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			after, _ := json.Marshal(test.after)
+			diff, err := workflowAdapterContentFidelity(test.transformKind, test.before, after)
+			if err != nil || diff["contentChanged"] != true {
+				t.Fatalf("diff=%+v err=%v", diff, err)
+			}
+			reasons := strings.Join(diff["contentChangeReasons"].([]string), " ")
+			if !strings.Contains(reasons, test.wantPath) {
+				t.Fatalf("reasons=%q want path %q", reasons, test.wantPath)
+			}
+		})
+	}
+}
+
+func TestWorkflowAdapterContentFidelityRequiresStableAddedIdentifiers(t *testing.T) {
+	assetBefore := map[string]any{"items": []any{map[string]any{"kind": "character", "name": "林秋"}}}
+	shotBefore := map[string]any{"shots": []any{map[string]any{"shotId": nil, "sceneKey": "scene-001", "sourceScript": "进门"}}}
+	sceneBefore := map[string]any{"shots": []any{map[string]any{"shotId": "shot-001", "sceneKey": "   ", "sourceScript": "进门"}}}
+	tests := []struct {
+		name, transformKind string
+		before, after       map[string]any
+		wantPath            string
+	}{
+		{name: "missing assetId to whitespace", transformKind: "stage-art-normalize-v1", before: assetBefore, after: map[string]any{"items": []any{map[string]any{"assetId": "  ", "kind": "character", "name": "林秋"}}}, wantPath: "$.items[0].assetId"},
+		{name: "missing assetId stays deleted", transformKind: "stage-art-normalize-v1", before: assetBefore, after: assetBefore, wantPath: "$.items[0].assetId"},
+		{name: "missing assetId to wrong value", transformKind: "stage-art-normalize-v1", before: assetBefore, after: map[string]any{"items": []any{map[string]any{"assetId": "CHAR-999", "kind": "character", "name": "林秋"}}}, wantPath: "$.items[0].assetId"},
+		{name: "null shotId to whitespace", transformKind: "stage-storyboard-normalize-v1", before: shotBefore, after: map[string]any{"shots": []any{map[string]any{"shotId": "  ", "sceneKey": "scene-001", "sourceScript": "进门"}}}, wantPath: "$.shots[0].shotId"},
+		{name: "null shotId deleted", transformKind: "stage-storyboard-normalize-v1", before: shotBefore, after: map[string]any{"shots": []any{map[string]any{"sceneKey": "scene-001", "sourceScript": "进门"}}}, wantPath: "$.shots[0].shotId"},
+		{name: "null shotId to wrong value", transformKind: "stage-storyboard-normalize-v1", before: shotBefore, after: map[string]any{"shots": []any{map[string]any{"shotId": "shot-999", "sceneKey": "scene-001", "sourceScript": "进门"}}}, wantPath: "$.shots[0].shotId"},
+		{name: "blank sceneKey stays blank", transformKind: "stage-storyboard-normalize-v1", before: sceneBefore, after: sceneBefore, wantPath: "$.shots[0].sceneKey"},
+		{name: "blank sceneKey deleted", transformKind: "stage-storyboard-normalize-v1", before: sceneBefore, after: map[string]any{"shots": []any{map[string]any{"shotId": "shot-001", "sourceScript": "进门"}}}, wantPath: "$.shots[0].sceneKey"},
+		{name: "blank sceneKey to wrong value", transformKind: "stage-storyboard-normalize-v1", before: sceneBefore, after: map[string]any{"shots": []any{map[string]any{"shotId": "shot-001", "sceneKey": "scene-999", "sourceScript": "进门"}}}, wantPath: "$.shots[0].sceneKey"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

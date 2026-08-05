@@ -119,8 +119,11 @@ func compareAssetNormalizationV1(before, after any, reasons *[]string) {
 				if prefix != "" {
 					expected = fmt.Sprintf("%s-%03d", prefix, counters[prefix])
 				}
-				if !contentFidelityEmptyID(rightID) && rightID != expected {
+				converted, ok := rightID.(string)
+				if expected != "" && (!ok || converted != expected) {
 					addContentFidelityReason(reasons, fmt.Sprintf("%s 新增值不是稳定 ID %q", idPath, expected))
+				} else if expected == "" && !contentFidelityEmptyID(rightID) {
+					addContentFidelityReason(reasons, fmt.Sprintf("%s 无稳定 ID 算法却被新增", idPath))
 				}
 			})
 		}
@@ -166,6 +169,13 @@ func compareStoryboardShotV1(left, right map[string]any, index int, path string,
 	}
 	for key := range right {
 		if !seen[key] {
+			seen[key] = true
+			keys = append(keys, key)
+		}
+	}
+	for _, key := range []string{"shotId", "sceneKey"} {
+		if !seen[key] {
+			seen[key] = true
 			keys = append(keys, key)
 		}
 	}
@@ -197,7 +207,8 @@ func compareAddedStableID(before, after any, expected, path string, reasons *[]s
 		compareContentFidelityExact(before, after, path, reasons)
 		return
 	}
-	if !contentFidelityEmptyID(after) && after != expected {
+	converted, ok := after.(string)
+	if !ok || converted != expected {
 		addContentFidelityReason(reasons, fmt.Sprintf("%s 新增值不是稳定 ID %q", path, expected))
 	}
 }
@@ -211,8 +222,12 @@ func compareContentFidelityMaps(left, right map[string]any, path, specialKey str
 	}
 	for key := range right {
 		if !seen[key] {
+			seen[key] = true
 			keys = append(keys, key)
 		}
+	}
+	if !seen[specialKey] {
+		keys = append(keys, specialKey)
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
