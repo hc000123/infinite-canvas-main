@@ -154,7 +154,7 @@ func executeSkillTrial(executor AgentRunExecutor, skill model.SkillDefinition, v
 		report.add("image_output_count", "图片模型返回数量与试跑请求不一致", "")
 	}
 	standardOutputs, diffOutputs := make([]any, 0, len(declared)), make([]any, 0, len(declared))
-	structureChanged := false
+	structureChanged, contentChanged := false, false
 	for _, output := range declared {
 		itemID := fmt.Sprintf("%s#%d", output.bindingName, output.ordinal)
 		if output.validationError != nil {
@@ -170,14 +170,18 @@ func executeSkillTrial(executor AgentRunExecutor, skill model.SkillDefinition, v
 		var payload map[string]any
 		_ = json.Unmarshal(converted, &payload)
 		standardOutputs = append(standardOutputs, map[string]any{"bindingName": output.bindingName, "ordinal": output.ordinal, "payload": payload})
-		itemDiff["bindingName"], itemDiff["ordinal"] = output.bindingName, output.ordinal
+		itemDiff["bindingName"], itemDiff["ordinal"], itemDiff["itemId"] = output.bindingName, output.ordinal, itemID
 		diffOutputs = append(diffOutputs, itemDiff)
 		if changed, _ := itemDiff["structureChanged"].(bool); changed {
 			structureChanged = true
 		}
+		if changed, _ := itemDiff["contentChanged"].(bool); changed {
+			contentChanged = true
+			report.add("content_fidelity", "固定转换内容保真校验失败："+workflowAdapterContentFidelitySummary(itemDiff), itemID)
+		}
 	}
 	report = report.finish()
-	standard, diff := formatSkillTrialOutputs(packageValue.OutputContract.ArtifactOutputs, standardOutputs, diffOutputs, structureChanged)
+	standard, diff := formatSkillTrialOutputs(packageValue.OutputContract.ArtifactOutputs, standardOutputs, diffOutputs, structureChanged, contentChanged)
 	return raw, standard, diff, report, duration, run.ImageManifestJSON
 }
 
@@ -225,7 +229,7 @@ func buildSkillTrialImageRequest(parameters json.RawMessage, packageValue SkillP
 	return encoded, string(manifest), count, err
 }
 
-func formatSkillTrialOutputs(specs []ArtifactOutputSpec, outputs, diffs []any, structureChanged bool) (map[string]any, map[string]any) {
+func formatSkillTrialOutputs(specs []ArtifactOutputSpec, outputs, diffs []any, structureChanged, contentChanged bool) (map[string]any, map[string]any) {
 	if len(specs) == 1 && specs[0].Max == 1 && len(outputs) == 1 {
 		output, _ := outputs[0].(map[string]any)
 		payload, _ := output["payload"].(map[string]any)
@@ -234,7 +238,7 @@ func formatSkillTrialOutputs(specs []ArtifactOutputSpec, outputs, diffs []any, s
 		delete(diff, "ordinal")
 		return payload, diff
 	}
-	return map[string]any{"outputs": outputs}, map[string]any{"outputs": diffs, "structureChanged": structureChanged, "contentChanged": false}
+	return map[string]any{"outputs": outputs}, map[string]any{"outputs": diffs, "structureChanged": structureChanged, "contentChanged": contentChanged}
 }
 
 func GetSkillTrialResult(id string) (SkillTrialResult, error) {

@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -114,8 +115,8 @@ func TestWorkflowAdapterRejectsOutputSchemaFailureWithoutChangingParent(t *testi
 		t.Fatal(err)
 	}
 	_, err = ExecuteWorkflowAdapter("user-1", "project-1", "episode-1", adapter, []ArtifactRefInput{{BindingName: "production_script", ArtifactID: parent.Artifact.ID, ContentHash: parent.Artifact.ContentHash}})
-	if err == nil {
-		t.Fatal("adapter persisted an invalid output")
+	if err == nil || strings.Contains(err.Error(), "内容保真") {
+		t.Fatalf("adapter schema error was replaced by fidelity gate: %v", err)
 	}
 	reloaded, reloadErr := GetArtifact("user-1", parent.Artifact.ID)
 	if reloadErr != nil || reloaded.Artifact.ContentHash != parent.Artifact.ContentHash || reloaded.Payload["productionScript"] != "完整导演稿" {

@@ -47,7 +47,16 @@ func buildWorkflowAdapterTransformRegistry() map[string]WorkflowAdapterTransform
 			if !ok || strings.TrimSpace(value) == "" {
 				return nil, errors.New("production_script 缺少 productionScript")
 			}
-			return json.Marshal(map[string]string{"productionScript": value})
+			payload, err := json.Marshal(bindings[0].Artifact.Payload)
+			if err != nil {
+				return nil, errors.New("production_script 无法序列化")
+			}
+			var cloned map[string]any
+			if json.Unmarshal(payload, &cloned) != nil {
+				return nil, errors.New("production_script 必须是 JSON 对象")
+			}
+			cloned["productionScript"] = strings.TrimSpace(value)
+			return json.Marshal(cloned)
 		},
 	}
 	stageKeys := append([]string(nil), systemSkillSeedStageKeys...)
@@ -163,6 +172,10 @@ func ConvertSkillStageOutput(template SkillStageTemplate, structured map[string]
 	if err != nil {
 		return nil, nil, err
 	}
+	before, err := marshalInvocationCanonical(structured)
+	if err != nil {
+		return nil, nil, err
+	}
 	converted, err := definition.Transform([]ResolvedArtifactBinding{{
 		BindingName: definition.InputContracts[0].BindingName,
 		Artifact:    ArtifactEnvelope{Payload: structured},
@@ -177,12 +190,12 @@ func ConvertSkillStageOutput(template SkillStageTemplate, structured map[string]
 	if err := ValidateArtifactPayload(schema, converted); err != nil {
 		return nil, nil, err
 	}
-	before, _ := marshalInvocationCanonical(structured)
-	after, _ := marshalInvocationCanonical(json.RawMessage(converted))
-	return converted, map[string]any{
-		"adapterId": definition.ID, "adapterVersion": definition.Version,
-		"structureChanged": !bytes.Equal(before, after), "contentChanged": false,
-	}, nil
+	diff, err := workflowAdapterContentFidelity(definition.TransformKind, json.RawMessage(before), converted)
+	if err != nil {
+		return nil, nil, err
+	}
+	diff["adapterId"], diff["adapterVersion"] = definition.ID, definition.Version
+	return converted, diff, nil
 }
 
 func ResolveWorkflowAdapter(ref WorkflowAdapterRef) (WorkflowAdapterDefinition, error) {
@@ -361,12 +374,34 @@ func ExecuteWorkflowAdapterOutputs(userID, projectID, episodeID string, definiti
 	if err != nil {
 		return nil, err
 	}
-	outputs := make([]ArtifactEnvelope, 0, len(bindings))
+	schema, err := ResolveArtifactSchema(normalized.Output.ArtifactType, normalized.Output.SchemaVersion)
+	if err != nil {
+		return nil, err
+	}
+	payloads := make([]json.RawMessage, len(bindings))
 	for index, binding := range bindings {
+		before, err := marshalInvocationCanonical(binding.Artifact.Payload)
+		if err != nil {
+			return nil, err
+		}
 		payload, err := normalized.Transform([]ResolvedArtifactBinding{binding})
 		if err != nil {
 			return nil, err
 		}
+		if err := ValidateArtifactPayload(schema, payload); err != nil {
+			return nil, err
+		}
+		diff, err := workflowAdapterContentFidelity(normalized.TransformKind, json.RawMessage(before), payload)
+		if err != nil {
+			return nil, err
+		}
+		if changed, _ := diff["contentChanged"].(bool); changed {
+			return nil, safeMessageError{message: "Workflow Adapter 内容保真校验失败：" + workflowAdapterContentFidelitySummary(diff)}
+		}
+		payloads[index] = payload
+	}
+	outputs := make([]ArtifactEnvelope, 0, len(bindings))
+	for index, payload := range payloads {
 		parentRefs := []ArtifactRefInput{refs[index]}
 		items, built, err := buildArtifacts(userID, []CreateArtifactInput{{
 			ArtifactType: normalized.Output.ArtifactType, SchemaVersion: normalized.Output.SchemaVersion,

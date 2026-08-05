@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -41,6 +42,33 @@ func TestTrialSkillRunsWithoutWorkflowAndPersistsRawAndStandardResults(t *testin
 	var storedResult map[string]any
 	if json.Unmarshal([]byte(stored.ResultJSON), &storedResult) != nil || storedResult["raw"] == nil || storedResult["standard"] == nil {
 		t.Fatalf("stored result=%s", stored.ResultJSON)
+	}
+}
+
+func TestTrialSkillContentFidelityFailureKeepsRawAndStandard(t *testing.T) {
+	setupInvocationServiceTest(t)
+	snapshot, _ := ParseSkillFolder("剧本优化", []SkillFolderFile{{Path: "SKILL.md", Data: []byte("# 保留台词")}})
+	created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: WorkflowSkillStageScript, Snapshot: snapshot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := workflowAdapterTransformRegistry
+	workflowAdapterTransformRegistry = cloneWorkflowAdapterTransforms(original)
+	t.Cleanup(func() { workflowAdapterTransformRegistry = original })
+	workflowAdapterTransformRegistry["stage-script-normalize-v1"] = func([]ResolvedArtifactBinding) (json.RawMessage, error) {
+		return json.RawMessage(`{"productionScript":"被篡改台词"}`), nil
+	}
+	restore := useSkillEvaluationExecutor(t, fakeSkillExecutor{output: `{"productionScript":"原台词"}`})
+	defer restore()
+	result, err := TrialSkill("admin-1", created.Version.ID, SkillTrialInput{InputText: "原始剧本", ConfirmAPICost: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Evaluation.Status != "failed" || result.Raw["productionScript"] != "原台词" || result.Standard["productionScript"] != "被篡改台词" || result.Diff["contentChanged"] != true {
+		t.Fatalf("result=%+v", result)
+	}
+	if len(result.Gates) != 1 || result.Gates[0].Code != "content_fidelity" || !result.Gates[0].Blocking || !strings.Contains(result.Gates[0].Message, "内容保真") {
+		t.Fatalf("gates=%+v", result.Gates)
 	}
 }
 
@@ -227,6 +255,49 @@ func TestTrialImageSkillUsesImageRequestAndConvertsEveryOutput(t *testing.T) {
 	outputs, _ := result.Standard["outputs"].([]any)
 	if len(outputs) != 2 || result.Diff["contentChanged"] != false {
 		t.Fatalf("standard=%+v diff=%+v", result.Standard, result.Diff)
+	}
+}
+
+func TestTrialSkillContentFidelityChecksEveryOutputWithItemID(t *testing.T) {
+	setupInvocationServiceTest(t)
+	setupImageInvocationSettings(t, true)
+	snapshot, _ := ParseSkillFolder("角色资产成图", []SkillFolderFile{{Path: "SKILL.md", Data: []byte("# 生成角色四视图")}})
+	created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: "asset-rendition-character", Snapshot: snapshot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := workflowAdapterTransformRegistry
+	workflowAdapterTransformRegistry = cloneWorkflowAdapterTransforms(original)
+	t.Cleanup(func() { workflowAdapterTransformRegistry = original })
+	kind := "stage-asset-rendition-character-normalize-v1"
+	workflowAdapterTransformRegistry[kind] = func(bindings []ResolvedArtifactBinding) (json.RawMessage, error) {
+		payload, _ := json.Marshal(bindings[0].Artifact.Payload)
+		if bindings[0].Artifact.Payload["renditionId"] == "rendition-2" {
+			return json.RawMessage(`{"assetId":"trial-input","renditionId":"rendition-2","mediaType":"image","mediaRef":"/api/uploaded-assets/runtime/image/tampered.png","generationMetadata":{}}`), nil
+		}
+		return payload, nil
+	}
+	executor := &recordingSkillExecutor{output: `{"outputs":[{"bindingName":"asset_rendition","ordinal":0,"payload":{"assetId":"trial-input","renditionId":"rendition-1","mediaType":"image","mediaRef":"/api/uploaded-assets/runtime/image/one.png","generationMetadata":{}}},{"bindingName":"asset_rendition","ordinal":1,"payload":{"assetId":"trial-input","renditionId":"rendition-2","mediaType":"image","mediaRef":"/api/uploaded-assets/runtime/image/two.png","generationMetadata":{}}}]}`}
+	restore := useSkillEvaluationExecutor(t, executor)
+	defer restore()
+	result, err := TrialSkill("admin-1", created.Version.ID, SkillTrialInput{InputText: "同一位成年女性角色四视图", Parameters: json.RawMessage(`{"n":2,"size":"1024x1024"}`), ConfirmAPICost: true})
+	if err != nil || result.Evaluation.Status != "failed" || result.Diff["contentChanged"] != true {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	standards, _ := result.Standard["outputs"].([]any)
+	diffs, _ := result.Diff["outputs"].([]any)
+	if len(standards) != 2 || len(diffs) != 2 {
+		t.Fatalf("standard=%+v diff=%+v", result.Standard, result.Diff)
+	}
+	for index, value := range diffs {
+		diff := value.(map[string]any)
+		wantID := "asset_rendition#" + fmt.Sprint(index)
+		if diff["itemId"] != wantID {
+			t.Fatalf("diff[%d]=%+v", index, diff)
+		}
+	}
+	if diffs[0].(map[string]any)["contentChanged"] != false || diffs[1].(map[string]any)["contentChanged"] != true || len(result.Gates) != 1 || result.Gates[0].ItemID != "asset_rendition#1" {
+		t.Fatalf("diffs=%+v gates=%+v", diffs, result.Gates)
 	}
 }
 
