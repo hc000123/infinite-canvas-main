@@ -3,11 +3,11 @@ import fs from "node:fs";
 import test from "node:test";
 
 import type { SkillAdminItem, SkillOwnerType } from "@/services/api/admin-skills.ts";
-import { canPublishSkill, filterSkillItems, nextDraftVersion, nextPatchVersion } from "./skill-view.ts";
+import { canPublishSkill, filterSkillItems, nextDraftVersion, nextPatchVersion, skillLifecycleLabel } from "./skill-view.ts";
 
 function skillItem(id: string, ownerType: SkillOwnerType, capabilities: string[], inputArtifactTypes: string[], outputArtifactTypes: string[], projectTags: string[]): SkillAdminItem {
     return {
-        skill: { id, name: id, summary: id, ownerType, ownerProjectId: ownerType === "project" ? "p1" : "", enabled: true, recommendedVersionId: `${id}-v1`, createdAt: "", updatedAt: "" },
+        skill: { id, name: id, summary: id, ownerType, ownerUserId: "", ownerProjectId: ownerType === "project" ? "p1" : "", stageKey: "script", enabled: true, recommendedVersionId: `${id}-v1`, createdAt: "", updatedAt: "" },
         versions: [],
         bindings: [],
         evaluations: [],
@@ -15,8 +15,8 @@ function skillItem(id: string, ownerType: SkillOwnerType, capabilities: string[]
         recommendedPackage: {
             manifest: { capabilities, inputArtifactTypes, outputArtifactTypes, projectTags, schemaCompatibility: {}, sideEffects: ["none"], estimatedCostClass: "text_low" },
             files: { "SKILL.md": "test" },
-            inputContract: { requiredInputs: [], imagePolicy: { required: false, min: 0, max: 0, allowTextFallback: true, allowedTypes: [] } },
-            outputContract: { schemaVersion: "1.0.0", schema: { type: "object" } },
+            inputContract: { requiredInputs: [], artifactInputs: [], imagePolicy: { required: false, min: 0, max: 0, allowTextFallback: true, allowedTypes: [] } },
+            outputContract: { schemaVersion: "1.0.0", schema: { type: "object" }, artifactOutputs: [] },
             qualityGateProfile: ["schema"],
             contentHash: "hash",
         },
@@ -51,6 +51,13 @@ test("starts an empty Skill definition at version 1.0.0", () => {
     assert.equal(nextDraftVersion("2.4.9"), "2.4.10");
 });
 
+test("folder-first lifecycle uses production language", () => {
+    assert.equal(skillLifecycleLabel({ status: "draft" } as never, false, false), "待试跑");
+    assert.equal(skillLifecycleLabel({ status: "published" } as never, true, false), "可使用");
+    assert.equal(skillLifecycleLabel({ status: "published" } as never, true, true), "推荐");
+    assert.equal(skillLifecycleLabel({ status: "archived" } as never, false, false), "已停用");
+});
+
 test("skill center is generic and exposes manifest filters", () => {
     const page = fs.readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
     for (const text of ["Skill 中心", "Capability", "输入 Artifact", "输出 Artifact", "所有者", "项目标签"]) {
@@ -58,4 +65,6 @@ test("skill center is generic and exposes manifest filters", () => {
     }
     assert.equal(page.includes("workflowSkillStageNumbers"), false);
     assert.equal(page.includes('disabled={!detailQuery.data}'), false);
+    for (const text of ["导入 Skill 文件夹", "导入新版本", "独立试运行", "设为可用", "技术详情与底层契约"]) assert.ok(page.includes(text), `missing folder-first action ${text}`);
+    assert.equal(page.includes("工作流 Run ID"), false);
 });

@@ -58,3 +58,10 @@ export function resolveRecommendationLabel(item: SkillAdminItem, version?: Skill
     if (version.status === "archived") return "已停用";
     return "可切换推荐版";
 }
+
+export function skillLifecycleLabel(version: SkillVersion, hasPassingTrial: boolean, recommended: boolean) {
+    if (version.status === "archived") return "已停用";
+    if (recommended) return "推荐";
+    if (version.status === "published" && hasPassingTrial) return "可使用";
+    return "待试跑";
+}

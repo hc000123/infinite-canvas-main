@@ -1,4 +1,7 @@
-import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from "@/services/api/request";
+import { apiDelete, apiGet, apiPatch, apiPost, apiPostForm, apiPut } from "@/services/api/request";
+import { buildSkillFolderFormData, type SkillFolderImportFields } from "./skill-folder-form";
+
+export { buildSkillFolderFormData } from "./skill-folder-form";
 
 export type SkillOwnerType = "system" | "project";
 export type SkillVersionStatus = "draft" | "published" | "archived";
@@ -8,7 +11,9 @@ export type SkillDefinition = {
     name: string;
     summary: string;
     ownerType: SkillOwnerType;
+    ownerUserId: string;
     ownerProjectId: string;
+    stageKey: string;
     enabled: boolean;
     recommendedVersionId: string;
     createdAt: string;
@@ -22,6 +27,8 @@ export type SkillVersion = {
     status: SkillVersionStatus;
     contentHash: string;
     evaluationSummaryJson: string;
+    sourceKind: string;
+    sourceHash: string;
     createdBy: string;
     publishedAt: string;
     createdAt: string;
@@ -53,12 +60,14 @@ export type SkillImagePolicy = {
 
 export type SkillInputContract = {
     requiredInputs: string[];
+    artifactInputs: SkillArtifactInputSpec[];
     imagePolicy: SkillImagePolicy;
 };
 
 export type SkillOutputContract = {
     schemaVersion: string;
     schema: Record<string, unknown>;
+    artifactOutputs: SkillArtifactOutputSpec[];
 };
 
 export type SkillPackage = {
@@ -127,6 +136,10 @@ export type SkillEvaluationResult = {
     baseline: Record<string, unknown>;
     diff: Record<string, unknown>;
 };
+export type SkillStageTemplate = { key: string; label: string; description: string; executorKind: string; capability: string; inputTypes: string[]; outputType: string; fixedAdapter: { adapterId: string; adapterVersion: string } };
+export type SkillSourceFile = { path: string; mimeType: string; hash: string; size: number; text: boolean };
+export type SkillTrialInput = { inputText: string; inputArtifacts: Array<{ bindingName: string; artifactId: string; contentHash: string }>; confirmApiCost: boolean };
+export type SkillTrialResult = { evaluation: SkillEvaluation; stageKey: string; raw: Record<string, unknown>; standard: Record<string, unknown>; diff: Record<string, unknown>; gates: Array<{ code: string; message: string; itemId?: string; blocking: boolean }> };
 export type SkillDraftInput = { version: string; package: SkillPackage };
 export type CreateSkillInput = SkillDraftInput & Pick<SkillDefinition, "name" | "summary" | "ownerType" | "ownerProjectId">;
 export type SkillOption = Pick<SkillDefinition, "ownerType" | "ownerProjectId" | "summary"> & {
@@ -142,6 +155,35 @@ export type SkillOption = Pick<SkillDefinition, "ownerType" | "ownerProjectId" |
 };
 
 const base = "/api/v1/admin";
+
+export function fetchAdminSkillStageTemplates(token: string) {
+    return apiGet<SkillStageTemplate[]>(`${base}/skill-stage-templates`, undefined, token);
+}
+
+export function importAdminSkillFolder(token: string, files: File[], input: SkillFolderImportFields) {
+    return apiPostForm<{ skill: SkillDefinition; version: SkillVersion; package: SkillPackage }>(`${base}/skills/import-folder`, buildSkillFolderFormData(files, input), token);
+}
+
+export function importAdminSkillFolderVersion(token: string, skillId: string, files: File[], version?: string) {
+    const form = buildSkillFolderFormData(files, { ownerType: "system", stageKey: "version", version });
+    return apiPostForm<SkillVersion>(`${base}/skills/${encodeURIComponent(skillId)}/import-version`, form, token);
+}
+
+export function fetchAdminSkillSourceFiles(token: string, versionId: string) {
+    return apiGet<SkillSourceFile[]>(`${base}/skill-versions/${encodeURIComponent(versionId)}/source-files`, undefined, token);
+}
+
+export function fetchAdminSkillSourceText(token: string, versionId: string, path: string) {
+    return apiGet<{ path: string; content: string }>(`${base}/skill-versions/${encodeURIComponent(versionId)}/source-file`, { path }, token);
+}
+
+export function trialAdminSkillVersion(token: string, versionId: string, input: SkillTrialInput) {
+    return apiPost<SkillTrialResult>(`${base}/skill-versions/${encodeURIComponent(versionId)}/trials`, input, token);
+}
+
+export function fetchAdminSkillTrial(token: string, trialId: string) {
+    return apiGet<SkillTrialResult>(`${base}/skill-trials/${encodeURIComponent(trialId)}`, undefined, token);
+}
 
 export function fetchAdminSkills(token: string) {
     return apiGet<SkillAdminItem[]>(`${base}/skills`, undefined, token);

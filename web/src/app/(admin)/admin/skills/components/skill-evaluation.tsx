@@ -8,13 +8,13 @@ import { shortSkillHash } from "../skill-view";
 
 export function SkillEvaluationPanel({ result, stored }: { result?: SkillEvaluationResult; stored?: SkillEvaluation }) {
     const evaluation = result?.evaluation || stored;
-    if (!evaluation) return <Card size="small" title="同输入评测" className="studio-panel" variant="borderless"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前内容哈希尚无评测" /></Card>;
+    if (!evaluation) return <Card size="small" title="最近试跑" className="studio-panel" variant="borderless"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前内容哈希尚无通过的试跑" /></Card>;
     const passed = evaluation.status === "passed";
     const diff = result?.diff || parseObject(evaluation.diffJson);
     return (
-        <Card size="small" className="studio-panel" variant="borderless" title={<Flex align="center" gap={8}>{passed ? <CheckCircleFilled style={{ color: "var(--studio-success)" }} /> : <CloseCircleFilled style={{ color: "var(--studio-danger)" }} />}<span>同输入评测</span></Flex>} extra={<Tag color={passed ? "success" : "error"}>{passed ? "通过" : "未通过"}</Tag>}>
+        <Card size="small" className="studio-panel" variant="borderless" title={<Flex align="center" gap={8}>{passed ? <CheckCircleFilled style={{ color: "var(--studio-success)" }} /> : <CloseCircleFilled style={{ color: "var(--studio-danger)" }} />}<span>最近试跑</span></Flex>} extra={<Tag color={passed ? "success" : "error"}>{passed ? "通过" : "未通过"}</Tag>}>
             <Descriptions size="small" column={1} styles={{ label: { width: 90 } }}>
-                <Descriptions.Item label="测试项目">{evaluation.projectId || "契约自检"}</Descriptions.Item>
+                <Descriptions.Item label="运行方式">{evaluation.projectId ? `项目 ${evaluation.projectId}` : "独立试跑"}</Descriptions.Item>
                 <Descriptions.Item label="输入快照"><Typography.Text code>{shortSkillHash(evaluation.inputHash)}</Typography.Text></Descriptions.Item>
                 <Descriptions.Item label="图片理解"><PictureOutlined /> {result ? `${result.imageCount} 张` : "已冻结"}</Descriptions.Item>
                 <Descriptions.Item label="耗时">{evaluation.durationMs ? `${(evaluation.durationMs / 1000).toFixed(1)} 秒` : "确定性检查"}</Descriptions.Item>
