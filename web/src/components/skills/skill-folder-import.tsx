@@ -6,14 +6,15 @@ import { App, Button, Empty, Flex, Modal, Select, Tag, Typography } from "antd";
 import { useMemo, useRef, useState } from "react";
 
 import { fetchAdminSkillStageTemplates, importAdminSkillFolder, importAdminSkillFolderVersion, type SkillStageTemplate } from "@/services/api/admin-skills";
+import { fetchProjectSkillStageTemplates, importProjectSkillFolder, importProjectSkillFolderVersion } from "@/services/api/project-skills";
 
-export function SkillFolderImport({ open, token, skillId, onCancel, onImported }: { open: boolean; token: string; skillId?: string; onCancel: () => void; onImported: (skillId?: string, versionId?: string) => void }) {
+export function SkillFolderImport({ open, token, scope = "admin", projectId, skillId, onCancel, onImported }: { open: boolean; token: string; scope?: "admin" | "project"; projectId?: string; skillId?: string; onCancel: () => void; onImported: (skillId?: string, versionId?: string) => void }) {
     const { message } = App.useApp();
     const inputRef = useRef<HTMLInputElement>(null);
     const [files, setFiles] = useState<File[]>([]);
     const [stageKey, setStageKey] = useState("");
     const updating = Boolean(skillId);
-    const templates = useQuery({ queryKey: ["admin", "skill-stage-templates", token], queryFn: () => fetchAdminSkillStageTemplates(token), enabled: open && !updating && Boolean(token), retry: false });
+    const templates = useQuery({ queryKey: [scope, "skill-stage-templates", token], queryFn: () => scope === "admin" ? fetchAdminSkillStageTemplates(token) : fetchProjectSkillStageTemplates(token), enabled: open && !updating && Boolean(token), retry: false });
     const selected = templates.data?.find((item) => item.key === stageKey);
     const folderName = useMemo(() => files[0]?.webkitRelativePath?.split("/")[0] || "", [files]);
     const hasSkill = useMemo(() => files.some((file) => {
@@ -21,7 +22,9 @@ export function SkillFolderImport({ open, token, skillId, onCancel, onImported }
         return path === "SKILL.md" || path === `${folderName}/SKILL.md`;
     }), [files, folderName]);
     const mutation = useMutation({
-        mutationFn: () => updating ? importAdminSkillFolderVersion(token, skillId!, files) : importAdminSkillFolder(token, files, { ownerType: "system", stageKey }),
+        mutationFn: () => updating
+            ? scope === "admin" ? importAdminSkillFolderVersion(token, skillId!, files) : importProjectSkillFolderVersion(token, skillId!, files)
+            : scope === "admin" ? importAdminSkillFolder(token, files, { ownerType: "system", stageKey }) : importProjectSkillFolder(token, files, { ownerType: "project", projectId, stageKey }),
         onSuccess: (result) => {
             const value = result as { skill?: { id: string }; version?: { id: string }; id?: string };
             message.success(updating ? "新版本已载入，请先试跑" : "Skill 文件夹已载入，请先试跑");

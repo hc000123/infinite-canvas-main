@@ -16,6 +16,13 @@ test("project Skill client covers the authenticated management lifecycle", () =>
         '`${versionPath(id)}/publish`',
         '`${skillPath(skillId)}/recommended-version`',
         '`${versionPath(id)}/archive`',
+        '"/api/v1/skill-stage-templates"',
+        '"/api/v1/skills/import-folder"',
+        '`${skillPath(skillId)}/import-version`',
+        '`${versionPath(id)}/source-files`',
+        '`${versionPath(id)}/source-file`',
+        '`${versionPath(id)}/trials`',
+        '`/api/v1/skill-trials/${encodeURIComponent(id)}`',
     ]) assert.ok(source.includes(route), `missing route ${route}`);
     assert.match(source, /apiPatch<SkillDefinition>\(skillPath\(id\), input, token\)/);
     assert.match(source, /apiPatch<SkillVersion>\(versionPath\(id\), input, token\)/);

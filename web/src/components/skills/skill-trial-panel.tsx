@@ -6,15 +6,16 @@ import { App, Checkbox, Collapse, Empty, Flex, Input, Modal, Tabs, Tag, Typograp
 import { useState } from "react";
 
 import { trialAdminSkillVersion, type SkillTrialInput, type SkillTrialResult } from "@/services/api/admin-skills";
+import { trialProjectSkillVersion } from "@/services/api/project-skills";
 
-export function SkillTrialPanel({ open, token, versionId, onCancel, onCompleted }: { open: boolean; token: string; versionId: string; onCancel: () => void; onCompleted: (result: SkillTrialResult) => void }) {
+export function SkillTrialPanel({ open, token, versionId, scope = "admin", onCancel, onCompleted }: { open: boolean; token: string; versionId: string; scope?: "admin" | "project"; onCancel: () => void; onCompleted: (result: SkillTrialResult) => void }) {
     const { message } = App.useApp();
     const [inputText, setInputText] = useState("");
     const [artifactText, setArtifactText] = useState("[]");
     const [confirmAPICost, setConfirmAPICost] = useState(false);
     const [result, setResult] = useState<SkillTrialResult>();
     const mutation = useMutation({
-        mutationFn: () => trialAdminSkillVersion(token, versionId, trialInput(inputText, artifactText, confirmAPICost)),
+        mutationFn: () => scope === "admin" ? trialAdminSkillVersion(token, versionId, trialInput(inputText, artifactText, confirmAPICost)) : trialProjectSkillVersion(token, versionId, trialInput(inputText, artifactText, confirmAPICost)),
         onSuccess: (value) => { setResult(value); onCompleted(value); value.evaluation.status === "passed" ? message.success("试跑通过，已可发布为可用版本") : message.warning("试跑未通过，请查看问题后更新文件夹"); },
         onError: (error) => message.error(error instanceof Error ? error.message : "试跑失败"),
     });

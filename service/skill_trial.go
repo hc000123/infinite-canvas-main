@@ -148,3 +148,14 @@ func GetSkillTrialResult(id string) (SkillTrialResult, error) {
 	}
 	return SkillTrialResult{Evaluation: evaluation, StageKey: stageKey, Raw: stored.Raw, Standard: stored.Standard, Diff: diff, Gates: gates.Issues}, nil
 }
+
+func GetManagedSkillTrialResult(userID, id string, isAdmin bool) (SkillTrialResult, error) {
+	evaluation, ok, err := repository.GetSkillEvaluation(strings.TrimSpace(id))
+	if err != nil || !ok {
+		return SkillTrialResult{}, safeMessageError{message: "Skill 试跑不存在"}
+	}
+	if _, _, err := GetManagedSkillVersionPackage(userID, evaluation.SkillVersionID, isAdmin); err != nil {
+		return SkillTrialResult{}, err
+	}
+	return GetSkillTrialResult(evaluation.ID)
+}

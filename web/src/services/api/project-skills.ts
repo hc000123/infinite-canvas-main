@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from "@/services/api/request";
+import { apiDelete, apiGet, apiPatch, apiPost, apiPostForm, apiPut } from "@/services/api/request";
 import type {
     SkillAdminItem,
     SkillDefinition,
@@ -7,7 +7,12 @@ import type {
     SkillPackage,
     SkillVersion,
     SkillVersionDetail,
+    SkillSourceFile,
+    SkillStageTemplate,
+    SkillTrialInput,
+    SkillTrialResult,
 } from "@/services/api/admin-skills";
+import { buildSkillFolderFormData, type SkillFolderImportFields } from "./skill-folder-form";
 
 export type ProjectSkillCreateInput = SkillDraftInput & Pick<SkillDefinition, "name" | "summary"> & { projectId: string };
 export type ProjectSkillCopyInput = { projectId: string; name: string; version: string };
@@ -19,6 +24,18 @@ const versionPath = (id: string) => `/api/v1/skill-versions/${encodeURIComponent
 
 export function fetchProjectSkills(token: string, projectId: string) {
     return apiGet<SkillAdminItem[]>("/api/v1/skills", { projectId }, token);
+}
+
+export function fetchProjectSkillStageTemplates(token: string) {
+    return apiGet<SkillStageTemplate[]>("/api/v1/skill-stage-templates", undefined, token);
+}
+
+export function importProjectSkillFolder(token: string, files: File[], input: SkillFolderImportFields) {
+    return apiPostForm<ProjectSkillResolved>("/api/v1/skills/import-folder", buildSkillFolderFormData(files, input), token);
+}
+
+export function importProjectSkillFolderVersion(token: string, skillId: string, files: File[], version?: string) {
+    return apiPostForm<SkillVersion>(`${skillPath(skillId)}/import-version`, buildSkillFolderFormData(files, { ownerType: "project", stageKey: "version", version }), token);
 }
 
 export function createProjectSkill(token: string, input: ProjectSkillCreateInput) {
@@ -45,6 +62,14 @@ export function fetchProjectSkillVersion(token: string, id: string) {
     return apiGet<SkillVersionDetail>(versionPath(id), undefined, token);
 }
 
+export function fetchProjectSkillSourceFiles(token: string, id: string) {
+    return apiGet<SkillSourceFile[]>(`${versionPath(id)}/source-files`, undefined, token);
+}
+
+export function fetchProjectSkillSourceText(token: string, id: string, path: string) {
+    return apiGet<{ path: string; content: string }>(`${versionPath(id)}/source-file`, { path }, token);
+}
+
 export function updateProjectSkillVersion(token: string, id: string, input: SkillDraftInput) {
     return apiPatch<SkillVersion>(versionPath(id), input, token);
 }
@@ -59,6 +84,14 @@ export function validateProjectSkillVersion(token: string, id: string) {
 
 export function evaluateProjectSkillVersion(token: string, id: string, input: ProjectSkillEvaluationInput) {
     return apiPost<SkillEvaluationResult>(`${versionPath(id)}/evaluations`, input, token);
+}
+
+export function trialProjectSkillVersion(token: string, id: string, input: SkillTrialInput) {
+    return apiPost<SkillTrialResult>(`${versionPath(id)}/trials`, input, token);
+}
+
+export function fetchProjectSkillTrial(token: string, id: string) {
+    return apiGet<SkillTrialResult>(`/api/v1/skill-trials/${encodeURIComponent(id)}`, undefined, token);
 }
 
 export function publishProjectSkillVersion(token: string, id: string) {

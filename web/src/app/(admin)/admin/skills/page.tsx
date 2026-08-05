@@ -22,9 +22,9 @@ import {
 import { useUserStore } from "@/stores/use-user-store";
 import { SkillEditor } from "./components/skill-editor";
 import { SkillEvaluationPanel } from "./components/skill-evaluation";
-import { SkillFolderImport } from "./components/skill-folder-import";
-import { SkillSourceBrowser } from "./components/skill-source-browser";
-import { SkillTrialPanel } from "./components/skill-trial-panel";
+import { SkillFolderImport } from "@/components/skills/skill-folder-import";
+import { SkillSourceBrowser } from "@/components/skills/skill-source-browser";
+import { SkillTrialPanel } from "@/components/skills/skill-trial-panel";
 import { canPublishSkill, filterSkillItems, latestPassingEvaluation, shortSkillHash, skillLifecycleLabel, type SkillFilter } from "./skill-view";
 
 const initialFilters: SkillFilter = { search: "", capability: "", inputArtifactType: "", outputArtifactType: "", projectTag: "", ownerType: "" };

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/basketikun/infinite-canvas/model"
 	"github.com/basketikun/infinite-canvas/service"
@@ -27,6 +28,48 @@ func Skills(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	OK(w, items)
+}
+
+func SkillStageTemplates(w http.ResponseWriter, _ *http.Request) {
+	OK(w, service.ListSkillStageTemplates())
+}
+
+func ImportProjectSkillFolder(w http.ResponseWriter, r *http.Request) {
+	user, _, ok := skillActor(r)
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	snapshot, values, ok := decodeSkillFolderMultipart(w, r)
+	if !ok {
+		return
+	}
+	result, err := service.ImportManagedSkillFolder(user.ID, false, service.SkillFolderImportInput{
+		OwnerType: model.SkillOwnerProject, ProjectID: values.Get("projectId"), StageKey: values.Get("stageKey"), Snapshot: snapshot,
+	})
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
+func ImportProjectSkillFolderVersion(w http.ResponseWriter, r *http.Request, skillID string) {
+	user, isAdmin, ok := skillActor(r)
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	snapshot, values, ok := decodeSkillFolderMultipart(w, r)
+	if !ok {
+		return
+	}
+	result, err := service.ImportOwnedSkillFolderVersion(user.ID, isAdmin, skillID, values.Get("version"), snapshot)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
 }
 
 func CreateProjectSkill(w http.ResponseWriter, r *http.Request) {
@@ -132,6 +175,35 @@ func ProjectSkillVersion(w http.ResponseWriter, r *http.Request, id string) {
 	OK(w, map[string]any{"version": version, "package": packageValue})
 }
 
+func ProjectSkillSourceFiles(w http.ResponseWriter, r *http.Request, id string) {
+	user, isAdmin, ok := skillActor(r)
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	result, err := service.GetManagedSkillSourceFiles(user.ID, id, isAdmin)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
+func ProjectSkillSourceFile(w http.ResponseWriter, r *http.Request, id string) {
+	user, isAdmin, ok := skillActor(r)
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	path := strings.TrimSpace(r.URL.Query().Get("path"))
+	result, err := service.GetManagedSkillSourceText(user.ID, id, path, isAdmin)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, map[string]string{"path": path, "content": result})
+}
+
 func UpdateProjectSkillVersion(w http.ResponseWriter, r *http.Request, id string) {
 	user, isAdmin, ok := skillActor(r)
 	if !ok {
@@ -188,6 +260,38 @@ func EvaluateProjectSkillVersion(w http.ResponseWriter, r *http.Request, id stri
 		return
 	}
 	result, err := service.EvaluateOwnedSkillVersion(user.ID, isAdmin, id, input)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
+func TrialProjectSkillVersion(w http.ResponseWriter, r *http.Request, id string) {
+	user, isAdmin, ok := skillActor(r)
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	var input service.SkillTrialInput
+	if !decodeWorkflowBody(w, r, &input, 1<<20) {
+		return
+	}
+	result, err := service.TrialOwnedSkillVersion(user.ID, isAdmin, id, input)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
+func ProjectSkillTrial(w http.ResponseWriter, r *http.Request, id string) {
+	user, isAdmin, ok := skillActor(r)
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	result, err := service.GetManagedSkillTrialResult(user.ID, id, isAdmin)
 	if err != nil {
 		FailError(w, err)
 		return

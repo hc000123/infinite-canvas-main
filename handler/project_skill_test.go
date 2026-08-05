@@ -1,7 +1,11 @@
 package handler_test
 
 import (
+	"bytes"
+	"encoding/json"
+	"mime/multipart"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -42,5 +46,50 @@ func TestProjectSkillHTTPIsolatesOwnersAndCopiesSystemSkill(t *testing.T) {
 	deletedSkill := invocationHTTPCall(t, app, http.MethodDelete, "/api/v1/skills/"+copied.Skill.ID, ownerToken, nil)
 	if deletedSkill.Code != 0 {
 		t.Fatalf("delete skill=%s", deletedSkill.Raw)
+	}
+}
+
+func TestProjectSkillFolderImportSourceAndStandaloneTrialRoutes(t *testing.T) {
+	app := setupInvocationHTTPRouter(t)
+	ownerToken := registerAndLoginInvocationHTTPUser(t, app, "project-folder-owner")
+	strangerToken := registerAndLoginInvocationHTTPUser(t, app, "project-folder-stranger")
+	templates := invocationHTTPCall(t, app, http.MethodGet, "/api/v1/skill-stage-templates", ownerToken, nil)
+	if templates.Code != 0 || !strings.Contains(templates.Raw, `"key":"script"`) {
+		t.Fatalf("templates=%s", templates.Raw)
+	}
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for key, value := range map[string]string{"projectId": "project-folder", "stageKey": "script", "folderName": "Script"} {
+		_ = writer.WriteField(key, value)
+	}
+	_ = writer.WriteField("paths", "Script/SKILL.md")
+	part, _ := writer.CreateFormFile("files", "SKILL.md")
+	_, _ = part.Write([]byte("---\nname: 项目剧本 Skill\n---\n# Rules"))
+	_ = writer.Close()
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/skills/import-folder", &body)
+	request.Header.Set("Authorization", "Bearer "+ownerToken)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	recorder := httptest.NewRecorder()
+	app.ServeHTTP(recorder, request)
+	var response invocationHTTPResponse
+	if json.Unmarshal(recorder.Body.Bytes(), &response) != nil || response.Code != 0 {
+		t.Fatalf("import=%s", recorder.Body.String())
+	}
+	var created service.ResolvedSkill
+	decodeInvocationHTTPData(t, response, &created)
+	if created.Skill.OwnerType != model.SkillOwnerProject || created.Skill.OwnerProjectID != "project-folder" || created.Skill.StageKey != "script" {
+		t.Fatalf("created=%+v", created)
+	}
+	source := invocationHTTPCall(t, app, http.MethodGet, "/api/v1/skill-versions/"+created.Version.ID+"/source-files", ownerToken, nil)
+	if source.Code != 0 || !strings.Contains(source.Raw, "SKILL.md") {
+		t.Fatalf("source=%s", source.Raw)
+	}
+	foreign := invocationHTTPCall(t, app, http.MethodGet, "/api/v1/skill-versions/"+created.Version.ID+"/source-files", strangerToken, nil)
+	if foreign.Code == 0 {
+		t.Fatalf("stranger source=%s", foreign.Raw)
+	}
+	trial := invocationHTTPCall(t, app, http.MethodPost, "/api/v1/skill-versions/"+created.Version.ID+"/trials", ownerToken, map[string]any{})
+	if trial.Code == 0 || !strings.Contains(trial.Raw, "输入") || strings.Contains(trial.Raw, "workflowRunId") {
+		t.Fatalf("trial=%s", trial.Raw)
 	}
 }

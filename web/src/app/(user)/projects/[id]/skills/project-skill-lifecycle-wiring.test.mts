@@ -4,9 +4,10 @@ import test from "node:test";
 
 const page = readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
 
-test("project Skill management can recover after deleting its only draft", () => {
-    assert.match(page, /const sourceVersion = activeVersion \|\| item\.versions\[0\]/);
-    assert.match(page, /sourceVersion \? nextPatch\(sourceVersion\.version\) : "1\.0\.0"/);
+test("project Skill management uses the shared folder-first lifecycle", () => {
+    for (const text of ["导入项目 Skill 文件夹", "导入新版本", "独立试运行", "设为可用", "技术详情与底层契约"]) assert.ok(page.includes(text), `missing ${text}`);
+    assert.match(page, /scope="project"/);
+    assert.doesNotMatch(page, /Workflow Run ID/);
     assert.doesNotMatch(page, /disabled=\{!detailQuery\.data\}/);
 });
 
