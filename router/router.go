@@ -373,6 +373,8 @@ func New() *gin.Engine {
 		handler.AdminRecommendAgentVersion(c.Writer, c.Request, c.Param("id"))
 	})
 	skillAdmin.GET("/skills", gin.WrapF(handler.AdminSkills))
+	skillAdmin.GET("/skill-stage-templates", gin.WrapF(handler.AdminSkillStageTemplates))
+	skillAdmin.POST("/skills/import-folder", gin.WrapF(handler.AdminImportSkillFolder))
 	skillAdmin.POST("/skills", gin.WrapF(handler.AdminCreateSkill))
 	skillAdmin.PATCH("/skills/:id", func(c *gin.Context) {
 		handler.AdminUpdateSkill(c.Writer, c.Request, c.Param("id"))
@@ -380,11 +382,20 @@ func New() *gin.Engine {
 	skillAdmin.POST("/skills/:id/versions", func(c *gin.Context) {
 		handler.AdminCreateSkillVersion(c.Writer, c.Request, c.Param("id"))
 	})
+	skillAdmin.POST("/skills/:id/import-version", func(c *gin.Context) {
+		handler.AdminImportSkillFolderVersion(c.Writer, c.Request, c.Param("id"))
+	})
 	skillAdmin.GET("/skill-versions/:id", func(c *gin.Context) {
 		handler.AdminSkillVersion(c.Writer, c.Request, c.Param("id"))
 	})
 	skillAdmin.PATCH("/skill-versions/:id", func(c *gin.Context) {
 		handler.AdminUpdateSkillVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	skillAdmin.GET("/skill-versions/:id/source-files", func(c *gin.Context) {
+		handler.AdminSkillSourceFiles(c.Writer, c.Request, c.Param("id"))
+	})
+	skillAdmin.GET("/skill-versions/:id/source-file", func(c *gin.Context) {
+		handler.AdminSkillSourceFile(c.Writer, c.Request, c.Param("id"))
 	})
 	skillAdmin.POST("/skill-versions/:id/validate", func(c *gin.Context) {
 		handler.AdminValidateSkillVersion(c.Writer, c.Request, c.Param("id"))

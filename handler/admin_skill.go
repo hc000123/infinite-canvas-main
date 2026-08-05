@@ -1,11 +1,15 @@
 package handler
 
 import (
+	"io"
 	"net/http"
+	"strings"
 
 	"github.com/basketikun/infinite-canvas/model"
 	"github.com/basketikun/infinite-canvas/service"
 )
+
+const skillFolderRequestMaxBytes = 34 << 20
 
 type skillCreateInput struct {
 	Name           string               `json:"name"`
@@ -47,6 +51,122 @@ func AdminCreateSkill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	OK(w, result)
+}
+
+func AdminSkillStageTemplates(w http.ResponseWriter, _ *http.Request) {
+	OK(w, service.ListSkillStageTemplates())
+}
+
+func AdminImportSkillFolder(w http.ResponseWriter, r *http.Request) {
+	admin, ok := skillAdmin(r)
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	snapshot, values, ok := decodeSkillFolderMultipart(w, r)
+	if !ok {
+		return
+	}
+	result, err := service.ImportManagedSkillFolder(admin.ID, true, service.SkillFolderImportInput{
+		OwnerType: model.SkillOwnerType(values.Get("ownerType")), ProjectID: values.Get("projectId"), StageKey: values.Get("stageKey"),
+		Name: values.Get("name"), Summary: values.Get("summary"), Version: values.Get("version"), Snapshot: snapshot,
+	})
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
+func AdminImportSkillFolderVersion(w http.ResponseWriter, r *http.Request, skillID string) {
+	admin, ok := skillAdmin(r)
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	snapshot, values, ok := decodeSkillFolderMultipart(w, r)
+	if !ok {
+		return
+	}
+	result, err := service.ImportOwnedSkillFolderVersion(admin.ID, true, skillID, values.Get("version"), snapshot)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
+func AdminSkillSourceFiles(w http.ResponseWriter, r *http.Request, versionID string) {
+	admin, ok := skillAdmin(r)
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	result, err := service.GetManagedSkillSourceFiles(admin.ID, versionID, true)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
+func AdminSkillSourceFile(w http.ResponseWriter, r *http.Request, versionID string) {
+	admin, ok := skillAdmin(r)
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	filePath := strings.TrimSpace(r.URL.Query().Get("path"))
+	result, err := service.GetManagedSkillSourceText(admin.ID, versionID, filePath, true)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, map[string]string{"path": filePath, "content": result})
+}
+
+func decodeSkillFolderMultipart(w http.ResponseWriter, r *http.Request) (service.SkillFolderSnapshot, mapValues, bool) {
+	r.Body = http.MaxBytesReader(w, r.Body, skillFolderRequestMaxBytes)
+	if err := r.ParseMultipartForm(8 << 20); err != nil {
+		Fail(w, "Skill 文件夹上传失败或超过大小限制")
+		return service.SkillFolderSnapshot{}, nil, false
+	}
+	defer r.MultipartForm.RemoveAll()
+	paths, headers := r.MultipartForm.Value["paths"], r.MultipartForm.File["files"]
+	if len(paths) == 0 || len(paths) != len(headers) {
+		Fail(w, "Skill 文件清单与路径不一致")
+		return service.SkillFolderSnapshot{}, nil, false
+	}
+	files := make([]service.SkillFolderFile, 0, len(headers))
+	for index, header := range headers {
+		opened, err := header.Open()
+		if err != nil {
+			Fail(w, "读取 Skill 文件失败")
+			return service.SkillFolderSnapshot{}, nil, false
+		}
+		content, readErr := io.ReadAll(opened)
+		_ = opened.Close()
+		if readErr != nil {
+			Fail(w, "读取 Skill 文件失败")
+			return service.SkillFolderSnapshot{}, nil, false
+		}
+		files = append(files, service.SkillFolderFile{Path: paths[index], Data: content})
+	}
+	snapshot, err := service.ParseSkillFolder(r.FormValue("folderName"), files)
+	if err != nil {
+		FailError(w, err)
+		return service.SkillFolderSnapshot{}, nil, false
+	}
+	return snapshot, mapValues(r.MultipartForm.Value), true
+}
+
+type mapValues map[string][]string
+
+func (values mapValues) Get(key string) string {
+	if len(values[key]) == 0 {
+		return ""
+	}
+	return values[key][0]
 }
 
 func AdminUpdateSkill(w http.ResponseWriter, r *http.Request, id string) {

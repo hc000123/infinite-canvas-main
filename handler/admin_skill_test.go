@@ -1,7 +1,10 @@
 package handler
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +13,64 @@ import (
 	"github.com/basketikun/infinite-canvas/model"
 	"github.com/basketikun/infinite-canvas/service"
 )
+
+func TestAdminSkillFolderImportAndSourcePreview(t *testing.T) {
+	setupWorkflowHandlerTestDB(t)
+	if err := service.EnsureCoreArtifactSchemas(); err != nil {
+		t.Fatal(err)
+	}
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for key, value := range map[string]string{"ownerType": "system", "stageKey": "script", "folderName": "Seedance", "version": "1.0.0"} {
+		_ = writer.WriteField(key, value)
+	}
+	for path, content := range map[string]string{"Seedance/SKILL.md": "---\nname: 导入剧本 Skill\n---\n# Rules", "Seedance/rules/preserve.md": "保留全部台词"} {
+		_ = writer.WriteField("paths", path)
+		part, err := writer.CreateFormFile("files", path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = part.Write([]byte(content))
+	}
+	_ = writer.Close()
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/admin/skills/import-folder", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	request = request.WithContext(service.WithUser(context.Background(), model.AuthUser{ID: "admin-1", Role: model.UserRoleAdmin}))
+	recorder := httptest.NewRecorder()
+	AdminImportSkillFolder(recorder, request)
+	if !strings.Contains(recorder.Body.String(), `"code":0`) || !strings.Contains(recorder.Body.String(), `"stageKey":"script"`) {
+		t.Fatalf("body=%s", recorder.Body.String())
+	}
+	var response struct {
+		Data struct {
+			Version model.SkillVersion `json:"version"`
+		} `json:"data"`
+	}
+	if json.Unmarshal(recorder.Body.Bytes(), &response) != nil || response.Data.Version.ID == "" {
+		t.Fatalf("body=%s", recorder.Body.String())
+	}
+	indexRecorder := httptest.NewRecorder()
+	AdminSkillSourceFiles(indexRecorder, request, response.Data.Version.ID)
+	if !strings.Contains(indexRecorder.Body.String(), "rules/preserve.md") || strings.Contains(indexRecorder.Body.String(), "SourceArchiveBlob") {
+		t.Fatalf("index=%s", indexRecorder.Body.String())
+	}
+	previewRequest := httptest.NewRequest(http.MethodGet, "/api/v1/admin/skill-versions/x/source-file?path=rules%2Fpreserve.md", nil)
+	previewRequest = previewRequest.WithContext(request.Context())
+	previewRecorder := httptest.NewRecorder()
+	AdminSkillSourceFile(previewRecorder, previewRequest, response.Data.Version.ID)
+	if !strings.Contains(previewRecorder.Body.String(), "保留全部台词") {
+		t.Fatalf("preview=%s", previewRecorder.Body.String())
+	}
+}
+
+func TestAdminSkillStageTemplates(t *testing.T) {
+	setupWorkflowHandlerTestDB(t)
+	recorder := httptest.NewRecorder()
+	AdminSkillStageTemplates(recorder, httptest.NewRequest(http.MethodGet, "/api/v1/admin/skill-stage-templates", nil))
+	if !strings.Contains(recorder.Body.String(), `"key":"script"`) || !strings.Contains(recorder.Body.String(), `"fixedAdapter"`) {
+		t.Fatalf("body=%s", recorder.Body.String())
+	}
+}
 
 func TestPublishedSkillVersionCannotBePatched(t *testing.T) {
 	setupWorkflowHandlerTestDB(t)
