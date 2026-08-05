@@ -81,6 +81,9 @@ func TestAdminSkillFolderImportAndSourcePreview(t *testing.T) {
 	if !strings.Contains(previewRecorder.Body.String(), "保留全部台词") {
 		t.Fatalf("preview=%s", previewRecorder.Body.String())
 	}
+	if previewRecorder.Header().Get("X-Content-Type-Options") != "nosniff" || previewRecorder.Header().Get("Cache-Control") != "no-store" || previewRecorder.Header().Get("Content-Security-Policy") != "default-src 'none'" {
+		t.Fatalf("unsafe preview headers=%v", previewRecorder.Header())
+	}
 }
 
 func TestAdminSkillStageTemplates(t *testing.T) {

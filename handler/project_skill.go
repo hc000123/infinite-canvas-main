@@ -203,6 +203,9 @@ func ProjectSkillSourceFile(w http.ResponseWriter, r *http.Request, id string) {
 		FailError(w, err)
 		return
 	}
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'")
 	OK(w, map[string]string{"path": path, "content": result})
 }
 

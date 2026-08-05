@@ -106,6 +106,13 @@ func TestProjectSkillFolderImportSourceAndStandaloneTrialRoutes(t *testing.T) {
 	if source.Code != 0 || !strings.Contains(source.Raw, "SKILL.md") {
 		t.Fatalf("source=%s", source.Raw)
 	}
+	previewRequest := httptest.NewRequest(http.MethodGet, "/api/v1/skill-versions/"+created.Version.ID+"/source-file?path=SKILL.md", nil)
+	previewRequest.Header.Set("Authorization", "Bearer "+ownerToken)
+	previewRecorder := httptest.NewRecorder()
+	app.ServeHTTP(previewRecorder, previewRequest)
+	if previewRecorder.Code != http.StatusOK || previewRecorder.Header().Get("X-Content-Type-Options") != "nosniff" || previewRecorder.Header().Get("Cache-Control") != "no-store" || previewRecorder.Header().Get("Content-Security-Policy") != "default-src 'none'" {
+		t.Fatalf("unsafe project preview status=%d headers=%v body=%s", previewRecorder.Code, previewRecorder.Header(), previewRecorder.Body.String())
+	}
 	foreign := invocationHTTPCall(t, app, http.MethodGet, "/api/v1/skill-versions/"+created.Version.ID+"/source-files", strangerToken, nil)
 	if foreign.Code == 0 {
 		t.Fatalf("stranger source=%s", foreign.Raw)
