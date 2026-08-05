@@ -25,7 +25,16 @@ type capabilitySkillSeed struct {
 }
 
 func ensureCapabilitySkillSeeds() error {
-	seeds := []capabilitySkillSeed{
+	for _, seed := range capabilitySkillSeeds() {
+		if err := ensureCapabilitySkillSeed(seed); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func capabilitySkillSeeds() []capabilitySkillSeed {
+	return []capabilitySkillSeed{
 		{
 			Key: "content-classifier", Name: "内容标签分类", Summary: "从已批准生产剧本提取受众、题材、叙事机制与制作路由标签。",
 			Capabilities: []string{"content.classify"}, Inputs: []ArtifactInputSpec{capabilitySeedInput("production_script")}, Output: capabilitySeedOutput("content_profile", 1),
@@ -66,12 +75,6 @@ func ensureCapabilitySkillSeeds() error {
 			Capabilities: []string{"storyboard.compose", "storyboard.horizontal.long"}, ProjectTags: []string{"horizontal", "long_form"}, Inputs: capabilityStoryboardInputs(), Output: capabilitySeedOutput("storyboard_package", 1),
 		},
 	}
-	for _, seed := range seeds {
-		if err := ensureCapabilitySkillSeed(seed); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func capabilitySeedInput(artifactType string) ArtifactInputSpec {
@@ -87,38 +90,11 @@ func capabilityStoryboardInputs() []ArtifactInputSpec {
 }
 
 func ensureCapabilitySkillSeed(seed capabilitySkillSeed) error {
-	if seed.ExecutorKind == "" {
-		seed.ExecutorKind = "text_model"
-	}
-	if len(seed.SideEffects) == 0 {
-		seed.SideEffects = []string{"none"}
-	}
-	if seed.EstimatedCostClass == "" {
-		seed.EstimatedCostClass = "text_high"
-	}
 	files, err := loadCapabilitySkillSeedFiles(seed.Key)
 	if err != nil {
 		return err
 	}
-	coreSchema, err := loadCoreArtifactSchema(seed.Output.ArtifactType)
-	if err != nil {
-		return err
-	}
-	inputTypes, compatibility := make([]string, 0, len(seed.Inputs)), map[string]string{}
-	for _, input := range seed.Inputs {
-		inputTypes = append(inputTypes, input.ArtifactType)
-		compatibility[input.ArtifactType] = input.SchemaConstraint
-	}
-	packageValue, err := ValidateInvocableSkillPackage(SkillPackage{
-		Manifest: SkillManifest{
-			Capabilities: seed.Capabilities, InputArtifactTypes: inputTypes, OutputArtifactTypes: []string{seed.Output.ArtifactType}, ProjectTags: seed.ProjectTags,
-			SchemaCompatibility: compatibility, SideEffects: seed.SideEffects, EstimatedCostClass: seed.EstimatedCostClass, ExecutorKind: seed.ExecutorKind, RequiredTools: []string{},
-		},
-		Files:              files,
-		InputContract:      SkillInputContract{RequiredInputs: []string{"artifacts"}, ArtifactInputs: seed.Inputs, ImagePolicy: SkillImagePolicy{AllowTextFallback: true}},
-		OutputContract:     SkillOutputContract{SchemaVersion: coreSchema.Version, Schema: coreSchema.Schema, ArtifactOutputs: []ArtifactOutputSpec{seed.Output}},
-		QualityGateProfile: capabilitySeedGates(seed.Output.ArtifactType),
-	})
+	packageValue, err := buildCapabilitySkillPackage(seed, files)
 	if err != nil {
 		return fmt.Errorf("normalize capability skill %s: %w", seed.Key, err)
 	}
@@ -160,6 +136,37 @@ func ensureCapabilitySkillSeed(seed capabilitySkillSeed) error {
 		return repository.SaveSkillDefinition(skill)
 	}
 	return nil
+}
+
+func buildCapabilitySkillPackage(seed capabilitySkillSeed, files map[string]string) (SkillPackage, error) {
+	if seed.ExecutorKind == "" {
+		seed.ExecutorKind = "text_model"
+	}
+	if len(seed.SideEffects) == 0 {
+		seed.SideEffects = []string{"none"}
+	}
+	if seed.EstimatedCostClass == "" {
+		seed.EstimatedCostClass = "text_high"
+	}
+	coreSchema, err := loadCoreArtifactSchema(seed.Output.ArtifactType)
+	if err != nil {
+		return SkillPackage{}, err
+	}
+	inputTypes, compatibility := make([]string, 0, len(seed.Inputs)), map[string]string{}
+	for _, input := range seed.Inputs {
+		inputTypes = append(inputTypes, input.ArtifactType)
+		compatibility[input.ArtifactType] = input.SchemaConstraint
+	}
+	return ValidateInvocableSkillPackage(SkillPackage{
+		Manifest: SkillManifest{
+			Capabilities: seed.Capabilities, InputArtifactTypes: inputTypes, OutputArtifactTypes: []string{seed.Output.ArtifactType}, ProjectTags: seed.ProjectTags,
+			SchemaCompatibility: compatibility, SideEffects: seed.SideEffects, EstimatedCostClass: seed.EstimatedCostClass, ExecutorKind: seed.ExecutorKind, RequiredTools: []string{},
+		},
+		Files:              files,
+		InputContract:      SkillInputContract{RequiredInputs: []string{"artifacts"}, ArtifactInputs: seed.Inputs, ImagePolicy: SkillImagePolicy{AllowTextFallback: true}},
+		OutputContract:     SkillOutputContract{SchemaVersion: coreSchema.Version, Schema: coreSchema.Schema, ArtifactOutputs: []ArtifactOutputSpec{seed.Output}},
+		QualityGateProfile: capabilitySeedGates(seed.Output.ArtifactType),
+	})
 }
 
 func capabilitySeedGates(artifactType string) []string {
