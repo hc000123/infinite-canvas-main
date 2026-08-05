@@ -1,10 +1,37 @@
 package repository
 
 import (
+	"bytes"
+	"encoding/json"
 	"testing"
 
 	"github.com/basketikun/infinite-canvas/model"
 )
+
+func TestSkillFolderSourceRoundTripsWithoutSerializingArchive(t *testing.T) {
+	setupRepositoryTestDB(t)
+	skill := model.SkillDefinition{ID: "folder-skill", Name: "剧本优化", StageKey: "script", OwnerType: model.SkillOwnerSystem, Enabled: true}
+	version := model.SkillVersion{
+		ID: "folder-version", SkillID: skill.ID, Version: "1.0.0", Status: model.SkillVersionDraft,
+		SourceKind: "folder_import", SourceHash: "sha256:test", SourceArchiveBlob: []byte("private-zip"),
+		SourceFileIndexJSON: `[{"path":"SKILL.md"}]`, ImportMetadataJSON: `{"folderName":"script"}`,
+	}
+	if err := CreateSkillAggregate(skill, version); err != nil {
+		t.Fatal(err)
+	}
+	storedSkill, ok, err := GetSkillDefinition(skill.ID)
+	if err != nil || !ok || storedSkill.StageKey != "script" {
+		t.Fatalf("skill=%+v ok=%v err=%v", storedSkill, ok, err)
+	}
+	storedVersion, ok, err := GetSkillVersion(version.ID)
+	if err != nil || !ok || !bytes.Equal(storedVersion.SourceArchiveBlob, version.SourceArchiveBlob) || storedVersion.SourceHash != version.SourceHash || storedVersion.SourceFileIndexJSON != version.SourceFileIndexJSON {
+		t.Fatalf("version=%+v ok=%v err=%v", storedVersion, ok, err)
+	}
+	encoded, err := json.Marshal(storedVersion)
+	if err != nil || bytes.Contains(encoded, []byte("private-zip")) || bytes.Contains(encoded, []byte("folderName")) {
+		t.Fatalf("json=%s err=%v", encoded, err)
+	}
+}
 
 func TestListVisibleSkillDefinitionsIncludesSystemAndProject(t *testing.T) {
 	setupRepositoryTestDB(t)

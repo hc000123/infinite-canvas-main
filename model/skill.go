@@ -19,6 +19,7 @@ type SkillDefinition struct {
 	OwnerType            SkillOwnerType `json:"ownerType" gorm:"index;uniqueIndex:idx_skill_owner_name,priority:1"`
 	OwnerUserID          string         `json:"ownerUserId" gorm:"index;uniqueIndex:idx_skill_owner_name,priority:2"`
 	OwnerProjectID       string         `json:"ownerProjectId" gorm:"index;uniqueIndex:idx_skill_owner_name,priority:3"`
+	StageKey             string         `json:"stageKey" gorm:"index"`
 	Enabled              bool           `json:"enabled" gorm:"index"`
 	RecommendedVersionID string         `json:"recommendedVersionId" gorm:"index"`
 	CreatedAt            string         `json:"createdAt"`
@@ -37,6 +38,11 @@ type SkillVersion struct {
 	QualityGateProfileJSON string             `json:"-" gorm:"type:text"`
 	ContentHash            string             `json:"contentHash" gorm:"index"`
 	EvaluationSummaryJSON  string             `json:"evaluationSummaryJson" gorm:"type:text"`
+	SourceKind             string             `json:"sourceKind" gorm:"index"`
+	SourceHash             string             `json:"sourceHash" gorm:"index"`
+	SourceArchiveBlob      []byte             `json:"-"`
+	SourceFileIndexJSON    string             `json:"-" gorm:"type:text"`
+	ImportMetadataJSON     string             `json:"-" gorm:"type:text"`
 	CreatedBy              string             `json:"createdBy" gorm:"index"`
 	PublishedAt            string             `json:"publishedAt"`
 	CreatedAt              string             `json:"createdAt"`

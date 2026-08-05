@@ -575,11 +575,11 @@ Workflow 对浏览器本地素材、分镜或生产包完成受控 Apply 后的�
 
 ### skill_definitions
 
-通用 Skill 稳定身份表。记录名称、说明、`system` / `project` 所有者、创建用户、项目归属、启用状态和当前推荐版本；不保存版本正文。System Skill 只允许管理员写，Project Skill 按创建用户与项目隔离；复制 System Skill 会创建新的 Project Definition 和 Draft，不改变源记录。
+通用 Skill 稳定身份表。记录名称、说明、`system` / `project` 所有者、创建用户、项目归属、固定生产阶段 `stage_key`、启用状态和当前推荐版本；不保存版本正文。System Skill 只允许管理员写，Project Skill 按创建用户与项目隔离；复制 System Skill 会创建新的 Project Definition 和 Draft，不改变源记录。
 
 ### skill_versions
 
-Skill 不可变版本表。`skill_id + version` 唯一；分别保存 Manifest、逻辑文件、输入契约、输出契约、质量门、内容哈希和评测摘要。只有 Draft 可原地编辑；发布、推荐、归档和停用相互独立，运行只冻结精确 Version ID 与内容哈希。未引用 Draft 和从未发布的 Definition 可安全删除，已发布、已归档、已评测、已绑定或被 Workflow / Agent / Invocation 引用的记录禁止物理删除。
+Skill 不可变版本表。`skill_id + version` 唯一；分别保存 Manifest、逻辑文件、输入契约、输出契约、质量门、内容哈希和评测摘要。外部文件夹导入版本还保存 `source_kind`、完整文件夹哈希 `source_hash`、规范化 ZIP 快照 `source_archive_blob`、文件索引和导入元数据；压缩快照只在服务端持久化，不进入普通 JSON 响应。只有 Draft 可原地编辑；发布、推荐、归档和停用相互独立，运行只冻结精确 Version ID 与内容哈希。未引用 Draft 和从未发布的 Definition 可安全删除，已发布、已归档、已评测、已绑定或被 Workflow / Agent / Invocation 引用的记录禁止物理删除。
 
 ### workflow_stage_skill_bindings
 
