@@ -43,7 +43,7 @@ func TestSameIndexColumnsIgnoresDriverOrder(t *testing.T) {
 	}
 }
 
-func TestSkillOwnerIndexMigratesLegacyThreeColumnIndex(t *testing.T) {
+func TestSkillOwnerIndexMigratesLegacyUniqueIndexToNonUniqueLookupIndex(t *testing.T) {
 	setupRepositoryTestDB(t)
 	legacy, err := gorm.Open(sqlite.Open(config.Cfg.DatabaseDSN), &gorm.Config{})
 	if err != nil {
@@ -79,8 +79,8 @@ func TestSkillOwnerIndexMigratesLegacyThreeColumnIndex(t *testing.T) {
 				t.Fatalf("columns=%v want=%v", index.Columns(), want)
 			}
 			unique, ok := index.Unique()
-			if !ok || !unique {
-				t.Fatal("owner-name index must remain unique")
+			if !ok || unique {
+				t.Fatal("owner-name index must allow independent definitions with the same name")
 			}
 		}
 	}
@@ -93,6 +93,14 @@ func TestSkillOwnerIndexMigratesLegacyThreeColumnIndex(t *testing.T) {
 			OwnerUserID: userID, OwnerProjectID: "project-1", Enabled: true,
 		}); err != nil {
 			t.Fatalf("user=%s err=%v", userID, err)
+		}
+	}
+	for _, id := range []string{"skill-same-owner-1", "skill-same-owner-2"} {
+		if err := CreateSkillDefinition(model.SkillDefinition{
+			ID: id, Name: "同名技能", OwnerType: model.SkillOwnerProject,
+			OwnerUserID: "user-1", OwnerProjectID: "project-1", Enabled: true,
+		}); err != nil {
+			t.Fatalf("same owner definition %s err=%v", id, err)
 		}
 	}
 }

@@ -40,6 +40,17 @@ const emptyPackage = (capability = "custom.general", inputType = "source_text", 
 
 const errorText = (error: unknown) => error instanceof Error ? error.message : "操作失败";
 
+function passingTrialSummary(version?: SkillVersion) {
+    if (!version?.evaluationSummaryJson) return undefined;
+    try {
+        const value = JSON.parse(version.evaluationSummaryJson) as Record<string, unknown>;
+        if (value.status !== "passed" || value.contentHash !== version.contentHash || typeof value.evaluationId !== "string") return undefined;
+        return { id: value.evaluationId, durationMs: typeof value.durationMs === "number" ? value.durationMs : 0 };
+    } catch {
+        return undefined;
+    }
+}
+
 export default function ProjectSkillsPage() {
     const params = useParams<{ id: string }>();
     const projectId = params.id;
@@ -100,7 +111,7 @@ export default function ProjectSkillsPage() {
 
     const dirty = Boolean(detailQuery.data && JSON.stringify(editorValue) !== JSON.stringify(detailQuery.data.package));
     const recommended = activeItem?.versions.find((version) => version.id === activeItem.skill.recommendedVersionId);
-    const passingTrial = activeItem?.evaluations.find((item) => item.skillVersionId === activeVersion?.id && item.contentHash === activeVersion?.contentHash && item.status === "passed");
+    const passingTrial = passingTrialSummary(activeVersion);
 
     return <main className="studio-shell h-full overflow-auto text-[var(--studio-text-primary)]">
         <div className="mx-auto flex w-full max-w-[1900px] flex-col gap-5 px-5 py-7 lg:px-8">

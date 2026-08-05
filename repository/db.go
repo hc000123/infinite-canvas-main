@@ -183,7 +183,7 @@ func ensureSkillOwnerNameIndex(database *gorm.DB) error {
 			continue
 		}
 		unique, uniqueKnown := index.Unique()
-		if sameIndexColumns(index.Columns(), want) && uniqueKnown && unique {
+		if sameIndexColumns(index.Columns(), want) && uniqueKnown && !unique {
 			return nil
 		}
 		if err := database.Migrator().DropIndex(&model.SkillDefinition{}, indexName); err != nil {

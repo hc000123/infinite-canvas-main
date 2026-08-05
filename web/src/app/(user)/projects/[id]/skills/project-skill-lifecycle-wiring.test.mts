@@ -9,6 +9,8 @@ test("project Skill management uses the shared folder-first lifecycle", () => {
     assert.match(page, /scope="project"/);
     assert.doesNotMatch(page, /Workflow Run ID/);
     assert.doesNotMatch(page, /disabled=\{!detailQuery\.data\}/);
+    assert.match(page, /evaluationSummaryJson/);
+    assert.doesNotMatch(page, /activeItem\?\.evaluations\.find/);
 });
 
 test("archived project Skill versions are view-only", () => {

@@ -76,6 +76,41 @@ func TestImportOwnedSkillFolderVersionInheritsStageAndRejectsDuplicateContent(t 
 	}
 }
 
+func TestImportOwnedSkillFolderAllowsIndependentDefinitionsWithTheSameName(t *testing.T) {
+	setupInvocationServiceTest(t)
+	if err := EnsureCoreArtifactSchemas(); err != nil {
+		t.Fatal(err)
+	}
+	for index, content := range []string{"# First", "# Second"} {
+		snapshot, err := ParseSkillFolder("script", []SkillFolderFile{{Path: "SKILL.md", Data: []byte(content)}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{
+			OwnerType: model.SkillOwnerSystem, StageKey: WorkflowSkillStageScript, Name: "同名剧本 Skill", Snapshot: snapshot,
+		})
+		if err != nil {
+			t.Fatalf("import %d err=%v", index, err)
+		}
+		if index == 0 {
+			continue
+		}
+		definitions, err := repository.ListSkillDefinitions()
+		if err != nil {
+			t.Fatal(err)
+		}
+		count := 0
+		for _, definition := range definitions {
+			if definition.Name == "同名剧本 Skill" {
+				count++
+			}
+		}
+		if count != 2 || created.Skill.Name != "同名剧本 Skill" {
+			t.Fatalf("count=%d created=%+v", count, created.Skill)
+		}
+	}
+}
+
 func TestSkillFolderImportDistinguishesMissingAndExplicitEmptyMetadata(t *testing.T) {
 	setupInvocationServiceTest(t)
 	if err := EnsureCoreArtifactSchemas(); err != nil {
@@ -241,7 +276,7 @@ func TestVisibleSkillListDoesNotExposeManagementRelations(t *testing.T) {
 	}
 	versionID := "skill-version-system-workflow-script-3.2.0"
 	stamp := now()
-	if err := repository.CreateSkillEvaluation(model.SkillEvaluation{ID: "evaluation-secret", SkillVersionID: versionID, ProjectID: "project-secret", ResultJSON: `{"secret":true}`, CreatedAt: stamp}); err != nil {
+	if err := repository.CreateSkillEvaluationAndUpdateSummary(model.SkillEvaluation{ID: "evaluation-secret", SkillVersionID: versionID, ProjectID: "project-secret", ResultJSON: `{"secret":true}`, CreatedAt: stamp}, `{"evaluationId":"evaluation-secret","status":"passed","contentHash":"safe-hash","durationMs":12,"standalone":true}`, stamp); err != nil {
 		t.Fatal(err)
 	}
 	if err := repository.CreateSkillAuditLog(model.SkillAuditLog{ID: "audit-secret", SkillVersionID: versionID, Action: "secret", CreatedAt: stamp}); err != nil {
@@ -261,6 +296,11 @@ func TestVisibleSkillListDoesNotExposeManagementRelations(t *testing.T) {
 			found = true
 			if len(item.Evaluations) != 0 || len(item.Audits) != 0 || len(item.Bindings) != 0 {
 				t.Fatalf("management relations leaked to regular user: %+v", item)
+			}
+			for _, version := range item.Versions {
+				if version.ID == versionID && !strings.Contains(version.EvaluationSummaryJSON, "evaluation-secret") {
+					t.Fatalf("safe latest trial summary missing: %+v", version)
+				}
 			}
 		}
 	}

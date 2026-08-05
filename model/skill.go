@@ -14,11 +14,11 @@ const (
 
 type SkillDefinition struct {
 	ID                   string         `json:"id" gorm:"primaryKey"`
-	Name                 string         `json:"name" gorm:"index;uniqueIndex:idx_skill_owner_name,priority:4"`
+	Name                 string         `json:"name" gorm:"index;index:idx_skill_owner_name,priority:4"`
 	Summary              string         `json:"summary" gorm:"type:text"`
-	OwnerType            SkillOwnerType `json:"ownerType" gorm:"index;uniqueIndex:idx_skill_owner_name,priority:1"`
-	OwnerUserID          string         `json:"ownerUserId" gorm:"index;uniqueIndex:idx_skill_owner_name,priority:2"`
-	OwnerProjectID       string         `json:"ownerProjectId" gorm:"index;uniqueIndex:idx_skill_owner_name,priority:3"`
+	OwnerType            SkillOwnerType `json:"ownerType" gorm:"index;index:idx_skill_owner_name,priority:1"`
+	OwnerUserID          string         `json:"ownerUserId" gorm:"index;index:idx_skill_owner_name,priority:2"`
+	OwnerProjectID       string         `json:"ownerProjectId" gorm:"index;index:idx_skill_owner_name,priority:3"`
 	StageKey             string         `json:"stageKey" gorm:"index"`
 	Enabled              bool           `json:"enabled" gorm:"index"`
 	RecommendedVersionID string         `json:"recommendedVersionId" gorm:"index"`
