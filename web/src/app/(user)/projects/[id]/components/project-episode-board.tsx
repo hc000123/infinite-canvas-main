@@ -44,7 +44,7 @@ type ProjectEpisodeBoardProps = {
     canvases: CanvasProject[];
     unboundCanvases: CanvasProject[];
     bindingCanvasId: string;
-    optimizingEpisodeId: string;
+    optimizingEpisodeIds: Record<string, string>;
     projectTitle: string;
     presetSummary: string;
     rows: ProjectEpisodeBoardRow[];
@@ -82,7 +82,7 @@ export function ProjectEpisodeBoard({
     canvases,
     unboundCanvases,
     bindingCanvasId,
-    optimizingEpisodeId,
+    optimizingEpisodeIds,
     projectTitle,
     presetSummary,
     rows,
@@ -178,7 +178,7 @@ export function ProjectEpisodeBoard({
                         onOpenEpisode={onOpenEpisode}
                         onOpenEpisodeCanvas={onOpenEpisodeCanvas}
                         onSaveEpisodeScript={onSaveEpisodeScript}
-                        optimizingEpisodeId={optimizingEpisodeId}
+                        optimizingEpisodeIds={optimizingEpisodeIds}
                         progress={progress}
                         projectTitle={projectTitle}
                         rows={rows}
@@ -209,7 +209,7 @@ function ProjectEpisodeProductionPanel({
     onOpenEpisode,
     onOpenEpisodeCanvas,
     onSaveEpisodeScript,
-    optimizingEpisodeId,
+    optimizingEpisodeIds,
     progress,
     projectTitle,
     rows,
@@ -233,7 +233,7 @@ function ProjectEpisodeProductionPanel({
     onOpenEpisode: (episodeId: string) => void;
     onOpenEpisodeCanvas: (episodeId: string) => void;
     onSaveEpisodeScript: (episodeId: string, script: string) => void;
-    optimizingEpisodeId: string;
+    optimizingEpisodeIds: Record<string, string>;
     progress: number;
     projectTitle: string;
     rows: ProjectEpisodeBoardRow[];
@@ -256,7 +256,7 @@ function ProjectEpisodeProductionPanel({
     const selectedScript = selectedEpisode?.scriptPreview.trim() || "";
     const selectedOptimizedScript = selectedEpisode?.optimizedScriptPreview.trim() || "";
     const selectedOptimizeError = selectedEpisode ? scriptOptimizeErrors[selectedEpisode.id] || "" : "";
-    const selectedOptimizing = Boolean(selectedEpisode && optimizingEpisodeId === selectedEpisode.id);
+    const selectedOptimizing = Boolean(selectedEpisode && optimizingEpisodeIds[selectedEpisode.id]);
     const selectedSkillVersionId = selectedEpisode ? scriptSkillVersionIds[selectedEpisode.id] || "" : "";
 
     useEffect(() => {

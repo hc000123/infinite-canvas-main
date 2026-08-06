@@ -10,7 +10,7 @@ test("image, text, video, and config prompts use the structured mention editor",
     const configPreview = readCanvasFile("../components/canvas-config-node-preview.tsx");
 
     assert.doesNotMatch(promptPanel, /mode === "video"\s*\?\s*\(\s*<CanvasPromptEditor/);
-    assert.match(promptPanel, /validatePromptDocument\(promptDocument, referenceMentionOptions\)/);
+    assert.match(promptPanel, /validatePromptDocument\(promptDocument, promptReferenceOptions\)/);
     assert.match(configPanel, /validatePromptDocument\(ownPromptDocument, referenceMentionOptions\)/);
     assert.match(configPreview, /<CanvasPromptEditor/);
 });
@@ -68,6 +68,6 @@ test("generation serializes structured references against the latest input order
     const promptPanel = readCanvasFile("../components/canvas-node-prompt-panel.tsx");
     const layer = readCanvasFile("../components/canvas-nodes-layer.tsx");
 
-    assert.match(promptPanel, /serializePromptDocument\(promptDocument, referenceMentionOptions\)\.trim\(\)/);
+    assert.match(promptPanel, /serializePromptDocument\(promptDocument, promptReferenceOptions\)\.trim\(\)/);
     assert.match(layer, /serializePromptDocument\(target\.metadata\.promptDocument, buildReferenceMentionOptions\(inputs\)\)/);
 });

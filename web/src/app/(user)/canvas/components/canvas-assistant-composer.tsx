@@ -4,7 +4,6 @@ import { ArrowUp, Bot, FileText, ImageIcon, LoaderCircle, MessageSquare, Network
 import { Button, Tooltip } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
-import { ModelThinkingSettings } from "@/components/image-settings-panel";
 import type { AiConfig } from "@/stores/use-config-store";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -102,7 +101,6 @@ export function CanvasAssistantComposer({
                         {mode === "image" ? (
                             <>
                                 <ModelPicker className="h-8 shrink-0" config={config} modelType="image" value={config.imageModel || config.model} onChange={(model) => onConfigChange("imageModel", model)} onMissingConfig={onMissingConfig} />
-                                <ModelThinkingSettings compact config={config} model={config.imageModel || config.model} theme={theme} onConfigChange={onConfigChange} />
                                 <CanvasImageSettingsPopover
                                     config={config}
                                     placement="topRight"

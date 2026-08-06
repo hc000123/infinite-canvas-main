@@ -50,6 +50,18 @@ func TestPreflightInvocationFreezesExactVersionSchemasInputsPolicyAndUntrustedPa
 	}
 }
 
+func TestNormalizeInvocationRequestKeepsConsumerCoordinates(t *testing.T) {
+	request, _, _, err := normalizeInvocationRequest(InvocationRequest{
+		Source: "direct", ConsumerSurface: " Project_Episode ", TargetKind: " Episode ", TargetID: " episode-1 ", Parameters: json.RawMessage(`{}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if request.ConsumerSurface != "project_episode" || request.TargetKind != "episode" || request.TargetID != "episode-1" {
+		t.Fatalf("consumer coordinates=%q/%q/%q", request.ConsumerSurface, request.TargetKind, request.TargetID)
+	}
+}
+
 func TestPreflightInvocationUsesSixMinuteDefaultTimeout(t *testing.T) {
 	setupInvocationServiceTest(t)
 	input := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "source_text", `{"text":"test"}`)

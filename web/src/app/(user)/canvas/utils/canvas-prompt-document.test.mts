@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { insertPromptReference, promptDocumentFromText, serializePromptDocument, validatePromptDocument } from "./canvas-prompt-document.ts";
+import { autoMentionPromptImageReferences, insertPromptReference, promptDocumentFromText, serializePromptDocument, validatePromptDocument } from "./canvas-prompt-document.ts";
 
 const options = [
     { id: "image-a", label: "图片 1", previewType: "image" as const, previewUrl: "data:image/png;base64,a" },
@@ -54,5 +54,38 @@ test("inserting another reference keeps existing structured references", () => {
         { type: "reference", nodeId: "image-a", kind: "image", label: "图片 1" },
         { type: "text", text: " 后接 " },
         { type: "reference", nodeId: "image-b", kind: "image", label: "图片 2" },
+    ]);
+});
+
+test("auto mentions an image when its title appears in a video prompt", () => {
+    const document = autoMentionPromptImageReferences(promptDocumentFromText("张三正在吃饭"), [{ id: "image-zhangsan", label: "@张三", detail: "张三", previewType: "image" as const }]);
+
+    assert.deepEqual(document.blocks, [
+        { type: "reference", nodeId: "image-zhangsan", kind: "image", label: "@张三" },
+        { type: "text", text: " 正在吃饭" },
+    ]);
+    assert.equal(serializePromptDocument(document, [{ id: "image-zhangsan", label: "@张三", detail: "张三", previewType: "image" as const }]), "@张三 正在吃饭");
+});
+
+test("auto mentions multiple image titles from left to right", () => {
+    const document = autoMentionPromptImageReferences(promptDocumentFromText("张三和李四在餐桌旁聊天"), [
+        { id: "image-lisi", label: "@李四", detail: "李四", previewType: "image" as const },
+        { id: "image-zhangsan", label: "@张三", detail: "张三", previewType: "image" as const },
+    ]);
+
+    assert.deepEqual(document.blocks, [
+        { type: "reference", nodeId: "image-zhangsan", kind: "image", label: "@张三" },
+        { type: "text", text: " 和" },
+        { type: "reference", nodeId: "image-lisi", kind: "image", label: "@李四" },
+        { type: "text", text: " 在餐桌旁聊天" },
+    ]);
+});
+
+test("auto mention absorbs a typed at sign instead of duplicating it", () => {
+    const document = autoMentionPromptImageReferences(promptDocumentFromText("@张三正在吃饭"), [{ id: "image-zhangsan", label: "@张三", detail: "张三", previewType: "image" as const }]);
+
+    assert.deepEqual(document.blocks, [
+        { type: "reference", nodeId: "image-zhangsan", kind: "image", label: "@张三" },
+        { type: "text", text: " 正在吃饭" },
     ]);
 });

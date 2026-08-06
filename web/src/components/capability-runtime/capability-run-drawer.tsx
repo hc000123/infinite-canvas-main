@@ -80,6 +80,7 @@ export function CapabilityRunDrawer({ open, onClose, title = "Skill 能力", ...
 
                 <div className="space-y-4 p-5">
                     {run.error ? <Alert type="error" showIcon title={run.error} /> : null}
+                    {run.restored ? <Alert type="info" showIcon title="已恢复本页面未完成的 Skill 运行" /> : null}
                     {!run.fingerprintMatches && run.frozenLocalFingerprint ? <Alert type="warning" showIcon title="当前文本或 Skill 已与预检快照不同" description="确认已锁定；请重新预检生成新的 Invocation。" /> : null}
 
                     <section className="rounded-lg border p-4" style={{ borderColor: theme.node.stroke, background: theme.node.panel }}>
@@ -88,7 +89,7 @@ export function CapabilityRunDrawer({ open, onClose, title = "Skill 能力", ...
                             className="w-full"
                             value={run.selectedSkillVersionId || undefined}
                             loading={run.loading}
-                            disabled={Boolean(run.preflight) || run.busy}
+                            disabled={Boolean(run.invocationId) || run.busy}
                             placeholder="选择 Skill"
                             onChange={run.setSelectedSkillVersionId}
                             options={run.skillOptions.map((skill) => {
@@ -132,7 +133,7 @@ export function CapabilityRunDrawer({ open, onClose, title = "Skill 能力", ...
                         <Button icon={<RotateCcw className="size-4" />} disabled={run.busy} onClick={run.reset}>新运行</Button>
                         <Button type="primary" icon={<Play className="size-4" />} loading={run.busy && run.actions.canPreflight} disabled={run.busy || !run.actions.canPreflight || !run.compatibility?.compatible} onClick={() => void execute(run.preflightRun, "预检已冻结") }>预检</Button>
                         <Button icon={<ShieldCheck className="size-4" />} disabled={run.busy || !run.actions.canConfirm} onClick={() => void execute(run.confirm, "已确认版本与额度") }>确认</Button>
-                        <Button icon={<RefreshCw className="size-4" />} disabled={run.busy || !run.preflight} onClick={() => void execute(run.refresh, "状态已刷新") }>刷新</Button>
+                        <Button icon={<RefreshCw className="size-4" />} disabled={run.busy || !run.invocationId} onClick={() => void execute(run.refresh, "状态已刷新") }>刷新</Button>
                         <Button danger icon={<CircleStop className="size-4" />} disabled={run.busy || !run.actions.canCancel} onClick={() => void execute(run.cancel, "已请求取消") }>取消</Button>
                         <Button icon={<Check className="size-4" />} disabled={run.busy || !run.actions.canApprove} onClick={() => void execute(() => run.review("approved"), "Artifact-set 已批准") }>批准</Button>
                         <Button danger icon={<X className="size-4" />} disabled={run.busy || !run.actions.canReject} onClick={() => void execute(() => run.review("rejected"), "Artifact-set 已拒绝") }>拒绝</Button>

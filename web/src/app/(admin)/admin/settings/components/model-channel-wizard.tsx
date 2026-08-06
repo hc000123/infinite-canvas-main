@@ -35,6 +35,7 @@ const protocolOptions: { value: AdminModelChannel["protocol"]; title: string; de
 ];
 const capabilityOptions = [
     { label: "文本 Agent", value: "text" },
+    { label: "最高思考", value: "reasoning" },
     { label: "图片生成", value: "image" },
     { label: "视频生成", value: "video" },
     { label: "视频任务查询", value: "video_query" },

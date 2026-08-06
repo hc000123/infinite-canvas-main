@@ -5,9 +5,11 @@ import { useEffect, type ReactNode } from "react";
 import { ImageSettingsTheme } from "@/components/image-settings-panel";
 import { resolveSeedanceTaskModeForSource, seedanceReferenceImageModeOptions, shouldShowSeedanceImageControl, visibleSeedanceReferenceImageMode, visibleSeedanceTaskModeOptions } from "@/components/video-settings-options";
 import { type CanvasTheme } from "@/lib/canvas-theme";
+import { resolveDreaminaVideoCapability } from "@/lib/dreamina-video-capabilities";
+import { normalizeVideoReferenceMode } from "@/services/api/video-reference";
 import type { AiConfig } from "@/stores/use-config-store";
 
-const resolutionOptions = [
+const defaultResolutionOptions = [
     { value: "720", label: "720p" },
     { value: "1080", label: "1080p" },
 ];
@@ -50,6 +52,15 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
     const seconds = normalizeVideoSecondsValue(config.videoSeconds, config);
     const ratio = normalizeVideoRatioValue(config.size);
     const resolution = normalizeVideoResolutionValue(config.vquality);
+    const referenceMode = normalizeVideoReferenceMode(config.videoReferenceMode);
+    const dreaminaCapability = resolveDreaminaVideoCapability({
+        protocol: config.videoProtocol,
+        model: config.videoModel,
+        mode: referenceMode === "auto" ? "text2video" : referenceMode,
+    });
+    const resolutionOptions = dreaminaCapability
+        ? dreaminaCapability.resolutions.map((value) => ({ value, label: value === "2160" ? "4K" : `${value}p` }))
+        : defaultResolutionOptions;
     const generateAudio = config.videoGenerateAudio === "true";
     const watermark = config.videoWatermark === "true";
     const promptReviewEnabled = config.videoPromptReviewEnabled !== "false";
@@ -62,6 +73,11 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
         if (!showTaskMode || hasSourceVideo || (config.videoTaskMode !== "edit" && config.videoTaskMode !== "extend")) return;
         onConfigChange("videoTaskMode", "generate");
     }, [config.videoTaskMode, hasSourceVideo, onConfigChange, showTaskMode]);
+
+    useEffect(() => {
+        if (resolutionOptions.some((item) => item.value === resolution)) return;
+        onConfigChange("vquality", "720");
+    }, [onConfigChange, resolution, resolutionOptions]);
 
     return (
         <ImageSettingsTheme theme={theme}>
@@ -109,7 +125,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                     </SettingGroup>
                 ) : null}
                 <SettingGroup title="清晰度" color={theme.node.muted}>
-                    <div className="grid grid-cols-2 gap-2.5">
+                    <div className={`grid gap-2.5 ${resolutionOptions.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
                         {resolutionOptions.map((item) => (
                             <OptionPill key={item.value} selected={resolution === item.value} theme={theme} onClick={() => onConfigChange("vquality", item.value)}>
                                 {item.label}
@@ -166,7 +182,8 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
 }
 
 export function videoResolutionLabel(value: string) {
-    return `${normalizeVideoResolutionValue(value)}p`;
+    const resolution = normalizeVideoResolutionValue(value);
+    return resolution === "2160" ? "4K" : `${resolution}p`;
 }
 
 export function videoRatioLabel(value: string) {
@@ -178,7 +195,7 @@ export function videoSecondsLabel(value: string, config?: VideoSecondsConfig) {
     return `${normalizeVideoSecondsValue(value, config)}s`;
 }
 
-export type VideoSecondsConfig = Pick<AiConfig, "channelMode" | "videoProtocol"> | boolean;
+export type VideoSecondsConfig = Partial<Pick<AiConfig, "channelMode" | "videoProtocol" | "videoModel" | "videoReferenceMode">> | boolean;
 
 export function normalizeVideoSecondsValue(value: string, config?: VideoSecondsConfig) {
     const limits = videoSecondsLimits(config);
@@ -187,7 +204,15 @@ export function normalizeVideoSecondsValue(value: string, config?: VideoSecondsC
     return String(Math.max(limits.min, Math.min(limits.max, seconds)));
 }
 
-function videoSecondsLimits(_config?: VideoSecondsConfig) {
+function videoSecondsLimits(config?: VideoSecondsConfig) {
+    if (typeof config !== "object") return { min: 4, max: 15 };
+    const referenceMode = normalizeVideoReferenceMode(config.videoReferenceMode);
+    const dreaminaCapability = resolveDreaminaVideoCapability({
+        protocol: config.videoProtocol || "openai",
+        model: config.videoModel || "",
+        mode: referenceMode === "auto" ? "text2video" : referenceMode,
+    });
+    if (dreaminaCapability) return dreaminaCapability.duration;
     return { min: 4, max: 15 };
 }
 
@@ -205,8 +230,11 @@ export function normalizeVideoRatioValue(value: string) {
 }
 
 export function normalizeVideoResolutionValue(value: string) {
+    if (String(value).toLowerCase() === "4k") return "2160";
     const resolution = Number(String(value || "").replace(/p$/i, ""));
-    return resolution >= 1080 ? "1080" : "720";
+    if (resolution >= 2160) return "2160";
+    if (resolution >= 1080) return "1080";
+    return resolution > 0 && resolution <= 480 ? "480" : "720";
 }
 
 function OptionPill({ selected, theme, onClick, children }: { selected: boolean; theme: CanvasTheme; onClick: () => void; children: ReactNode }) {

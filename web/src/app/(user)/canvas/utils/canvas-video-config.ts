@@ -1,5 +1,6 @@
 import type { AiConfig } from "../../../../stores/use-config-store.ts";
 import { protocolForModel, resolveGenerationModel } from "../../../../lib/ai-model-catalog.ts";
+import { normalizeDreaminaVideoSettings } from "../../../../lib/dreamina-video-capabilities.ts";
 import type { AdminPublicSettings } from "../../../../services/api/admin.ts";
 import { inferVideoReferenceMode, normalizeSeedanceImageRoleMode, normalizeVideoReferenceMode } from "../../../../services/api/video-reference.ts";
 import type { CanvasNodeMetadata } from "../types";
@@ -27,7 +28,7 @@ export function buildCanvasVideoConfig(config: AiConfig, metadata?: CanvasNodeMe
     const model = resolveGenerationModel({ config, capability: "video", nodeModel: metadata?.model });
     const provider = protocolForModel(config, model);
     const metadataDuration = metadata?.taskId ? "" : metadata?.duration;
-    const seconds = normalizeCanvasVideoSeconds(metadata?.seconds || metadataDuration || config.videoSeconds, provider);
+    const seconds = normalizeCanvasVideoSeconds(metadata?.seconds || metadataDuration || config.videoSeconds, provider, model);
     return {
         ...config,
         channelMode,
@@ -59,7 +60,7 @@ export function resolveCanvasVideoChannelConfig(_localConfig: AiConfig, effectiv
 export function buildCanvasVideoModePatch(config: AiConfig): Partial<CanvasNodeMetadata> {
     const model = resolveGenerationModel({ config, capability: "video" });
     const provider = protocolForModel(config, model);
-    const seconds = normalizeCanvasVideoSeconds(config.videoSeconds, provider);
+    const seconds = normalizeCanvasVideoSeconds(config.videoSeconds, provider, model);
     return {
         generationMode: "video",
         channelMode: "remote",
@@ -81,6 +82,25 @@ export function buildCanvasVideoModePatch(config: AiConfig): Partial<CanvasNodeM
     };
 }
 
+export function buildCanvasVideoModelPatch(config: AiConfig, model: string): Partial<CanvasNodeMetadata> {
+    const provider = protocolForModel(config, model);
+    const mode = normalizeVideoReferenceMode(config.videoReferenceMode);
+    const normalized = normalizeDreaminaVideoSettings({
+        protocol: provider,
+        model,
+        mode: mode === "auto" ? "text2video" : mode,
+        seconds: config.videoSeconds,
+        resolution: config.vquality,
+    });
+    return {
+        model,
+        provider,
+        seconds: normalized.seconds,
+        duration: normalized.seconds,
+        vquality: normalized.resolution,
+    };
+}
+
 export function buildCanvasVideoDefaultsPatch(config: AiConfig, metadata: Partial<CanvasNodeMetadata>) {
     const model = resolveGenerationModel({ config, capability: "video", nodeModel: metadata.model });
     const provider = protocolForModel(config, model);
@@ -93,7 +113,7 @@ export function buildCanvasVideoDefaultsPatch(config: AiConfig, metadata: Partia
         if (provider === "volcengine-ark") patch.seedanceModel = model;
     }
     if (metadata.size) patch.size = metadata.size;
-    if (metadata.seconds || metadata.duration) patch.videoSeconds = normalizeCanvasVideoSeconds(metadata.seconds || metadata.duration || "", provider);
+    if (metadata.seconds || metadata.duration) patch.videoSeconds = normalizeCanvasVideoSeconds(metadata.seconds || metadata.duration || "", provider, model);
     if (metadata.vquality) patch.vquality = metadata.vquality;
     if (metadata.generateAudio) patch.videoGenerateAudio = metadata.generateAudio;
     if (metadata.watermark) patch.videoWatermark = metadata.watermark;
@@ -117,11 +137,11 @@ function resolveCanvasVideoReferenceMode(config: AiConfig, metadata: CanvasNodeM
     });
 }
 
-function normalizeCanvasVideoSeconds(value: string, provider: CanvasVideoProvider) {
+function normalizeCanvasVideoSeconds(value: string, provider: CanvasVideoProvider, model: string) {
     const fallback = 6;
     const seconds = Math.floor(Number(value) || fallback);
     const min = isSeedanceDurationProtocol(provider) ? 4 : 1;
-    const max = isSeedanceDurationProtocol(provider) ? 15 : 20;
+    const max = provider === "jimeng-cli" && model === "seedance2.5" ? 30 : isSeedanceDurationProtocol(provider) ? 15 : 20;
     return String(Math.max(min, Math.min(max, seconds)));
 }
 

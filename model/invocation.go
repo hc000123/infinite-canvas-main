@@ -27,6 +27,9 @@ type InvocationRun struct {
 	Source                  string           `json:"source" gorm:"size:32;index"`
 	ProjectID               string           `json:"projectId" gorm:"size:128;index"`
 	EpisodeID               string           `json:"episodeId" gorm:"size:128;index"`
+	ConsumerSurface         string           `json:"consumerSurface,omitempty" gorm:"size:64;index"`
+	TargetKind              string           `json:"targetKind,omitempty" gorm:"size:64;index"`
+	TargetID                string           `json:"targetId,omitempty" gorm:"size:128;index"`
 	AgentPlanID             string           `json:"agentPlanId,omitempty" gorm:"size:128;index"`
 	AgentPlanRevision       int              `json:"agentPlanRevision,omitempty" gorm:"index"`
 	AgentPlanStepKey        string           `json:"agentPlanStepKey,omitempty" gorm:"size:128;index"`
@@ -180,13 +183,16 @@ type InvocationTestSinkReceipt struct {
 }
 
 type InvocationQuery struct {
-	ProjectID string
-	EpisodeID string
-	Source    string
-	Status    string
-	SkillID   string
-	Page      int
-	PageSize  int
+	ProjectID       string
+	EpisodeID       string
+	Source          string
+	ConsumerSurface string
+	TargetKind      string
+	TargetID        string
+	Status          string
+	SkillID         string
+	Page            int
+	PageSize        int
 }
 
 func (q *InvocationQuery) Normalize() {

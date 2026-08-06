@@ -13,6 +13,9 @@ type InvocationRequest struct {
 	Source                     string                            `json:"source"`
 	ProjectID                  string                            `json:"projectId"`
 	EpisodeID                  string                            `json:"episodeId"`
+	ConsumerSurface            string                            `json:"consumerSurface"`
+	TargetKind                 string                            `json:"targetKind"`
+	TargetID                   string                            `json:"targetId"`
 	SkillID                    string                            `json:"skillId"`
 	SkillVersionID             string                            `json:"skillVersionId"`
 	SkillVersionConstraint     string                            `json:"skillVersionConstraint"`
@@ -182,6 +185,9 @@ type InvocationRunSummary struct {
 	Source                  string                 `json:"source"`
 	ProjectID               string                 `json:"projectId"`
 	EpisodeID               string                 `json:"episodeId"`
+	ConsumerSurface         string                 `json:"consumerSurface,omitempty"`
+	TargetKind              string                 `json:"targetKind,omitempty"`
+	TargetID                string                 `json:"targetId,omitempty"`
 	AgentPlanID             string                 `json:"agentPlanId,omitempty"`
 	AgentPlanRevision       int                    `json:"agentPlanRevision,omitempty"`
 	AgentPlanStepKey        string                 `json:"agentPlanStepKey,omitempty"`

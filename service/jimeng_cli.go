@@ -51,7 +51,7 @@ type JimengLoginCheckResult struct {
 }
 
 func SupportedJimengModelVersions() []string {
-	return []string{"seedance2.0fast", "seedance2.0", "seedance2.0_vip", "seedance2.0fast_vip", "seedance2.0mini"}
+	return []string{"seedance2.0fast", "seedance2.0", "seedance2.0_vip", "seedance2.0fast_vip", "seedance2.0mini", "seedance2.5"}
 }
 
 func WithJimengCLIHome(ctx context.Context, home string) context.Context {
@@ -396,7 +396,7 @@ func BuildJimengText2VideoArgs(body []byte, contentType string, modelVersion str
 	args := []string{
 		"text2video",
 		"--prompt=" + prompt,
-		"--duration=" + strconv.Itoa(normalizeJimengDuration(fields.Duration)),
+		"--duration=" + strconv.Itoa(normalizeJimengDuration(fields.Duration, modelVersion)),
 		"--ratio=" + normalizeJimengRatio(fields.Ratio),
 		"--video_resolution=" + normalizeJimengModelResolution(modelVersion, fields.Resolution),
 		"--model_version=" + modelVersion,
@@ -623,7 +623,7 @@ func jimengPayloadHasReferences(payload map[string]any) bool {
 	return false
 }
 
-func normalizeJimengDuration(value string) int {
+func normalizeJimengDuration(value, modelVersion string) int {
 	duration, err := strconv.Atoi(strings.TrimSpace(value))
 	if err != nil || duration == 0 {
 		duration = 6
@@ -631,8 +631,12 @@ func normalizeJimengDuration(value string) int {
 	if duration < 4 {
 		return 4
 	}
-	if duration > 15 {
-		return 15
+	maxDuration := 15
+	if strings.TrimSpace(modelVersion) == "seedance2.5" {
+		maxDuration = 30
+	}
+	if duration > maxDuration {
+		return maxDuration
 	}
 	return duration
 }
@@ -652,6 +656,9 @@ func normalizeJimengRatio(value string) string {
 
 func normalizeJimengResolution(value string) string {
 	resolution := strings.ToLower(strings.TrimSpace(value))
+	if resolution == "4k" || resolution == "2160" || resolution == "2160p" {
+		return "4k"
+	}
 	if resolution == "1080" || resolution == "1080p" {
 		return "1080p"
 	}

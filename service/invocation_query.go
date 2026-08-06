@@ -236,6 +236,7 @@ func SafeInvocationApplyAttempt(apply model.InvocationApplyAttempt) InvocationAp
 func invocationRunSummary(run model.InvocationRun) InvocationRunSummary {
 	return InvocationRunSummary{
 		ID: run.ID, Source: run.Source, ProjectID: run.ProjectID, EpisodeID: run.EpisodeID, Status: run.Status,
+		ConsumerSurface: run.ConsumerSurface, TargetKind: run.TargetKind, TargetID: run.TargetID,
 		AgentPlanID: run.AgentPlanID, AgentPlanRevision: run.AgentPlanRevision,
 		AgentPlanStepKey: run.AgentPlanStepKey, ConfirmationSource: run.ConfirmationSource,
 		LatestRevision: run.LatestRevision, LatestAttempt: run.LatestAttempt, ReviewedAttempt: run.ReviewedAttempt,

@@ -6,20 +6,21 @@ import { ArrowRight, AudioLines, Clapperboard, Eye, Image as ImageIcon, LoaderCi
 import { Alert, App, Button, Segmented } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
-import { ModelThinkingSettings } from "@/components/image-settings-panel";
 import { videoRatioLabel, videoResolutionLabel, videoSecondsLabel } from "@/components/video-settings-panel";
 import { defaultConfig, useConfigStore, type AiConfig } from "@/stores/use-config-store";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
-import { defaultSeedanceImageRole, normalizeSeedanceImageRole, seedanceReferenceLabelRange } from "@/services/api/video-reference";
+import { resolveDreaminaVideoCapability, validateDreaminaReferences } from "@/lib/dreamina-video-capabilities";
+import { defaultSeedanceImageRole, inferVideoReferenceMode, normalizeSeedanceImageRole, normalizeVideoReferenceMode, seedanceReferenceLabelRange } from "@/services/api/video-reference";
 import { useThemeStore } from "@/stores/use-theme-store";
-import { buildCanvasVideoConfig, buildCanvasVideoModePatch, resolveCanvasVideoChannelConfig } from "../utils/canvas-video-config";
+import { buildCanvasVideoConfig, buildCanvasVideoModePatch, buildCanvasVideoModelPatch, resolveCanvasVideoChannelConfig } from "../utils/canvas-video-config";
 import { buildReferenceMentionOptions } from "../utils/canvas-reference-mentions";
 import { promptDocumentFromText, serializePromptDocument, validatePromptDocument, type CanvasPromptDocument } from "../utils/canvas-prompt-document";
 import { CANVAS_IMAGE_GENERATION_DEFAULT_COUNT } from "../constants";
 import { CanvasConfigNodePreview } from "./canvas-config-node-preview";
 import { CanvasConnectedMediaStrip } from "./canvas-connected-media-strip";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
+import { CanvasVideoCapabilityHint } from "./canvas-video-capability-hint";
 import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
 import type { NodeGenerationInput } from "./canvas-node-generation";
 import type { CanvasGenerationMode, CanvasNodeData, CanvasNodeMetadata } from "../types";
@@ -68,6 +69,15 @@ export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSu
     const promptCount = inputSummary.textCount + (ownPrompt.trim() ? 1 : 0);
     const hasGenerationInput = Boolean(promptCount || inputSummary.imageCount || inputSummary.videoCount || inputSummary.audioCount);
     const hasSourceVideo = videoInputs.some((input) => Boolean(input.video?.url));
+    const storedVideoReferenceMode = normalizeVideoReferenceMode(config.videoReferenceMode);
+    const resolvedVideoReferenceMode = storedVideoReferenceMode === "auto"
+        ? inferVideoReferenceMode({ imageCount: imageInputs.length, videoCount: videoInputs.length, audioCount: audioInputs.length, imageRoleMode: config.videoReferenceImageMode })
+        : storedVideoReferenceMode;
+    const videoCapability = mode === "video" ? resolveDreaminaVideoCapability({ protocol: config.videoProtocol, model: config.videoModel, mode: resolvedVideoReferenceMode }) : null;
+    const videoReferenceValidation = mode === "video"
+        ? validateDreaminaReferences({ protocol: config.videoProtocol, model: config.videoModel, mode: resolvedVideoReferenceMode, images: imageInputs.length, videos: videoInputs.length, audios: audioInputs.length })
+        : { error: "", usageLabel: "", detailLabel: "" };
+    const generationBlocked = isRunning || !hasGenerationInput || missingReferenceIds.length > 0 || Boolean(videoReferenceValidation.error);
     const imageReferenceValue = mode === "video" && imageInputs.length ? seedanceReferenceLabelRange("image", imageInputs.length) : `${inputSummary.imageCount} 张`;
     const videoReferenceValue = videoInputs.length ? seedanceReferenceLabelRange("video", videoInputs.length) : `${inputSummary.videoCount} 个`;
     const audioReferenceValue = audioInputs.length ? seedanceReferenceLabelRange("audio", audioInputs.length) : `${inputSummary.audioCount} 个`;
@@ -169,6 +179,16 @@ export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSu
                     onModeChange={(videoReferenceMode, videoReferenceImageMode) => onConfigChange(node.id, { videoReferenceMode, videoReferenceImageMode })}
                 />
 
+                <CanvasVideoCapabilityHint
+                    compact
+                    theme={theme}
+                    label={videoCapability?.label}
+                    notice={videoCapability?.notice}
+                    usageLabel={videoReferenceValidation.usageLabel}
+                    detailLabel={videoReferenceValidation.detailLabel}
+                    error={videoReferenceValidation.error}
+                />
+
                 <VideoReferenceDisplay imageReferences={imageReferences} inputs={mediaInputs} preset={referencePreset} theme={theme} />
 
                 <button
@@ -196,7 +216,7 @@ export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSu
                         config={config}
                         modelType="video"
                         value={config.model}
-                        onChange={(model) => onConfigChange(node.id, videoModelPatch(model))}
+                        onChange={(model) => onConfigChange(node.id, buildCanvasVideoModelPatch(config, model))}
                         onMissingConfig={() => openConfigDialog(true)}
                         fullWidth
                     />
@@ -221,9 +241,9 @@ export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSu
                     <Button
                         type="primary"
                         className="!h-8 !min-w-[68px] shrink-0 !cursor-pointer !rounded-lg !px-2"
-                        disabled={isRunning || !hasGenerationInput || missingReferenceIds.length > 0}
+                        disabled={generationBlocked}
                         onClick={() => onGenerate(node.id)}
-                        title={missingReferenceIds.length ? "请先处理失效的素材引用" : hasGenerationInput ? "开始生成" : emptyHint}
+                        title={videoReferenceValidation.error || (missingReferenceIds.length ? "请先处理失效的素材引用" : hasGenerationInput ? "开始生成" : emptyHint)}
                     >
                         <span className="inline-flex items-center gap-1">
                             <span className="inline-flex items-center gap-0.5 text-[11px]">
@@ -338,7 +358,6 @@ export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSu
                     onMissingConfig={() => openConfigDialog(true)}
                     fullWidth
                 />
-                {mode === "image" ? <ModelThinkingSettings className="w-full justify-start" compact config={config} model={config.model} theme={theme} onConfigChange={(key, value) => onConfigChange(node.id, { [key]: value })} /> : null}
                 {mode === "image" ? (
                     <CanvasImageSettingsPopover
                         config={config}
@@ -414,7 +433,7 @@ function VideoReferenceModeTabs({
         { value: "text", label: "文生视频", disabled: mediaCount > 0, mode: "text2video", imageMode: "reference" },
         { value: "first_frame", label: "图生视频", disabled: imageCount === 0, mode: "image2video", imageMode: "first_frame" },
         { value: "first_last_frame", label: "首尾帧", disabled: imageCount < 2, mode: "frames2video", imageMode: "first_last_frame" },
-        { value: "multi_frame", label: "多帧故事", disabled: imageCount < 2, mode: "multiframe2video", imageMode: "reference" },
+        { value: "multi_frame", label: "多帧故事 · 固定模型", disabled: imageCount < 2, mode: "multiframe2video", imageMode: "reference" },
         { value: "all_reference", label: "全能参考", disabled: mediaCount === 0, mode: "multimodal2video", imageMode: "reference" },
     ];
 
@@ -434,6 +453,7 @@ function VideoReferenceModeTabs({
                             opacity: item.disabled && !active ? 0.4 : 1,
                         }}
                         disabled={item.disabled}
+                        title={item.value === "multi_frame" ? "多帧故事使用 CLI 固定模型，不受当前 2.5 选择影响" : item.label}
                         onClick={() => onModeChange(item.mode, item.imageMode)}
                     >
                         {item.label}
@@ -615,8 +635,4 @@ function videoConfigPatch(key: keyof AiConfig, value: string): Partial<CanvasNod
     if (key === "videoReferenceImageMode") return { videoReferenceImageMode: value as CanvasNodeMetadata["videoReferenceImageMode"] };
     if (key === "videoReferenceMode") return { videoReferenceMode: value as CanvasNodeMetadata["videoReferenceMode"] };
     return { [key]: value } as Partial<CanvasNodeMetadata>;
-}
-
-function videoModelPatch(model: string): Partial<CanvasNodeMetadata> {
-    return { model };
 }

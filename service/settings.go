@@ -977,7 +977,7 @@ func normalizeModelChannelCapabilities(capabilities []string, protocol string) [
 		}
 		return []string{"text", "image"}
 	}
-	allowed := map[string]bool{"text": true, "image": true, "video": true, "video_query": true, "asset_review": true, "preflight": true, "cli": true, "cli_workflow": true}
+	allowed := map[string]bool{"text": true, "image": true, "video": true, "reasoning": true, "video_query": true, "asset_review": true, "preflight": true, "cli": true, "cli_workflow": true}
 	seen := map[string]bool{}
 	result := []string{}
 	for _, item := range capabilities {

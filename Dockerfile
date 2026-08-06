@@ -47,8 +47,8 @@ ARG DREAMINA_CLI_BASE=https://lf3-static.bytednsdoc.com/obj/eden-cn/psj_hupthlyk
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
     && case "$TARGETARCH" in \
-        amd64) dreamina_file=dreamina_cli_linux_amd64; dreamina_sha=1b82dcdcc5fe608830010d2a235810d68cff8e1ab3ed6c55fb5166b28fcb91db ;; \
-        arm64) dreamina_file=dreamina_cli_linux_arm64; dreamina_sha=916e70bb2efb7de23ca4d1e1703411ae2e29fa1e26cecf4c397ff16414fe6eb7 ;; \
+        amd64) dreamina_file=dreamina_cli_linux_amd64; dreamina_sha=7c2817bc844e5a93cc5c6e57f876ccaea91d438e520ad50f665a515e816c7dc6 ;; \
+        arm64) dreamina_file=dreamina_cli_linux_arm64; dreamina_sha=696216eee0fe55ba5e5d781429a3eb304cfdb539823397742a4d1a7575ab1202 ;; \
         *) echo "Unsupported Dreamina CLI architecture: $TARGETARCH" >&2; exit 1 ;; \
     esac \
     && curl -fsSL "$DREAMINA_CLI_BASE/$dreamina_file" -o /usr/local/bin/dreamina \

@@ -76,6 +76,9 @@ export type InvocationRequest = {
     source: ClientInvocationSource;
     projectId: string;
     episodeId?: string;
+    consumerSurface?: string;
+    targetKind?: string;
+    targetId?: string;
     skillId?: string;
     skillVersionId?: string;
     skillVersionConstraint?: string;
@@ -109,6 +112,9 @@ export type InvocationRunSummary = {
     source: string;
     projectId: string;
     episodeId: string;
+    consumerSurface?: string;
+    targetKind?: string;
+    targetId?: string;
     status: InvocationStatus;
     latestRevision: number;
     latestAttempt: number;
@@ -326,6 +332,9 @@ export type InvocationQuery = {
     project?: string;
     episode?: string;
     source?: string;
+    consumerSurface?: string;
+    targetKind?: string;
+    targetId?: string;
     status?: InvocationStatus;
     skillId?: string;
     page?: number;

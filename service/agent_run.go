@@ -368,6 +368,11 @@ func buildAgentRunChatRequest(input CreateAgentRunInput, modelName string) ([]by
 func callAgentRunTextModel(run model.AgentRun, channel model.ModelChannel, requestBody []byte, timeoutSeconds int) model.AgentRun {
 	startedAt := time.Now()
 	run.StartedAt = startedAt.Format(time.RFC3339Nano)
+	var err error
+	requestBody, err = ApplyHighestReasoning(requestBody, "application/json", "/chat/completions", channel)
+	if err != nil {
+		return failAgentRun(run, startedAt, "Agent Run 思考参数无效")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSeconds)*time.Second)
 	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, BuildModelChannelURL(channel, "/chat/completions"), bytes.NewReader(requestBody))

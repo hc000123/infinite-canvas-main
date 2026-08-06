@@ -44,6 +44,11 @@ function validateDreaminaMedia(mode: Exclude<VideoReferenceMode, "auto">, input:
     if (mode === "frames2video" && (images.length !== 2 || videos.length || audios.length)) throw new Error("首尾帧需要恰好 2 张图片");
     if (mode === "multiframe2video" && (images.length < 2 || images.length > 20 || videos.length || audios.length)) throw new Error("多帧故事需要 2-20 张图片，且不能包含视频或音频");
     if (mode !== "multimodal2video") return;
+    if (input.model === "seedance2.5") {
+        if (!images.length && !videos.length && !audios.length) throw new Error("全能参考至少添加一种参考素材");
+        if (images.length > 30 || videos.length > 10 || audios.length > 10 || images.length + videos.length + audios.length > 50) throw new Error("Seedance 2.5 全能参考最多支持 30 张图片、10 个视频、10 个音频且素材总数不超过 50 个");
+        return;
+    }
     if (!images.length && !videos.length) throw new Error("全能参考至少添加图片或视频");
     if (images.length > 9 || videos.length > 3 || audios.length > 3 || images.length + videos.length + audios.length > 12) throw new Error("全能参考最多支持 9 张图片、3 个视频、3 个音频且素材总数不超过 12 个");
 }

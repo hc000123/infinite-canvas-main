@@ -1,23 +1,15 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const source = await readFile(new URL("./app-config-modal.tsx", import.meta.url), "utf8");
+const modal = readFileSync(new URL("./app-config-modal.tsx", import.meta.url), "utf8");
 
-test("App config exposes user-side Jimeng login without admin settings", () => {
-    assert.match(source, /startUserJimengLogin/);
-    assert.match(source, /checkUserJimengLogin/);
-    assert.match(source, /videoProtocol === "jimeng-cli"/);
-    assert.match(source, /后台仍会记录任务和用量/);
-    assert.doesNotMatch(source, /\/api\/admin\/settings\/jimeng-login/);
+test("configuration modal loads once without a height-changing polling indicator", () => {
+    assert.doesNotMatch(modal, /setInterval/);
+    assert.doesNotMatch(modal, /正在同步后台配置/);
 });
 
-test("Jimeng login opens the verification page from the same click", () => {
-    const start = source.indexOf("const startJimengLogin");
-    const request = source.indexOf("await startUserJimengLogin", start);
-    const preopenedWindow = source.indexOf("window.open", start);
-
-    assert.ok(start >= 0 && preopenedWindow > start && preopenedWindow < request, "the browser tab must be opened before the async request");
-    assert.match(source, /verificationWindow\.location\.replace\(loginURL\)/);
-    assert.match(source, />\s*登录即梦\s*</);
+test("configuration modal no longer exposes manual reasoning controls", () => {
+    assert.doesNotMatch(modal, /思考模式/);
+    assert.doesNotMatch(modal, /reasoningEffort|thinkingMode/);
 });

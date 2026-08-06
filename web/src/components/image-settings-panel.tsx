@@ -39,7 +39,6 @@ type ImageSettingsPanelProps = {
     compact?: boolean;
 };
 type ImageSettingsKey = "quality" | "size" | "count";
-type ModelThinkingSettingsKey = "thinkingMode" | "reasoningEffort";
 
 export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = true, className = "w-[320px] space-y-4 rounded-lg px-1 py-0.5", maxCount = 15, quickCount = 10, compact = false }: ImageSettingsPanelProps) {
     const quality = config.quality || "auto";
@@ -111,61 +110,6 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
     );
 }
 
-export function ModelThinkingSettings({
-    config,
-    model,
-    onConfigChange,
-    theme,
-    className = "",
-    compact = false,
-}: {
-    config: AiConfig;
-    model?: string;
-    onConfigChange: (key: ModelThinkingSettingsKey, value: string) => void;
-    theme: CanvasTheme;
-    className?: string;
-    compact?: boolean;
-}) {
-    const currentModel = model || config.imageModel || config.textModel || config.model || "";
-    const thinkingSupported = supportsThinkingModel(currentModel);
-    const thinkingOn = config.thinkingMode === "true";
-    const effort = config.reasoningEffort || "medium";
-    const title = thinkingSupported ? "当前模型可使用思考参数" : "仅支持思考参数的模型生效";
-
-    return (
-        <ImageSettingsTheme theme={theme}>
-            <div
-                className={`inline-flex min-w-0 items-center gap-1 rounded-full border px-2 py-1 ${compact ? "text-[11px]" : "text-xs"} ${className}`}
-                style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text }}
-                title={title}
-                onMouseDown={(event) => event.stopPropagation()}
-                onPointerDown={(event) => event.stopPropagation()}
-            >
-                <span className="shrink-0 font-medium" style={{ color: theme.node.muted }}>
-                    思考
-                </span>
-                <SmallOptionPill selected={!thinkingOn} theme={theme} onClick={() => onConfigChange("thinkingMode", "false")}>
-                    关
-                </SmallOptionPill>
-                <SmallOptionPill selected={thinkingOn} theme={theme} onClick={() => onConfigChange("thinkingMode", "true")}>
-                    开
-                </SmallOptionPill>
-                <span className="mx-0.5 h-4 w-px shrink-0 opacity-60" style={{ background: theme.node.stroke }} />
-                {[
-                    { value: "minimal", label: "极低" },
-                    { value: "low", label: "低" },
-                    { value: "medium", label: "中" },
-                    { value: "high", label: "高" },
-                ].map((item) => (
-                    <SmallOptionPill key={item.value} selected={effort === item.value} disabled={!thinkingOn} theme={theme} onClick={() => onConfigChange("reasoningEffort", item.value)}>
-                        {item.label}
-                    </SmallOptionPill>
-                ))}
-            </div>
-        </ImageSettingsTheme>
-    );
-}
-
 export function ImageSettingsTheme({ theme, children }: { theme: CanvasTheme; children: ReactNode }) {
     return (
         <ConfigProvider
@@ -193,21 +137,6 @@ function OptionPill({ selected, theme, onClick, children }: { selected: boolean;
             type="button"
             className="h-9 cursor-pointer rounded-full border px-2 text-sm transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
             style={{ background: "transparent", borderColor: selected ? theme.node.text : theme.node.stroke, color: theme.node.text }}
-            onMouseDown={(event) => event.stopPropagation()}
-            onClick={onClick}
-        >
-            {children}
-        </button>
-    );
-}
-
-function SmallOptionPill({ selected, disabled = false, theme, onClick, children }: { selected: boolean; disabled?: boolean; theme: CanvasTheme; onClick: () => void; children: ReactNode }) {
-    return (
-        <button
-            type="button"
-            disabled={disabled}
-            className="h-7 cursor-pointer rounded-full border px-2 text-xs transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
-            style={{ background: selected ? theme.node.panel : "transparent", borderColor: selected ? theme.node.text : theme.node.stroke, color: theme.node.text }}
             onMouseDown={(event) => event.stopPropagation()}
             onClick={onClick}
         >
@@ -258,11 +187,6 @@ function SettingTitle({ children, color }: { children: string; color: string }) 
             {children}
         </div>
     );
-}
-
-function supportsThinkingModel(model: string) {
-    const value = model.toLowerCase();
-    return value.includes("gemini-3") || value.includes("gemini-2.5") || value.includes("thinking");
 }
 
 function readSizeDimensions(size: string, fallback: { width: number; height: number }) {

@@ -1,21 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { ArrowUp, LoaderCircle } from "lucide-react";
+import { ArrowUp, LoaderCircle, WandSparkles } from "lucide-react";
 import { Alert, Button, Modal } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
-import { ModelThinkingSettings } from "@/components/image-settings-panel";
-import { inferRemoteVideoProtocol } from "@/services/api/ai-channel-boundary";
 import { defaultConfig, useConfigStore, type AiConfig } from "@/stores/use-config-store";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
+import { resolveDreaminaVideoCapability, validateDreaminaReferences } from "@/lib/dreamina-video-capabilities";
+import { inferVideoReferenceMode, normalizeVideoReferenceMode } from "@/services/api/video-reference";
 import { useThemeStore } from "@/stores/use-theme-store";
-import { buildCanvasVideoConfig, resolveCanvasVideoChannelConfig } from "../utils/canvas-video-config";
+import { buildCanvasVideoConfig, buildCanvasVideoModelPatch, resolveCanvasVideoChannelConfig } from "../utils/canvas-video-config";
 import { canSubmitCanvasPrompt } from "../utils/canvas-prompt-preview";
 import type { CanvasReferenceMentionOption } from "../utils/canvas-reference-mentions";
-import { promptDocumentFromText, serializePromptDocument, validatePromptDocument, type CanvasPromptDocument } from "../utils/canvas-prompt-document";
+import { autoMentionPromptImageReferences, promptDocumentFromText, serializePromptDocument, validatePromptDocument, type CanvasPromptDocument } from "../utils/canvas-prompt-document";
 import { CANVAS_IMAGE_GENERATION_DEFAULT_COUNT } from "../constants";
 import { canvasPromptEditorDocument, canvasPromptEditorValue } from "../utils/canvas-media-versions";
 import { CanvasImageCameraPopover } from "./canvas-image-camera-popover";
@@ -25,6 +25,7 @@ import { CanvasPromptLibrary } from "./canvas-prompt-library";
 import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
 import { CanvasMediaVersionControl } from "./canvas-media-version-control";
 import { CanvasConnectedMediaStrip } from "./canvas-connected-media-strip";
+import { CanvasVideoCapabilityHint } from "./canvas-video-capability-hint";
 import type { CanvasConnectedMediaItem } from "../utils/canvas-connected-media";
 import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData, type CanvasNodeMetadata } from "../types";
 
@@ -56,6 +57,7 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const mode = defaultMode(node.type);
+    const promptReferenceOptions = useMemo(() => (mode === "video" ? referenceMentionOptions.map(videoReferenceMentionOption) : referenceMentionOptions), [mode, referenceMentionOptions]);
     const globalConfig = resolveCanvasVideoChannelConfig(localConfig, canvasAiConfig, publicSettings?.modelChannel, mode === "video" ? node.metadata?.channelMode : undefined);
     const config = buildNodeConfig(globalConfig, node, mode);
     const hasTextContent = node.type === CanvasNodeType.Text && Boolean(node.metadata?.content?.trim());
@@ -71,8 +73,22 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
     const latestNodeRef = useRef(node);
     latestNodeRef.current = node;
     const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, fallbackModel: mode === "video" ? config.seedanceModel || config.videoModel : undefined, count: mode === "video" ? config.videoSeconds : mode === "image" ? config.count : 1 });
-    const missingReferenceIds = validatePromptDocument(promptDocument, referenceMentionOptions);
-    const canSubmit = canSubmitCanvasPrompt(prompt, isRunning, hasConnectedText) && missingReferenceIds.length === 0;
+    const missingReferenceIds = validatePromptDocument(promptDocument, promptReferenceOptions);
+    const canAutoMentionImages = mode === "video" && promptReferenceOptions.some((option) => option.previewType === "image");
+    const videoCounts = {
+        images: connectedMedia.filter((item) => item.type === "image").length,
+        videos: connectedMedia.filter((item) => item.type === "video").length,
+        audios: connectedMedia.filter((item) => item.type === "audio").length,
+    };
+    const storedVideoReferenceMode = normalizeVideoReferenceMode(config.videoReferenceMode);
+    const resolvedVideoReferenceMode = storedVideoReferenceMode === "auto"
+        ? inferVideoReferenceMode({ imageCount: videoCounts.images, videoCount: videoCounts.videos, audioCount: videoCounts.audios, imageRoleMode: config.videoReferenceImageMode })
+        : storedVideoReferenceMode;
+    const videoCapability = mode === "video" ? resolveDreaminaVideoCapability({ protocol: config.videoProtocol, model: config.videoModel, mode: resolvedVideoReferenceMode }) : null;
+    const videoReferenceValidation = mode === "video"
+        ? validateDreaminaReferences({ protocol: config.videoProtocol, model: config.videoModel, mode: resolvedVideoReferenceMode, ...videoCounts })
+        : { error: "", usageLabel: "", detailLabel: "" };
+    const canSubmit = canSubmitCanvasPrompt(prompt, isRunning, hasConnectedText) && missingReferenceIds.length === 0 && !videoReferenceValidation.error;
 
     useEffect(() => {
         const currentNode = latestNodeRef.current;
@@ -95,10 +111,15 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
         onPromptChange(node.id, value, nextDocument);
     };
     const updatePromptDocument = (nextDocument: CanvasPromptDocument) => {
-        const value = serializePromptDocument(nextDocument, referenceMentionOptions);
+        const value = serializePromptDocument(nextDocument, promptReferenceOptions);
         setPromptDocument(nextDocument);
         setPrompt(value);
         onPromptChange(node.id, value, nextDocument);
+    };
+    const autoMentionImages = () => {
+        const nextDocument = autoMentionPromptImageReferences(promptDocument, promptReferenceOptions);
+        updatePromptDocument(nextDocument);
+        setEditorRevision((revision) => revision + 1);
     };
     const openExpandedEditor = () => setExpandedEditorOpen(true);
     const closeExpandedEditor = () => {
@@ -107,7 +128,7 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
     };
 
     const submit = () => {
-        const text = serializePromptDocument(promptDocument, referenceMentionOptions).trim();
+        const text = serializePromptDocument(promptDocument, promptReferenceOptions).trim();
         if (!canSubmit) return;
         onGenerate(node.id, mode, mode === "image" ? appendImageCameraPrompt(text, node.metadata) : text);
         if (!isGeneratedMedia) {
@@ -146,7 +167,7 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
             <CanvasPromptEditor
                 key={`${node.id}:${editorRevision}`}
                 initialDocument={promptDocument}
-                options={referenceMentionOptions}
+                options={promptReferenceOptions}
                 placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent, hasConnectedText)}
                 onChange={updatePromptDocument}
                 onPreviewReference={onPreviewReference}
@@ -157,6 +178,17 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
             <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
                 <div className="flex min-w-[220px] flex-1 flex-wrap items-center gap-2">
                     <CanvasPromptLibrary projectId={projectId} nodeGroup={mode} onSelect={updatePrompt} />
+                    {mode === "video" ? (
+                        <Button
+                            className="!h-10 !rounded-full !px-3"
+                            disabled={!canAutoMentionImages}
+                            icon={<WandSparkles className="size-4" />}
+                            onClick={autoMentionImages}
+                            title={canAutoMentionImages ? "根据提示词里的图片名称自动插入引用" : "请先连接图片节点"}
+                        >
+                            自动 @ 图片
+                        </Button>
+                    ) : null}
                     {mode === "image" ? (
                         <>
                             <ModelPicker className="h-10 !min-w-[150px] flex-1" fullWidth config={config} modelType="image" value={config.model} onChange={(model) => onConfigChange(node.id, { model })} onMissingConfig={() => openConfigDialog(true)} />
@@ -174,7 +206,6 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
                                 buttonClassName="!h-10 !w-[132px] !max-w-full !justify-start !rounded-lg !px-3"
                                 onChange={(patch) => onConfigChange(node.id, patch)}
                             />
-                            <ModelThinkingSettings className="min-w-[236px] flex-1" config={config} model={config.model} theme={theme} onConfigChange={(key, value) => onConfigChange(node.id, { [key]: value })} />
                         </>
                     ) : mode === "video" ? (
                         <>
@@ -184,7 +215,7 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
                                 config={config}
                                 modelType="video"
                                 value={config.model}
-                                onChange={(model) => onConfigChange(node.id, videoModelPatch(config, model))}
+                                onChange={(model) => onConfigChange(node.id, buildCanvasVideoModelPatch(config, model))}
                                 onMissingConfig={() => openConfigDialog(true)}
                             />
                             <CanvasVideoSettingsPopover
@@ -195,12 +226,21 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
                                 buttonClassName="!h-10 !w-[142px] !max-w-full !justify-start !rounded-full !px-3"
                                 onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))}
                             />
+                            <CanvasVideoCapabilityHint
+                                compact
+                                theme={theme}
+                                label={videoCapability?.label}
+                                notice={videoCapability?.notice}
+                                usageLabel={videoReferenceValidation.usageLabel}
+                                detailLabel={videoReferenceValidation.detailLabel}
+                                error={videoReferenceValidation.error}
+                            />
                         </>
                     ) : (
                         <ModelPicker className="h-10 !min-w-[140px] flex-1" fullWidth config={config} modelType="text" value={config.model} onChange={(model) => onConfigChange(node.id, { model })} onMissingConfig={() => openConfigDialog(true)} />
                     )}
                 </div>
-                <Button type="primary" className="!h-10 !min-w-[126px] shrink-0 !rounded-full !px-3" disabled={!canSubmit} onClick={submit} aria-label={isGeneratedMedia ? "生成新版本" : "生成"} title={isGeneratedMedia ? "生成新版本" : "生成"}>
+                <Button type="primary" className="!h-10 !min-w-[126px] shrink-0 !rounded-full !px-3" disabled={!canSubmit} onClick={submit} aria-label={isGeneratedMedia ? "生成新版本" : "生成"} title={videoReferenceValidation.error || (isGeneratedMedia ? "生成新版本" : "生成")}>
                     <span className="flex items-center gap-1.5">
                         <span className="text-xs font-medium">{isGeneratedMedia ? "新版本" : "生成"}</span>
                         <span className="inline-flex items-center gap-1 text-xs font-medium tabular-nums">
@@ -223,7 +263,7 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
                 <CanvasPromptEditor
                     key={`${node.id}:expanded:${expandedEditorOpen}`}
                     initialDocument={promptDocument}
-                    options={referenceMentionOptions}
+                    options={promptReferenceOptions}
                     placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent, hasConnectedText)}
                     expanded
                     onChange={updatePromptDocument}
@@ -232,6 +272,13 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
             </Modal>
         </div>
     );
+}
+
+function videoReferenceMentionOption(option: CanvasReferenceMentionOption): CanvasReferenceMentionOption {
+    if (option.previewType !== "image") return option;
+    const title = option.detail?.trim();
+    if (!title) return option;
+    return { ...option, label: title.startsWith("@") ? title : `@${title}` };
 }
 
 function defaultMode(type: CanvasNodeData["type"]): CanvasNodeGenerationMode {
@@ -274,13 +321,6 @@ function videoConfigPatch(key: keyof AiConfig, value: string): Partial<CanvasNod
     if (key === "videoSeed") return { seed: value };
     if (key === "videoPromptReviewEnabled") return { videoPromptReviewEnabled: value };
     return { [key]: value } as Partial<CanvasNodeMetadata>;
-}
-
-function videoModelPatch(config: AiConfig, model: string): Partial<CanvasNodeMetadata> {
-    return {
-        model,
-        provider: inferRemoteVideoProtocol(model, config.videoProtocol || "openai", config.modelProtocols || []),
-    };
 }
 
 function appendImageCameraPrompt(prompt: string, metadata?: CanvasNodeMetadata) {

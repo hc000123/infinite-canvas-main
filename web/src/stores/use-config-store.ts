@@ -335,7 +335,7 @@ function normalizeModelTextEndpoints(items: AdminModelTextEndpoint[], models: st
 
 function normalizeModelCapabilities(items: AdminModelCapability[], models: string[]) {
     const availableModels = new Set(uniqueModels(models));
-    const allowedCapabilities = new Set(["text", "image", "video"]);
+    const allowedCapabilities = new Set(["text", "image", "video", "reasoning"]);
     const byModel = new Map<string, Set<string>>();
     items.forEach((item) => {
         const model = item.model.trim();

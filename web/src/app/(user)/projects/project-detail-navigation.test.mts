@@ -18,12 +18,19 @@ test("project script entry invokes the selected Skill without an Agent Plan", ()
     const page = readProjectFile("./[id]/page.tsx");
     const board = readProjectFile("./[id]/components/project-episode-board.tsx");
 
-    assert.match(page, /\n\s+运行剧本 Skill\n/);
+    assert.doesNotMatch(page, /\n\s+运行剧本 Skill\n/);
     assert.match(page, /preflightScriptInvocation/);
     assert.match(page, /createInvocation/);
     assert.match(board, /aria-label="剧本优化 Skill"/);
     assert.match(board, /剧本 Skill/);
     assert.doesNotMatch(page, /createAgentPlan|Agent Plan|buildScriptSkillOverride/);
+});
+
+test("episode import uses scene wording and has no import-time optimization action", () => {
+    const page = readProjectFile("./[id]/page.tsx");
+    assert.match(page, /name="title" label="场次"/);
+    assert.doesNotMatch(page, /aria-label="导入剧本优化 Skill"/);
+    assert.doesNotMatch(page, /optimizeEpisodeImportScript/);
 });
 
 test("project script optimization writes automatically without a review UI", () => {

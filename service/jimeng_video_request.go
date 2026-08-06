@@ -46,7 +46,7 @@ func prepareJimengVideoCommand(body []byte, contentType, modelVersion string, se
 	if mode == "" || mode == "auto" {
 		mode = inferJimengMode(len(images), len(videos), len(audios), imageRoles)
 	}
-	if err := validateJimengModeInputs(mode, len(images), len(videos), len(audios)); err != nil {
+	if err := validateJimengModeInputs(mode, modelVersion, len(images), len(videos), len(audios)); err != nil {
 		return jimengPreparedVideoCommand{}, err
 	}
 
@@ -124,7 +124,7 @@ func inferJimengMode(imageCount, videoCount, audioCount int, roles []string) str
 	return "multiframe2video"
 }
 
-func validateJimengModeInputs(mode string, imageCount, videoCount, audioCount int) error {
+func validateJimengModeInputs(mode, modelVersion string, imageCount, videoCount, audioCount int) error {
 	switch mode {
 	case "text2video":
 		if imageCount+videoCount+audioCount > 0 {
@@ -143,6 +143,15 @@ func validateJimengModeInputs(mode string, imageCount, videoCount, audioCount in
 			return errors.New("多帧故事需要 2-20 张图片，且不能包含视频或音频")
 		}
 	case "multimodal2video":
+		if strings.TrimSpace(modelVersion) == "seedance2.5" {
+			if imageCount+videoCount+audioCount == 0 {
+				return errors.New("全能参考至少需要一种参考素材")
+			}
+			if imageCount > 30 || videoCount > 10 || audioCount > 10 || imageCount+videoCount+audioCount > 50 {
+				return errors.New("Seedance 2.5 全能参考最多支持 30 张图片、10 个视频、10 个音频且素材总数不超过 50 个")
+			}
+			break
+		}
 		if imageCount == 0 && videoCount == 0 {
 			return errors.New("全能参考至少需要图片或视频")
 		}
@@ -240,7 +249,7 @@ func buildJimengModeArgs(mode string, fields jimengVideoFields, modelVersion str
 	if modelVersion == "" {
 		modelVersion = "seedance2.0fast"
 	}
-	prompt, duration := strings.TrimSpace(fields.Prompt), normalizeJimengDuration(fields.Duration)
+	prompt, duration := strings.TrimSpace(fields.Prompt), normalizeJimengDuration(fields.Duration, modelVersion)
 	resolution := normalizeJimengModelResolution(modelVersion, fields.Resolution)
 	var args []string
 	switch mode {
@@ -252,11 +261,11 @@ func buildJimengModeArgs(mode string, fields jimengVideoFields, modelVersion str
 		first, last := jimengFramePaths(images, roles)
 		args = []string{"frames2video", "--first=" + first, "--last=" + last, "--prompt=" + prompt, "--duration=" + strconv.Itoa(duration), "--video_resolution=" + resolution, "--model_version=" + modelVersion}
 	case "multiframe2video":
-		args = []string{"multiframe2video", "--images=" + strings.Join(images, ",")}
+		args = []string{"multiframe2video", "--images=" + strings.Join(images, ","), "--video_resolution=" + normalizeJimengMultiframeResolution(fields.Resolution)}
 		if len(images) == 2 {
 			args = append(args, "--prompt="+prompt, "--duration="+strconv.Itoa(min(8, duration)))
 		} else {
-			segmentDuration := max(0.5, min(8, float64(duration)/float64(len(images)-1)))
+			segmentDuration := max(1, min(8, float64(duration)/float64(len(images)-1)))
 			for range len(images) - 1 {
 				args = append(args, "--transition-prompt="+prompt)
 			}
@@ -302,8 +311,24 @@ func jimengFramePaths(images, roles []string) (string, string) {
 }
 
 func normalizeJimengModelResolution(modelVersion, resolution string) string {
-	if strings.TrimSpace(modelVersion) != "seedance2.0_vip" {
+	switch strings.TrimSpace(modelVersion) {
+	case "seedance2.5":
+		value := strings.ToLower(strings.TrimSpace(resolution))
+		if value == "480" || value == "480p" {
+			return "480p"
+		}
+		return "720p"
+	case "seedance2.0_vip":
+		return normalizeJimengResolution(resolution)
+	default:
 		return "720p"
 	}
-	return normalizeJimengResolution(resolution)
+}
+
+func normalizeJimengMultiframeResolution(resolution string) string {
+	value := strings.ToLower(strings.TrimSpace(resolution))
+	if value == "1080" || value == "1080p" {
+		return "1080p"
+	}
+	return "720p"
 }

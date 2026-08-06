@@ -35,6 +35,7 @@ func Invocations(w http.ResponseWriter, r *http.Request) {
 	pageSize, _ := strconv.Atoi(query.Get("pageSize"))
 	result, err := service.ListInvocations(user.ID, model.InvocationQuery{
 		ProjectID: query.Get("project"), EpisodeID: query.Get("episode"), Source: query.Get("source"),
+		ConsumerSurface: query.Get("consumerSurface"), TargetKind: query.Get("targetKind"), TargetID: query.Get("targetId"),
 		Status: query.Get("status"), SkillID: query.Get("skillId"), Page: page, PageSize: pageSize,
 	})
 	invocationResult(w, result, err)

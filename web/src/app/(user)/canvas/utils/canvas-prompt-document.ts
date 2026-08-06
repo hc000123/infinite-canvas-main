@@ -28,6 +28,23 @@ export function insertPromptReference(document: CanvasPromptDocument, start: num
     };
 }
 
+export function autoMentionPromptImageReferences(document: CanvasPromptDocument, options: CanvasReferenceMentionOption[]): CanvasPromptDocument {
+    const existingIds = new Set(document.blocks.flatMap((block) => (block.type === "reference" ? [block.nodeId] : [])));
+    const imageOptions = options.filter((option) => option.previewType === "image" && !existingIds.has(option.id)).map((option) => ({ option, name: referenceImageName(option) })).filter((item) => item.name);
+    if (!imageOptions.length) return document;
+
+    const blocks: CanvasPromptDocument["blocks"] = [];
+    const usedIds = new Set(existingIds);
+    for (const block of document.blocks) {
+        if (block.type === "reference") {
+            blocks.push(block);
+            continue;
+        }
+        blocks.push(...autoMentionTextBlock(block.text, imageOptions, usedIds));
+    }
+    return { version: 1, blocks: mergePromptTextBlocks(blocks) };
+}
+
 export function serializePromptDocument(document: CanvasPromptDocument, options: CanvasReferenceMentionOption[]) {
     const labelById = new Map(options.map((option) => [option.id, option.label]));
     return document.blocks.map((block) => (block.type === "text" ? block.text : labelById.get(block.nodeId) || block.label)).join("");
@@ -64,4 +81,42 @@ function mergePromptTextBlocks(blocks: CanvasPromptDocument["blocks"]): CanvasPr
         else result.push(block);
     }
     return result;
+}
+
+function referenceImageName(option: CanvasReferenceMentionOption) {
+    return (option.label.startsWith("@") ? option.label.slice(1) : option.detail || option.label).trim();
+}
+
+function autoMentionTextBlock(text: string, options: Array<{ option: CanvasReferenceMentionOption; name: string }>, usedIds: Set<string>) {
+    const blocks: CanvasPromptDocument["blocks"] = [];
+    let rest = text;
+    while (rest) {
+        const match = findNextImageNameMatch(rest, options, usedIds);
+        if (!match) {
+            blocks.push({ type: "text", text: rest });
+            break;
+        }
+        const before = rest.slice(0, match.replaceStart);
+        const after = rest.slice(match.index + match.name.length);
+        if (before) blocks.push({ type: "text", text: before });
+        blocks.push({ type: "reference", nodeId: match.option.id, kind: "image", label: match.option.label });
+        usedIds.add(match.option.id);
+        rest = needsSpaceAfterReference(after) ? ` ${after}` : after;
+    }
+    return blocks;
+}
+
+function findNextImageNameMatch(text: string, options: Array<{ option: CanvasReferenceMentionOption; name: string }>, usedIds: Set<string>) {
+    return options
+        .filter((item) => !usedIds.has(item.option.id))
+        .map((item) => {
+            const index = text.indexOf(item.name);
+            return { ...item, index, replaceStart: index > 0 && text[index - 1] === "@" ? index - 1 : index };
+        })
+        .filter((item) => item.index >= 0)
+        .sort((left, right) => left.replaceStart - right.replaceStart || right.name.length - left.name.length)[0];
+}
+
+function needsSpaceAfterReference(text: string) {
+    return Boolean(text) && !/^[\s，。！？、；：,.!?;:]/.test(text);
 }

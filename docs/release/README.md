@@ -88,7 +88,7 @@ ESLint 和 oxlint 的 warning 需要记录，但只有 error 阻断发布。`bun
 
 ```bash
 docker compose -f docker-compose.local.yml config
-docker compose -f docker-compose.local.yml --progress=plain build
+docker compose -f docker-compose.local.yml --progress=plain build --no-cache
 docker compose -f docker-compose.local.yml up -d
 docker compose -f docker-compose.local.yml ps
 
@@ -99,6 +99,8 @@ curl -fsS -o /dev/null http://127.0.0.1:3000/api/settings
 docker compose -f docker-compose.local.yml exec -T app dreamina version
 docker compose -f docker-compose.local.yml exec -T app sh -lc '! command -v codex'
 ```
+
+发布冒烟必须使用 `--no-cache`，确保 Dreamina CLI 浮动下载地址会重新下载并执行固定哈希与 `version` 校验；普通开发构建可以继续使用缓存。
 
 `/api/health` 必须精确返回 `ok`。Docker 验收还要确认：
 

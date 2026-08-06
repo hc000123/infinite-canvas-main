@@ -222,6 +222,12 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 			return
 		}
 	}
+	upstreamBody, err = service.ApplyHighestReasoning(upstreamBody, upstreamContentType, upstreamPath, channel)
+	if err != nil {
+		log.Printf("AI proxy reasoning payload failed: model=%s path=%s err=%v", modelName, path, err)
+		Fail(w, "AI 接口请求失败")
+		return
+	}
 	isJimengVideoTask := service.IsJimengCLIProtocol(channel.Protocol) && path == "/videos"
 	aiTask, err := service.CreateAITask(service.CreateAITaskInput{
 		UserID:        user.ID,

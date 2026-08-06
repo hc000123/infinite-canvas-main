@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildCanvasVideoConfig, buildCanvasVideoDefaultsPatch, buildCanvasVideoModePatch, resolveCanvasVideoChannelConfig } from "./canvas-video-config.ts";
+import { buildCanvasVideoConfig, buildCanvasVideoDefaultsPatch, buildCanvasVideoModelPatch, buildCanvasVideoModePatch, resolveCanvasVideoChannelConfig } from "./canvas-video-config.ts";
 
 const baseConfig = {
     channelMode: "local",
@@ -233,6 +233,44 @@ test("video config normalizes duration by provider capability", () => {
     assert.equal(buildCanvasVideoConfig(routedVideoConfig("seedance2.0fast", "jimeng-cli"), { provider: "openai", seconds: "3" }).videoSeconds, "4");
     assert.equal(buildCanvasVideoConfig(routedVideoConfig("openai-video", "openai"), { provider: "volcengine-ark", seconds: "20" }).videoSeconds, "20");
     assert.equal(buildCanvasVideoConfig(catalogConfig, { seconds: "20" }).videoSeconds, "15");
+});
+
+test("Seedance 2.5 keeps Dreamina durations up to 30 seconds", () => {
+    const config = routedVideoConfig("seedance2.5", "jimeng-cli");
+
+    assert.equal(buildCanvasVideoConfig(config, { seconds: "30" }).videoSeconds, "30");
+    assert.equal(buildCanvasVideoConfig(config, { seconds: "40" }).videoSeconds, "30");
+    assert.equal(buildCanvasVideoModePatch({ ...config, videoSeconds: "24" }).seconds, "24");
+});
+
+test("normalizes duration and resolution when changing Dreamina models", () => {
+    const config = {
+        ...routedVideoConfig("seedance2.0fast", "jimeng-cli"),
+        videoSeconds: "30",
+        vquality: "480",
+        videoReferenceMode: "multimodal2video",
+    } as const;
+
+    assert.deepEqual(buildCanvasVideoModelPatch(config, "seedance2.0fast"), {
+        model: "seedance2.0fast",
+        provider: "jimeng-cli",
+        seconds: "15",
+        duration: "15",
+        vquality: "720",
+    });
+});
+
+test("keeps Seedance 2.5 settings inside its range", () => {
+    const config = {
+        ...routedVideoConfig("seedance2.5", "jimeng-cli"),
+        videoSeconds: "24",
+        vquality: "480",
+        videoReferenceMode: "multimodal2video",
+    } as const;
+    const patch = buildCanvasVideoModelPatch(config, "seedance2.5");
+
+    assert.equal(patch.seconds, "24");
+    assert.equal(patch.vquality, "480");
 });
 
 test("video config ignores completed task duration when editable seconds exist", () => {

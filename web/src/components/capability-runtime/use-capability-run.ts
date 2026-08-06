@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { fetchSkillOptions, type SkillOption } from "@/services/api/admin-skills";
 import {
@@ -12,6 +12,7 @@ import {
     createInvocation,
     getInvocation,
     listArtifacts,
+    listInvocations,
     retryInvocation,
     reviewInvocation,
     type ArtifactEnvelope,
@@ -21,6 +22,7 @@ import {
 } from "@/services/api/invocations";
 import { useUserStore } from "@/stores/use-user-store";
 import { buildCapabilityInputRefs, capabilityRunActions, capabilitySkillCompatibility } from "./capability-run-model";
+import { findRecoverableInvocation } from "./capability-run-recovery";
 
 export type CapabilityConsumerSource = Extract<ClientInvocationSource, "image" | "canvas_chat">;
 export type CapabilityConsumerTargetKind = "prompt" | "node" | "message" | "asset";
@@ -52,10 +54,12 @@ export function useCapabilityRun(options: UseCapabilityRunOptions) {
     const projectId = options.projectId.trim() || "local-image-workbench";
     const episodeId = options.episodeId?.trim() || "";
     const sourceText = options.sourceText.trim();
+    const consumerSurface = options.source === "image" ? "image" : "canvas";
     const [selectedSkillVersionId, setSelectedSkillVersionId] = useState("");
     const [preflight, setPreflight] = useState<InvocationPreflightResponse>();
     const [sourceArtifact, setSourceArtifact] = useState<ArtifactEnvelope>();
     const [frozenLocalFingerprint, setFrozenLocalFingerprint] = useState("");
+    const [dismissedInvocationId, setDismissedInvocationId] = useState("");
 
     const skillsQuery = useQuery({
         queryKey: ["capability-skill-options", projectId],
@@ -70,6 +74,13 @@ export function useCapabilityRun(options: UseCapabilityRunOptions) {
         enabled: options.enabled && Boolean(token),
         retry: false,
         staleTime: 10_000,
+    });
+    const recoveryQuery = useQuery({
+        queryKey: ["capability-invocation-recovery", projectId, episodeId, options.source, consumerSurface, options.targetKind, options.targetId],
+        queryFn: () => listInvocations({ project: projectId, episode: episodeId || undefined, source: options.source, consumerSurface, targetKind: options.targetKind, targetId: options.targetId, pageSize: 20 }),
+        enabled: options.enabled && Boolean(token && options.targetId),
+        retry: false,
+        staleTime: 2_000,
     });
 
     const skillOptions = skillsQuery.data || [];
@@ -90,7 +101,9 @@ export function useCapabilityRun(options: UseCapabilityRunOptions) {
         pendingSourceTextBindings: compatibility?.pendingSourceTextBindings || [],
     }), [compatibility, effectiveSkillVersionId, episodeId, options.source, projectId, sourceText]);
 
-    const invocationId = preflight?.run.id || "";
+    const restoredRun = findRecoverableInvocation(recoveryQuery.data?.items || [], { consumerSurface, targetKind: options.targetKind, targetId: options.targetId });
+    const restoredInvocationId = restoredRun?.id === dismissedInvocationId ? "" : restoredRun?.id || "";
+    const invocationId = preflight?.run.id || restoredInvocationId;
     const invocationQuery = useQuery({
         queryKey: ["capability-invocation", invocationId],
         queryFn: () => getInvocation(invocationId),
@@ -99,8 +112,14 @@ export function useCapabilityRun(options: UseCapabilityRunOptions) {
         refetchInterval: (query) => activeInvocationStatuses.has((query.state.data as InvocationDetail | undefined)?.run.status || "") ? 2_000 : false,
     });
     const detail = invocationQuery.data;
-    const status = detail?.run.status || preflight?.run.status || "draft";
+    const status = detail?.run.status || preflight?.run.status || (restoredInvocationId ? restoredRun?.status : undefined) || "draft";
     const actions = capabilityRunActions(status, { fingerprintMatches: Boolean(frozenLocalFingerprint) && frozenLocalFingerprint === localFingerprint });
+
+    useEffect(() => {
+        if (!restoredInvocationId || !detail) return;
+        const skillVersionId = detail.revisions.at(-1)?.skillVersionId || "";
+        if (skillVersionId) setSelectedSkillVersionId(skillVersionId);
+    }, [detail, restoredInvocationId]);
 
     const preflightMutation = useMutation({
         mutationFn: async () => {
@@ -121,7 +140,10 @@ export function useCapabilityRun(options: UseCapabilityRunOptions) {
                 skillVersionId: selectedSkill.skillVersionId,
                 expectedOutputArtifactType: selectedSkill.outputBindings.length === 1 ? selectedSkill.outputBindings[0].artifactType : undefined,
                 inputArtifactRefs: refs,
-                parameters: { consumerSurface: options.source === "image" ? "image" : "canvas" },
+                consumerSurface,
+                targetKind: options.targetKind,
+                targetId: options.targetId,
+                parameters: { consumerSurface },
                 idempotencyKey: globalThis.crypto.randomUUID(),
             });
             return { result, createdSource };
@@ -129,6 +151,7 @@ export function useCapabilityRun(options: UseCapabilityRunOptions) {
         onSuccess: ({ result, createdSource }) => {
             if (preflight?.run.id && preflight.run.id !== result.run.id) queryClient.removeQueries({ queryKey: ["capability-invocation", preflight.run.id] });
             setPreflight(result);
+            setDismissedInvocationId("");
             setSourceArtifact(createdSource);
             setFrozenLocalFingerprint(localFingerprint);
         },
@@ -190,6 +213,7 @@ export function useCapabilityRun(options: UseCapabilityRunOptions) {
         setPreflight(undefined);
         setSourceArtifact(undefined);
         setFrozenLocalFingerprint("");
+        setDismissedInvocationId(invocationId);
     };
 
     return {
@@ -201,6 +225,8 @@ export function useCapabilityRun(options: UseCapabilityRunOptions) {
         setSelectedSkillVersionId,
         compatibility,
         preflight,
+        invocationId,
+        restored: Boolean(restoredInvocationId),
         sourceArtifact,
         frozenLocalFingerprint,
         localFingerprint,
@@ -209,8 +235,8 @@ export function useCapabilityRun(options: UseCapabilityRunOptions) {
         status,
         actions,
         busy: mutations.some((mutation) => mutation.isPending),
-        loading: skillsQuery.isLoading || artifactsQuery.isLoading,
-        error: errorText(skillsQuery.error || artifactsQuery.error || invocationQuery.error || mutationError),
+        loading: skillsQuery.isLoading || artifactsQuery.isLoading || recoveryQuery.isLoading,
+        error: errorText(skillsQuery.error || artifactsQuery.error || recoveryQuery.error || invocationQuery.error || mutationError),
         preflightRun: () => preflightMutation.mutateAsync(),
         confirm: () => confirmMutation.mutateAsync(),
         refresh,

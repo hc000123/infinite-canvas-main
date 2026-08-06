@@ -72,7 +72,7 @@ Artifact 与 Invocation Runtime 使用以下 10 张正式业务表：
 | ---- | ---- |
 | `artifact_schemas` | 按 Artifact 类型与版本登记规范化 JSON Schema、核心 Schema 标记和内容哈希，用于冻结输入/输出校验契约。 |
 | `artifacts` | 通用不可变产物外壳，保存所有者、类型、Schema 版本/哈希、项目/分集坐标、父 Artifact 引用、生产 Invocation/attempt/Skill、payload、extensions 和内容哈希。 |
-| `invocation_runs` | Invocation 聚合头，记录当前状态、最新 revision / attempt 和已审核 Artifact 集哈希。状态包含 `planned`、`preflight`、`awaiting_confirmation`、`queued`、`running`、`cancel_requested`、`needs_review`、`approved`、`applied`、`blocked`、`failed`、`partial`、`rejected` 和 `cancelled`。 |
+| `invocation_runs` | Invocation 聚合头，记录当前状态、最新 revision / attempt、已审核 Artifact 集哈希及 `consumer_surface / target_kind / target_id` 消费页面坐标，供刷新后精确恢复。状态包含 `planned`、`preflight`、`awaiting_confirmation`、`queued`、`running`、`cancel_requested`、`needs_review`、`approved`、`applied`、`blocked`、`failed`、`partial`、`rejected` 和 `cancelled`。 |
 | `invocation_preflight_revisions` | 追加式预检版本，冻结 Skill、Schema、输入、参数、执行策略、路由 Trace 和确认要求。 |
 | `invocation_attempts` | 执行尝试、原始/结构化输出、费用与错误。`retry_plan_json` 冻结重试坐标和保留产物；失败或取消不会把保留产物复制到当前 attempt，后续重试精确继承已有非空计划，修正成功后才重新校验并挂回保留产物。`correction_trace_json` 单独记录人工校正，不改写原始输出或模型 Tool Trace。 |
 | `invocation_artifact_refs` | 按 revision、attempt、binding 和 ordinal 记录输入/输出 Artifact 引用。 |
@@ -301,7 +301,7 @@ Workflow Adapter 不新增数据库表，也不调用模型。Adapter 定义保�
 | `modelCosts`         | object[] | 模型单位算力点配置                                                 |
 | `modelTextEndpoints` | object[] | 文本模型使用的接口类型配置                                         |
 | `modelProtocols`     | object[] | 后端根据私有渠道推导出的模型协议映射，用于区分 OpenAI 兼容、Ark 与即梦 CLI |
-| `modelCapabilities`  | object[] | 后端根据私有渠道推导出的模型能力映射，用于前台区分文本 / 图片 / 视频 |
+| `modelCapabilities`  | object[] | 后端根据私有渠道推导出的模型能力映射，用于区分文本 / 图片 / 视频 / 思考 |
 | `modelSources`       | object[] | 后端根据私有渠道推导出的模型来源映射，用于前台按渠道来源筛选模型   |
 | `defaultModel`       | string   | 历史兼容字段；后台不再展示，默认文本模型使用 `defaultTextModel`    |
 | `defaultImageModel`  | string   | 默认图片模型                                                       |
@@ -331,7 +331,7 @@ Workflow Adapter 不新增数据库表，也不调用模型。Adapter 定义保�
 | 字段           | 类型     | 说明                                      |
 | -------------- | -------- | ----------------------------------------- |
 | `model`        | string   | 前端可见模型名称                          |
-| `capabilities` | string[] | 该模型支持的能力，例如 `text`、`image`、`video` |
+| `capabilities` | string[] | 该模型支持的能力，例如 `text`、`image`、`video`、`reasoning` |
 
 `modelSources` 每项字段：
 

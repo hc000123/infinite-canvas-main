@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { App, Button, Empty, Form, Input, Modal, Select, Spin } from "antd";
-import { Wand2 } from "lucide-react";
+import { App, Button, Empty, Form, Input, Modal, Spin } from "antd";
 
-import { confirmInvocation, createArtifact, createInvocation, getInvocation, reviewInvocation } from "@/services/api/invocations";
+import { applyInvocation, confirmInvocation, createArtifact, createInvocation, getInvocation, listInvocations, reviewInvocation } from "@/services/api/invocations";
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { CanvasCreateProjectModal } from "../../canvas/components/canvas-create-project-modal";
 import { useCanvasStore } from "../../canvas/stores/use-canvas-store";
@@ -14,11 +13,11 @@ import { useStoryboardStore } from "../../canvas/stores/use-storyboard-store";
 import { buildImportedEpisodeWriteInput, canvasEpisodeContextFromCreateBinding, canvasEpisodeContextFromEpisode, type CanvasCreateScriptBinding } from "../../canvas/utils/canvas-episode-context";
 import { episodeMainCanvas } from "../../canvas/utils/episode-canvas-hierarchy";
 import { canvasProjectPresetSummary, type CanvasProjectPreset } from "../../canvas/utils/canvas-project-preset";
-import { episodeProductionName, type StructuredEpisodeScript } from "../../canvas/utils/script-management";
+import { episodeProductionName } from "../../canvas/utils/script-management";
 import { videoWorkflowHref } from "../../original-workflow/video-workflow-routing";
 import { canvasIdsForCreativeProject, unfiledCanvasProjects } from "../creative-projects";
 import { editableCanvasPreset } from "../project-canvas-preset";
-import { executeScriptInvocationToReview, preflightScriptInvocation } from "../script-invocation-runtime";
+import { applyScriptInvocationResult, executeScriptInvocationToReview, preflightScriptInvocation, resumeScriptInvocationToReview } from "../script-invocation-runtime";
 import { useCreativeProjectStore } from "../use-creative-project-store";
 import { ProjectEpisodeBoard, type ProjectDetailTab, type ProjectEpisodeBoardRow } from "./components/project-episode-board";
 import { buildOriginalScriptEditPatch } from "./project-episode-script-edit";
@@ -28,11 +27,6 @@ type EpisodeImportFormValues = {
     code: string;
     title: string;
     scriptText: string;
-};
-
-type OptimizedImportDraft = {
-    sourceScript: string;
-    structuredScript?: StructuredEpisodeScript;
 };
 
 export default function CreativeProjectDetailPage() {
@@ -61,11 +55,10 @@ export default function CreativeProjectDetailPage() {
     const [canvasCreateOpen, setCanvasCreateOpen] = useState(false);
     const [episodeImportOpen, setEpisodeImportOpen] = useState(false);
     const [projectEditOpen, setProjectEditOpen] = useState(false);
-    const [scriptOptimizing, setScriptOptimizing] = useState(false);
     const [episodeImporting, setEpisodeImporting] = useState(false);
-    const [optimizingEpisodeId, setOptimizingEpisodeId] = useState("");
+    const [optimizingEpisodeIds, setOptimizingEpisodeIds] = useState<Record<string, string>>({});
     const [scriptOptimizeErrors, setScriptOptimizeErrors] = useState<Record<string, string>>({});
-    const [optimizedImportDraft, setOptimizedImportDraft] = useState<OptimizedImportDraft>();
+    const recoveredInvocationIdsRef = useRef(new Set<string>());
     const [editingCanvasPresetId, setEditingCanvasPresetId] = useState("");
     const [editingEpisodeTitleId, setEditingEpisodeTitleId] = useState("");
     const [episodeTitleDraft, setEpisodeTitleDraft] = useState("");
@@ -147,11 +140,47 @@ export default function CreativeProjectDetailPage() {
     }, [episodeRows]);
     useEffect(() => {
         if (!episodeImportOpen) {
-            setOptimizedImportDraft(undefined);
             return;
         }
         episodeImportForm.setFieldsValue({ code: `EP${String(projectEpisodes.length + 1).padStart(2, "0")}`, title: "", scriptText: "" });
     }, [episodeImportForm, episodeImportOpen, projectEpisodes.length]);
+
+    useEffect(() => {
+        if (!project || !hydrated || !scriptsHydrated) return;
+        let disposed = false;
+        void listInvocations({ project: project.id, source: "direct", consumerSurface: "project_episode", targetKind: "episode", pageSize: 100 }).then(({ items }) => {
+            const selectedTargets = new Set<string>();
+            items.forEach((run) => {
+                const episodeId = run.targetId || "";
+                if (!episodeId || run.status === "awaiting_confirmation" || selectedTargets.has(episodeId)) return;
+                selectedTargets.add(episodeId);
+                if (!["queued", "running", "cancel_requested", "needs_review", "approved"].includes(run.status) || recoveredInvocationIdsRef.current.has(run.id)) return;
+                recoveredInvocationIdsRef.current.add(run.id);
+                if (!disposed) setOptimizingEpisodeIds((state) => ({ ...state, [episodeId]: run.id }));
+                void resumeScriptInvocationToReview({ getInvocation, reviewInvocation }, run.id).then((result) => {
+                    if (disposed) return;
+                    const episode = useScriptStore.getState().episodes.find((item) => item.id === episodeId);
+                    if (!episode) return;
+                    const sourceScript = episode.sourceSummary?.trim() || episode.summary.trim();
+                    updateEpisode(episode.id, { summary: result.productionScript, sourceSummary: episode.sourceSummary || sourceScript, structuredScript: undefined });
+                    return applyScriptInvocationResult({ applyInvocation }, result, episode.id).then(() => episode);
+                }).then((episode) => {
+                    if (disposed || !episode) return;
+                    setScriptOptimizeErrors((state) => ({ ...state, [episode.id]: "" }));
+                    message.success(`已恢复并写入 ${episode.code || "本集"} 优化剧本`);
+                }).catch((error) => {
+                    if (!disposed) setScriptOptimizeErrors((state) => ({ ...state, [episodeId]: error instanceof Error ? error.message : "剧本优化恢复失败" }));
+                }).finally(() => {
+                    if (!disposed) setOptimizingEpisodeIds((state) => {
+                        const next = { ...state };
+                        delete next[episodeId];
+                        return next;
+                    });
+                });
+            });
+        }).catch(() => undefined);
+        return () => { disposed = true; };
+    }, [hydrated, message, project, scriptsHydrated, updateEpisode]);
 
     if (!hydrated || !scriptsHydrated) {
         return (
@@ -201,12 +230,13 @@ export default function CreativeProjectDetailPage() {
         setEpisodeTitleDraft("");
     };
 
-    const runScriptSkillToReview = async (input: { episodeId?: string; sourceScript: string; skillVersionId: string }) => {
+    const runScriptSkillToReview = async (input: { episodeId: string; sourceScript: string; skillVersionId: string }) => {
         if (!scriptSkills.options.some((option) => option.skillVersionId === input.skillVersionId)) throw new Error("所选剧本 Skill 已失效");
         const prepared = await preflightScriptInvocation(
             { createArtifact, createInvocation },
             { projectId: project.id, episodeId: input.episodeId, sourceText: input.sourceScript, skillVersionId: input.skillVersionId, idempotencyKey: globalThis.crypto.randomUUID() },
         );
+        setOptimizingEpisodeIds((state) => ({ ...state, [input.episodeId]: prepared.preflight.run.id }));
         const confirmed = await new Promise<boolean>((resolve) => {
             modal.confirm({
                 title: "确认运行剧本 Skill？",
@@ -216,7 +246,7 @@ export default function CreativeProjectDetailPage() {
                             将冻结 Invocation <code>{prepared.preflight.run.id}</code> 和 Skill <code>{prepared.preflight.revision.skillVersion}</code>，预计上限 {prepared.preflight.executionPolicy.estimatedCredits} Credits。
                         </div>
                         <div>{prepared.preflight.confirmationRequirements.join("；") || "本次无额外确认项"}</div>
-                        <div className="text-[var(--studio-text-muted)]">执行完成后自动批准结果；已有分集会直接写入，新导入剧本会填入表单。</div>
+                        <div className="text-[var(--studio-text-muted)]">执行完成后自动批准并写入本集，离开页面后再返回也会继续恢复。</div>
                     </div>
                 ),
                 okText: "确认执行",
@@ -238,8 +268,7 @@ export default function CreativeProjectDetailPage() {
         try {
             upsertScriptProject(project.id, scriptText);
             const order = projectEpisodes.length + 1;
-            const sourceSummary = optimizedImportDraft?.sourceScript && optimizedImportDraft.sourceScript.trim() !== scriptText ? optimizedImportDraft.sourceScript : undefined;
-            addEpisode({ projectId: project.id, code: values.code, order, title, summary: scriptText, sourceSummary, structuredScript: optimizedImportDraft?.structuredScript, hook: "", turningPoint: "", cliffhanger: "" });
+            addEpisode({ projectId: project.id, code: values.code, order, title, summary: scriptText, hook: "", turningPoint: "", cliffhanger: "" });
         } catch (error) {
             message.error(error instanceof Error ? error.message : "导入本集剧本失败");
             return;
@@ -247,29 +276,8 @@ export default function CreativeProjectDetailPage() {
             setEpisodeImporting(false);
         }
         setEpisodeImportOpen(false);
-        setOptimizedImportDraft(undefined);
         episodeImportForm.resetFields();
         message.success("已导入本集剧本，可在分集栏手动进入视频工作流");
-    };
-
-    const optimizeEpisodeImportScript = async () => {
-        const values = episodeImportForm.getFieldsValue();
-        const sourceScript = values.scriptText?.trim() || "";
-        const title = values.title?.trim() || "未命名集数";
-        if (!sourceScript) return message.warning("请先粘贴本集剧本");
-        setScriptOptimizing(true);
-        try {
-            const result = await runScriptSkillToReview({ sourceScript, skillVersionId: scriptSkills.importVersionId });
-            if (!result) return;
-            episodeImportForm.setFieldValue("scriptText", result.productionScript);
-            setOptimizedImportDraft({ sourceScript });
-            message.success("已自动写入优化剧本，可继续手动修改后导入。");
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "剧本 AI 适配失败";
-            message.warning(errorMessage);
-        } finally {
-            setScriptOptimizing(false);
-        }
     };
 
     const clearEpisodeOptimizedScript = (episodeId: string) => {
@@ -287,12 +295,13 @@ export default function CreativeProjectDetailPage() {
         if (!episode) return;
         const sourceScript = episode.sourceSummary?.trim() || episode.summary.trim();
         if (!sourceScript) return message.warning("当前分集还没有剧本");
-        setOptimizingEpisodeId(episode.id);
+        setOptimizingEpisodeIds((state) => ({ ...state, [episode.id]: "starting" }));
         setScriptOptimizeErrors((state) => ({ ...state, [episode.id]: "" }));
         try {
             const result = await runScriptSkillToReview({ episodeId: episode.id, sourceScript, skillVersionId });
             if (!result) return;
             updateEpisode(episode.id, { summary: result.productionScript, sourceSummary: episode.sourceSummary || sourceScript, structuredScript: undefined });
+            await applyScriptInvocationResult({ applyInvocation }, result, episode.id);
             setScriptOptimizeErrors((state) => ({ ...state, [episode.id]: "" }));
             message.success("已自动写入本集优化剧本，可继续手动调整。");
         } catch (error) {
@@ -300,7 +309,11 @@ export default function CreativeProjectDetailPage() {
             setScriptOptimizeErrors((state) => ({ ...state, [episode.id]: errorMessage }));
             message.warning(errorMessage);
         } finally {
-            setOptimizingEpisodeId("");
+            setOptimizingEpisodeIds((state) => {
+                const next = { ...state };
+                delete next[episode.id];
+                return next;
+            });
         }
     };
 
@@ -393,7 +406,7 @@ export default function CreativeProjectDetailPage() {
                 onOpenEpisodeCanvas={openEpisodeCanvas}
                 onSaveEpisodeScript={saveEpisodeScript}
                 onTabChange={setActiveTab}
-                optimizingEpisodeId={optimizingEpisodeId}
+                optimizingEpisodeIds={optimizingEpisodeIds}
                 scriptOptimizeErrors={scriptOptimizeErrors}
             />
 
@@ -423,7 +436,7 @@ export default function CreativeProjectDetailPage() {
                 onOk={() => void importEpisode()}
                 okText="导入剧本"
                 cancelText="取消"
-                confirmLoading={scriptOptimizing || episodeImporting}
+                confirmLoading={episodeImporting}
                 destroyOnHidden
             >
                 <Form form={episodeImportForm} layout="vertical" initialValues={{ code: "EP01", title: "", scriptText: "" }} requiredMark={false}>
@@ -439,18 +452,10 @@ export default function CreativeProjectDetailPage() {
                     >
                         <Input placeholder="例如：EP01" maxLength={12} />
                     </Form.Item>
-                    <Form.Item name="title" label="本集标题" rules={[{ required: true, message: "请填写本集标题" }]}>
+                    <Form.Item name="title" label="场次" rules={[{ required: true, message: "请填写场次" }]}>
                         <Input placeholder="例如：毕业典礼" />
                     </Form.Item>
-                    <div className="mb-2 flex items-center justify-between gap-3">
-                        <span className="text-sm text-[var(--studio-text-secondary)]">本集剧本</span>
-                        <div className="flex flex-wrap items-center justify-end gap-2">
-                            <Select aria-label="导入剧本优化 Skill" size="small" loading={scriptSkills.loading} value={scriptSkills.importVersionId || undefined} options={scriptSkills.options.map((option) => ({ value: option.skillVersionId, label: `${option.skillName} · v${option.version}` }))} placeholder="选择 Skill 版本" className="min-w-44" onChange={scriptSkills.setImportVersionId} />
-                            <Button size="small" icon={<Wand2 className="size-3.5" />} loading={scriptOptimizing} disabled={!scriptSkills.importVersionId} onClick={() => void optimizeEpisodeImportScript()}>
-                                运行剧本 Skill
-                            </Button>
-                        </div>
-                    </div>
+                    <div className="mb-2 text-sm text-[var(--studio-text-secondary)]">本集剧本</div>
                     <Form.Item name="scriptText" rules={[{ required: true, message: "请粘贴本集剧本" }]}>
                         <Input.TextArea rows={10} placeholder="导入后会留在当前项目分集页；需要继续生产时再手动进入视频工作流。" />
                     </Form.Item>

@@ -83,3 +83,22 @@ test("adds video and audio files to multimodal requests", () => {
     assert.equal((payload.get("input_video[]") as File).name, "clip.mp4");
     assert.equal((payload.get("input_audio[]") as File).name, "voice.mp3");
 });
+
+test("allows Seedance 2.5 audio-only multimodal requests", () => {
+    const payload = buildDreaminaVideoPayload({
+        model: "seedance2.5",
+        prompt: "跟随音乐生成画面",
+        duration: "30",
+        ratio: "16:9",
+        resolution: "480p",
+        mode: "multimodal2video",
+        images: [],
+        videos: [],
+        audios: [file("music.mp3", "audio/mpeg")],
+    });
+
+    assert.equal(payload.get("model"), "seedance2.5");
+    assert.equal(payload.get("duration"), "30");
+    assert.equal(payload.get("resolution"), "480p");
+    assert.equal((payload.get("input_audio[]") as File).name, "music.mp3");
+});

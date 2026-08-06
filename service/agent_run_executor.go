@@ -68,6 +68,10 @@ func (executor *APIAgentRunExecutor) Call(ctx context.Context, run model.AgentRu
 	if err != nil {
 		return agentRunCallResult{message: "Agent Run 图片上下文无效"}
 	}
+	requestBody, err = ApplyHighestReasoning(requestBody, "application/json", "/chat/completions", channel)
+	if err != nil {
+		return agentRunCallResult{message: "Agent Run 思考参数无效"}
+	}
 	request, err := http.NewRequestWithContext(callCtx, http.MethodPost, BuildModelChannelURL(channel, "/chat/completions"), bytes.NewReader(requestBody))
 	if err != nil {
 		return agentRunCallResult{message: "Agent Run 请求创建失败"}

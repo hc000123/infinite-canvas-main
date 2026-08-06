@@ -49,7 +49,7 @@
 - 本地或服务器工作流执行。
 - 需要 CLI 登录态、输出目录、日志和停止任务能力的任务。
 
-当前已接入受控 `dreamina` 视频五模式：`text2video`、`image2video`、`frames2video`、`multiframe2video` 与 `multimodal2video`。预检 CLI / 登录态 / 输出目录，提交、查询和下载均由后端白名单参数执行；图片、视频和音频参考必须通过前端 multipart 上传为受控临时文件，JSON 或 URL 参考暂不直接交给 CLI。CLI 队列、停止任务、日志回传和通用工作流 Worker 仍按本节完整目标继续规划。
+当前已接入受控 `dreamina` 视频五模式：`text2video`、`image2video`、`frames2video`、`multiframe2video` 与 `multimodal2video`。预检 CLI / 登录态 / 输出目录，提交、查询和下载均由后端白名单参数执行；图片、视频和音频参考必须通过前端 multipart 上传为受控临时文件，JSON 或 URL 参考暂不直接交给 CLI。显式模型支持集包含 Seedance 2.5；多帧命令不传模型但必须传 720p / 1080p 清晰度。CLI 队列、停止任务、日志回传和通用工作流 Worker 仍按本节完整目标继续规划。
 
 渠道要求：
 

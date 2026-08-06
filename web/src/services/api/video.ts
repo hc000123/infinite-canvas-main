@@ -368,14 +368,22 @@ async function buildDreaminaVideoRequest(config: AiConfig, prompt: string, refer
     return buildDreaminaVideoPayload({
         model,
         prompt,
-        duration: String(Math.max(4, Math.min(15, Number(config.videoSeconds) || 6))),
+        duration: String(Math.max(4, Math.min(model === "seedance2.5" ? 30 : 15, Number(config.videoSeconds) || 6))),
         ratio: normalizeSeedanceRatio(config.size),
-        resolution: model === "seedance2.0_vip" ? normalizeVideoResolution(config.vquality) : "720p",
+        resolution: normalizeDreaminaRequestedResolution(config.vquality),
         mode: config.videoReferenceMode,
         images,
         videos,
         audios,
     });
+}
+
+function normalizeDreaminaRequestedResolution(value: string) {
+    const normalized = String(value || "").toLowerCase().replace(/p$/, "");
+    if (normalized === "4k" || Number(normalized) >= 2160) return "4k";
+    if (Number(normalized) >= 1080) return "1080p";
+    if (Number(normalized) > 0 && Number(normalized) <= 480) return "480p";
+    return "720p";
 }
 
 async function dreaminaImageFile(image: ReferenceImage) {

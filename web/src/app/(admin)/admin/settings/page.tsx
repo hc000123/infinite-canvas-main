@@ -1027,7 +1027,7 @@ function stableChannelId(item: Partial<AdminModelChannel>) {
 
 function normalizeChannelCapabilities(value: string[] | undefined, protocol: AdminModelChannel["protocol"]) {
     const fallback = protocol === "volcengine-ark" ? ["text", "video"] : protocol === "jimeng-cli" ? ["video", "video_query", "preflight", "cli_workflow"] : protocol === "xinglian-cloud" ? ["video", "video_query", "preflight"] : ["text", "image"];
-    const allowed = new Set(["text", "image", "video", "video_query", "asset_review", "preflight", "cli", "cli_workflow"]);
+    const allowed = new Set(["text", "image", "video", "reasoning", "video_query", "asset_review", "preflight", "cli", "cli_workflow"]);
     const result = Array.from(new Set((value || []).map((item) => item.trim()).filter((item) => allowed.has(item))));
     return result.length ? result : fallback;
 }

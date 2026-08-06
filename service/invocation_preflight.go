@@ -56,6 +56,7 @@ func PreflightInvocation(userID string, raw InvocationRequest) (InvocationPrefli
 	run := model.InvocationRun{
 		ID: invocationID, UserID: strings.TrimSpace(userID), Source: build.request.Source,
 		ProjectID: build.request.ProjectID, EpisodeID: build.request.EpisodeID, IdempotencyKey: keyPointer,
+		ConsumerSurface: build.request.ConsumerSurface, TargetKind: build.request.TargetKind, TargetID: build.request.TargetID,
 		AgentPlanID: build.request.AgentPlanID, AgentPlanRevision: build.request.AgentPlanRevision,
 		AgentPlanStepKey: build.request.AgentPlanStepKey, ConfirmationSource: build.request.ConfirmationSource,
 		RequestHash: build.requestHash, Status: status, LatestRevision: 1, LatestAttempt: 0,
@@ -107,13 +108,22 @@ func RepreflightInvocation(userID, invocationID string, raw InvocationRequest) (
 	if strings.TrimSpace(raw.EpisodeID) == "" {
 		raw.EpisodeID = run.EpisodeID
 	}
+	if strings.TrimSpace(raw.ConsumerSurface) == "" {
+		raw.ConsumerSurface = run.ConsumerSurface
+	}
+	if strings.TrimSpace(raw.TargetKind) == "" {
+		raw.TargetKind = run.TargetKind
+	}
+	if strings.TrimSpace(raw.TargetID) == "" {
+		raw.TargetID = run.TargetID
+	}
 	normalizedSource := strings.ToLower(strings.TrimSpace(raw.Source))
 	if normalizedSource == "" {
 		raw.Source = run.Source
 	} else {
 		raw.Source = normalizedSource
 	}
-	if strings.TrimSpace(raw.ProjectID) != run.ProjectID || strings.TrimSpace(raw.EpisodeID) != run.EpisodeID || strings.TrimSpace(raw.Source) != run.Source {
+	if strings.TrimSpace(raw.ProjectID) != run.ProjectID || strings.TrimSpace(raw.EpisodeID) != run.EpisodeID || strings.TrimSpace(raw.Source) != run.Source || strings.ToLower(strings.TrimSpace(raw.ConsumerSurface)) != run.ConsumerSurface || strings.ToLower(strings.TrimSpace(raw.TargetKind)) != run.TargetKind || strings.TrimSpace(raw.TargetID) != run.TargetID {
 		return InvocationPreflightSnapshot{}, errors.New("重新预检不能改变 Invocation 坐标")
 	}
 	raw.IdempotencyKey = ""
@@ -251,6 +261,9 @@ func normalizeInvocationRequest(raw InvocationRequest) (InvocationRequest, strin
 	}
 	request.ProjectID = strings.TrimSpace(request.ProjectID)
 	request.EpisodeID = strings.TrimSpace(request.EpisodeID)
+	request.ConsumerSurface = strings.ToLower(strings.TrimSpace(request.ConsumerSurface))
+	request.TargetKind = strings.ToLower(strings.TrimSpace(request.TargetKind))
+	request.TargetID = strings.TrimSpace(request.TargetID)
 	request.SkillID = strings.TrimSpace(request.SkillID)
 	request.SkillVersionID = strings.TrimSpace(request.SkillVersionID)
 	request.SkillVersionConstraint = strings.Join(strings.Fields(request.SkillVersionConstraint), " ")

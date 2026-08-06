@@ -32,6 +32,29 @@ func TestBuildJimengText2VideoArgsFromJSON(t *testing.T) {
 	}
 }
 
+func TestBuildJimengText2VideoArgsSupportsSeedance25(t *testing.T) {
+	args, err := BuildJimengText2VideoArgs([]byte(`{
+		"prompt": "长镜头",
+		"duration": 30,
+		"ratio": "16:9",
+		"resolution": "480p"
+	}`), "application/json", "seedance2.5", 0)
+	if err != nil {
+		t.Fatalf("BuildJimengText2VideoArgs returned error: %v", err)
+	}
+	for _, want := range []string{"--duration=30", "--video_resolution=480p", "--model_version=seedance2.5"} {
+		if !jimengArgsContain(args, want) {
+			t.Fatalf("args = %#v, want %q", args, want)
+		}
+	}
+}
+
+func TestJimengVIPResolutionSupports4K(t *testing.T) {
+	if got := normalizeJimengModelResolution("seedance2.0_vip", "2160p"); got != "4k" {
+		t.Fatalf("resolution = %q, want 4k", got)
+	}
+}
+
 func TestBuildJimengText2VideoArgsRejectsReferenceInputs(t *testing.T) {
 	_, err := BuildJimengText2VideoArgs([]byte(`{
 		"model": "seedance2.0fast",

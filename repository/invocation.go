@@ -1524,6 +1524,15 @@ func ListUserInvocations(userID string, query model.InvocationQuery) ([]model.In
 	if value := strings.TrimSpace(query.Source); value != "" {
 		tx = tx.Where("invocation_runs.source = ?", value)
 	}
+	if value := strings.TrimSpace(query.ConsumerSurface); value != "" {
+		tx = tx.Where("invocation_runs.consumer_surface = ?", value)
+	}
+	if value := strings.TrimSpace(query.TargetKind); value != "" {
+		tx = tx.Where("invocation_runs.target_kind = ?", value)
+	}
+	if value := strings.TrimSpace(query.TargetID); value != "" {
+		tx = tx.Where("invocation_runs.target_id = ?", value)
+	}
 	if value := strings.TrimSpace(query.Status); value != "" {
 		tx = tx.Where("invocation_runs.status = ?", value)
 	}

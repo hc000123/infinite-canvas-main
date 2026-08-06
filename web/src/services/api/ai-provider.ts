@@ -10,7 +10,6 @@ export const AI_VIDEO_POLL_INTERVAL_MS = 2500;
 export const AI_VIDEO_MAX_POLL_ATTEMPTS = 480;
 
 export type AiProviderProtocol = AiConfig["videoProtocol"];
-const reasoningEfforts = new Set<AiConfig["reasoningEffort"]>(["minimal", "low", "medium", "high"]);
 
 export function aiApiUrl(_config: AiConfig, path: string, _protocol: AiProviderProtocol = "openai") {
     return `/api/v1${path}`;
@@ -28,16 +27,12 @@ export function refreshRemoteUser(_config: AiConfig) {
     void useUserStore.getState().hydrateUser();
 }
 
-export function aiReasoningPayload(config: AiConfig) {
-    if (config.thinkingMode !== "true") return {};
-    const effort = reasoningEfforts.has(config.reasoningEffort) ? config.reasoningEffort : "medium";
-    return { reasoning_effort: effort };
+export function aiReasoningPayload(_config: AiConfig) {
+    return {};
 }
 
-export function aiResponsesReasoningPayload(config: AiConfig) {
-    if (config.thinkingMode !== "true") return {};
-    const effort = reasoningEfforts.has(config.reasoningEffort) ? config.reasoningEffort : "medium";
-    return { reasoning: { effort } };
+export function aiResponsesReasoningPayload(_config: AiConfig) {
+    return {};
 }
 
 export function normalizeAiError(error: unknown, fallback: string) {
