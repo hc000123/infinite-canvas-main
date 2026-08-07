@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { dataCenterDefaultScope, dataCenterRecordColumnKeys, dataCenterScopeOptions } from "./data-center-view.ts";
+import { dataCenterDefaultScope, dataCenterDetailActions, dataCenterRecordColumnKeys, dataCenterSectionTitles, dataCenterScopeOptions } from "./data-center-view.ts";
 
 test("ordinary users are fixed to their own usage", () => {
     assert.equal(dataCenterDefaultScope("user"), "mine");
@@ -22,4 +22,9 @@ test("default record columns stay business focused", () => {
     for (const key of ["provider", "upstreamTaskId", "errorMessage", "actions"]) {
         assert.equal(dataCenterRecordColumnKeys("all").includes(key), false);
     }
+});
+
+test("data center separates overview, distribution, and records", () => {
+    assert.deepEqual(dataCenterSectionTitles, ["使用概览", "使用分布", "消费明细"]);
+    assert.deepEqual(dataCenterDetailActions, []);
 });
