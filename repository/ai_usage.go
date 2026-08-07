@@ -17,6 +17,7 @@ type aiUsageRefundGroup struct {
 	UserID          string
 	RelatedID       string
 	RefundedCredits int
+	CreatedAt       string
 }
 
 func ListAIUsageLedger(startAt, endAt, userID string) ([]model.AIUsageLedgerRow, error) {
@@ -38,19 +39,29 @@ func ListAIUsageLedger(startAt, endAt, userID string) ([]model.AIUsageLedgerRow,
 	}
 	var refunds []aiUsageRefundGroup
 	refundQuery := db.Model(&model.CreditLog{}).
-		Select("user_id, related_id, SUM(ABS(amount)) AS refunded_credits").
+		Select("user_id, related_id, ABS(amount) AS refunded_credits, created_at").
 		Where("type = ? AND related_id <> ''", model.CreditLogTypeAIRefund)
 	if userID != "" {
 		refundQuery = refundQuery.Where("user_id = ?", userID)
 	}
-	if err := refundQuery.
-		Group("user_id, related_id").
-		Scan(&refunds).Error; err != nil {
+	if err := refundQuery.Scan(&refunds).Error; err != nil {
 		return nil, err
+	}
+	consumeByUsage := make(map[string]time.Time, len(consumes))
+	for _, consume := range consumes {
+		consumedAt, parseErr := time.Parse(time.RFC3339, consume.ConsumedAt)
+		if parseErr == nil {
+			consumeByUsage[consume.UserID+"\x00"+consume.UsageKey] = consumedAt
+		}
 	}
 	refundByUsage := make(map[string]int, len(refunds))
 	for _, refund := range refunds {
-		refundByUsage[refund.UserID+"\x00"+refund.RelatedID] = refund.RefundedCredits
+		key := refund.UserID + "\x00" + refund.RelatedID
+		consumedAt, ok := consumeByUsage[key]
+		refundedAt, parseErr := time.Parse(time.RFC3339, refund.CreatedAt)
+		if ok && parseErr == nil && !refundedAt.Before(consumedAt) {
+			refundByUsage[key] += refund.RefundedCredits
+		}
 	}
 	start, startErr := time.Parse(time.RFC3339, startAt)
 	end, endErr := time.Parse(time.RFC3339, endAt)

@@ -34,6 +34,7 @@ func TestListAIUsageRecordsPairsRefundsAndEnrichesSources(t *testing.T) {
 		CreatedAt: "2026-08-07T02:00:00Z",
 	})
 	seedUsageLog(t, model.CreditLog{ID: "consume-task", UserID: "usage-user-1", Type: model.CreditLogTypeAIConsume, Amount: -8, RelatedID: "task-1", CreatedAt: "2026-08-07T01:00:00Z"})
+	seedUsageLog(t, model.CreditLog{ID: "stale-refund-task", UserID: "usage-user-1", Type: model.CreditLogTypeAIRefund, Amount: 50, RelatedID: "task-1", CreatedAt: "2026-08-07T00:30:00Z"})
 	seedUsageLog(t, model.CreditLog{ID: "refund-task", UserID: "usage-user-1", Type: model.CreditLogTypeAIRefund, Amount: 3, RelatedID: "task-1", CreatedAt: "2026-08-07T03:00:00Z"})
 	seedUsageLog(t, model.CreditLog{ID: "consume-agent", UserID: "usage-user-1", Type: model.CreditLogTypeAIConsume, Amount: -5, RelatedID: "agent-1", CreatedAt: "2026-08-07T02:00:00Z"})
 	seedUsageLog(t, model.CreditLog{ID: "consume-unknown", UserID: "usage-user-1", Type: model.CreditLogTypeAIConsume, Amount: -2, RelatedID: "missing-1", CreatedAt: "2026-08-07T04:00:00Z"})
