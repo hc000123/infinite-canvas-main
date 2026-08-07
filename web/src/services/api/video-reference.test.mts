@@ -295,7 +295,7 @@ test("builds Seedance 2.5 edit and extend payloads with adaptive derived setting
     const extend = buildSeedanceVideoTaskPayload({ ...baseConfig, videoTaskMode: "extend" }, "extend", [{ type: "video", url: "source-video" }]);
 
     assert.equal(edit.duration, -1);
-    assert.equal(edit._seedance_billing_duration, 20);
+    assert.equal("_seedance_billing_duration" in edit, false);
     assert.equal(edit._seedance_task_mode, "edit");
     assert.equal(edit.ratio, "adaptive");
     assert.equal(edit.resolution, "720p");

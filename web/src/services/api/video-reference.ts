@@ -140,7 +140,6 @@ export function buildSeedanceVideoTaskPayload(config: SeedanceVideoTaskConfig, p
         watermark: config.videoWatermark === "true",
         return_last_frame: config.returnLastFrame === "true",
     };
-    if (taskMode === "edit") payload._seedance_billing_duration = normalizeSeedanceDuration(config.videoSeconds || "", capabilityModel, "generate");
     const seed = normalizeSeedanceSeed(config.videoSeed || "");
     if (seed !== undefined) payload.seed = seed;
     return payload;

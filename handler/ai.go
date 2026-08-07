@@ -27,6 +27,7 @@ const (
 	maxAIRequestBodyBytes = 100 * 1024 * 1024
 	maxAIRequestCount     = 15
 	maxArkSeedance25Usage = 30
+	defaultArkVideoUsage  = 6
 	maxImageDownloadBytes = 50 * 1024 * 1024
 	maxVideoDownloadBytes = 1024 * 1024 * 1024
 )
@@ -1243,17 +1244,22 @@ func readAIRequestUsage(path string, requestKind string, body []byte, contentTyp
 }
 
 func readAIRequestUsageForModel(path string, requestKind string, body []byte, contentType string, modelName string, protocol string) int {
-	limit := maxAIRequestCount
-	if path == "/videos" && service.IsVolcengineArkProtocol(protocol) && service.IsArkSeedance25Model(modelName) {
-		limit = maxArkSeedance25Usage
-		if readAIRequestString(body, contentType, "_seedance_task_mode") == "edit" && readAIRequestInt(body, contentType, "duration") == -1 {
-			billingDuration := readAIRequestInt(body, contentType, "_seedance_billing_duration")
-			if billingDuration > 0 {
-				return clampAIRequestUsage(billingDuration, limit)
-			}
+	if path == "/videos" && service.IsVolcengineArkProtocol(protocol) {
+		seedance25 := service.IsArkSeedance25Model(modelName)
+		if seedance25 && readAIRequestString(body, contentType, "_seedance_task_mode") == "edit" {
+			return maxArkSeedance25Usage
 		}
+		usage := readAIRequestInt(body, contentType, "duration", "seconds")
+		if usage < 1 {
+			usage = defaultArkVideoUsage
+		}
+		limit := maxAIRequestCount
+		if seedance25 {
+			limit = maxArkSeedance25Usage
+		}
+		return clampAIRequestUsage(usage, limit)
 	}
-	return readAIRequestUsageWithLimit(path, requestKind, body, contentType, limit)
+	return readAIRequestUsage(path, requestKind, body, contentType)
 }
 
 func readAIRequestUsageWithLimit(path string, requestKind string, body []byte, contentType string, limit int) int {
