@@ -142,22 +142,20 @@ func TestBuildArkVideoCreateRequestRejectsAudioOnlySeedanceInput(t *testing.T) {
 }
 
 func TestBuildArkVideoCreateRequestRejectsSeedance20MoreThanTwelveReferences(t *testing.T) {
-	content := []any{map[string]any{"type": "text", "text": "生成视频"}}
-	for _, item := range []struct {
-		contentType string
-		field       string
-		count       int
-	}{{"image_url", "image_url", 9}, {"video_url", "video_url", 3}, {"audio_url", "audio_url", 1}} {
-		for index := 0; index < item.count; index++ {
-			content = append(content, map[string]any{"type": item.contentType, item.field: map[string]string{"url": fmt.Sprintf("asset://%s-%d", item.field, index)}})
-		}
-	}
-	body, err := json.Marshal(map[string]any{"model": "doubao-seedance-2-0", "content": content})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := BuildArkVideoCreateRequest(body, "application/json"); err == nil || err.Error() != "Seedance 2.0 参考素材总数不能超过 12 个" {
+	if _, _, err := BuildArkVideoCreateRequest(arkSeedanceMixedReferenceRequest(t, "doubao-seedance-2-0", 9, 3, 1), "application/json"); err == nil || err.Error() != "Seedance 2.0 参考素材总数不能超过 12 个" {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestBuildArkVideoCreateRequestAllowsSeedance20TwelveReferences(t *testing.T) {
+	if _, _, err := BuildArkVideoCreateRequest(arkSeedanceMixedReferenceRequest(t, "doubao-seedance-2-0", 9, 3, 0), "application/json"); err != nil {
+		t.Fatalf("BuildArkVideoCreateRequest returned error at Seedance 2.0 total limit: %v", err)
+	}
+}
+
+func TestBuildArkVideoCreateRequestAllowsSeedance25MoreThanTwelveReferences(t *testing.T) {
+	if _, _, err := BuildArkVideoCreateRequest(arkSeedanceMixedReferenceRequest(t, "doubao-seedance-2-5", 9, 3, 1), "application/json"); err != nil {
+		t.Fatalf("BuildArkVideoCreateRequest returned error for Seedance 2.5 references: %v", err)
 	}
 }
 
@@ -537,6 +535,25 @@ func arkSeedanceTestRequest(t *testing.T, modelName string, kind string, count i
 	contentType := kind + "_url"
 	for index := 0; index < count; index++ {
 		content = append(content, map[string]any{"type": contentType, contentType: map[string]string{"url": fmt.Sprintf("asset://%s-%d", kind, index)}})
+	}
+	body, err := json.Marshal(map[string]any{"model": modelName, "content": content})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return body
+}
+
+func arkSeedanceMixedReferenceRequest(t *testing.T, modelName string, imageCount int, videoCount int, audioCount int) []byte {
+	t.Helper()
+	content := []any{map[string]any{"type": "text", "text": "生成视频"}}
+	for _, item := range []struct {
+		kind  string
+		count int
+	}{{"image", imageCount}, {"video", videoCount}, {"audio", audioCount}} {
+		contentType := item.kind + "_url"
+		for index := 0; index < item.count; index++ {
+			content = append(content, map[string]any{"type": contentType, contentType: map[string]string{"url": fmt.Sprintf("asset://%s-%d", item.kind, index)}})
+		}
 	}
 	body, err := json.Marshal(map[string]any{"model": modelName, "content": content})
 	if err != nil {

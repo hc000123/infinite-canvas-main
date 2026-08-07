@@ -69,7 +69,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
     const taskOptions = visibleSeedanceTaskModeOptions(hasSourceVideo);
     const showImageControl = shouldShowSeedanceImageControl(config.videoTaskMode, hasSourceVideo);
     const referenceImageMode = visibleSeedanceReferenceImageMode(config.videoReferenceImageMode);
-    const showSeedance25EditCreditHint = isArkSeedance25EditCredit({ videoProtocol: config.videoProtocol, videoModel: config.videoModel || config.seedanceModel, videoTaskMode: config.videoTaskMode });
+    const showSeedance25EditCreditHint = isArkSeedance25EditCredit({ videoProtocol: config.videoProtocol, videoModel: config.videoModel || config.seedanceModel, videoTaskMode: taskMode });
 
     useEffect(() => {
         if (!showTaskMode || hasSourceVideo || (config.videoTaskMode !== "edit" && config.videoTaskMode !== "extend")) return;
