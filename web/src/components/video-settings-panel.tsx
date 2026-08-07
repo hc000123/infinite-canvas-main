@@ -4,9 +4,9 @@ import { useEffect, type ReactNode } from "react";
 
 import { ImageSettingsTheme } from "@/components/image-settings-panel";
 import { resolveSeedanceTaskModeForSource, seedanceReferenceImageModeOptions, shouldShowSeedanceImageControl, visibleSeedanceReferenceImageMode, visibleSeedanceTaskModeOptions } from "@/components/video-settings-options";
+import { isArkSeedance25EditCredit } from "@/constant/credit-quantity";
 import { type CanvasTheme } from "@/lib/canvas-theme";
 import { resolveDreaminaVideoCapability } from "@/lib/dreamina-video-capabilities";
-import { isSeedance25Model } from "@/services/api/video-normalizers";
 import { normalizeVideoReferenceMode } from "@/services/api/video-reference";
 import type { AiConfig } from "@/stores/use-config-store";
 
@@ -69,7 +69,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
     const taskOptions = visibleSeedanceTaskModeOptions(hasSourceVideo);
     const showImageControl = shouldShowSeedanceImageControl(config.videoTaskMode, hasSourceVideo);
     const referenceImageMode = visibleSeedanceReferenceImageMode(config.videoReferenceImageMode);
-    const showSeedance25EditCreditHint = config.videoProtocol === "volcengine-ark" && config.videoTaskMode === "edit" && (isSeedance25Model(config.videoModel) || isSeedance25Model(config.seedanceModel));
+    const showSeedance25EditCreditHint = isArkSeedance25EditCredit({ videoProtocol: config.videoProtocol, videoModel: config.videoModel || config.seedanceModel, videoTaskMode: config.videoTaskMode });
 
     useEffect(() => {
         if (!showTaskMode || hasSourceVideo || (config.videoTaskMode !== "edit" && config.videoTaskMode !== "extend")) return;

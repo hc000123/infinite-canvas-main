@@ -101,7 +101,7 @@ func validateArkEndpointMappingConflicts(channels []model.ModelChannel) error {
 				continue
 			}
 			if endpoints[endpointID] {
-				return fmt.Errorf("同一火山渠道不能重复使用 Endpoint / EP：%s", endpointID)
+				return safeMessageError{message: fmt.Sprintf("同一火山渠道不能重复使用 Endpoint / EP：%s", endpointID)}
 			}
 			endpoints[endpointID] = true
 		}

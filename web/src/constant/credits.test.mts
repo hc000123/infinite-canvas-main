@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { requestCreditQuantity } from "./credits.tsx";
+import { requestCreditQuantity } from "./credit-quantity.ts";
 
 test("uses 30 seconds for Ark Seedance 2.5 edit credit previews", () => {
     assert.equal(requestCreditQuantity({ count: "6", videoProtocol: "volcengine-ark", videoModel: "doubao-seedance-2-5", videoTaskMode: "edit" }), 30);

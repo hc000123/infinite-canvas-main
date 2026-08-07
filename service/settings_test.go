@@ -506,8 +506,11 @@ func TestSaveSettingsValidatesArkEndpointMappingUniqueness(t *testing.T) {
 			if tt.wantError == "" && err != nil {
 				t.Fatalf("SaveSettings returned error: %v", err)
 			}
-			if tt.wantError != "" && (err == nil || !strings.Contains(err.Error(), tt.wantError)) {
-				t.Fatalf("SaveSettings error = %v, want %q", err, tt.wantError)
+			if tt.wantError != "" {
+				safeErr, ok := err.(safeMessageError)
+				if !ok || safeErr.SafeMessage() != tt.wantError {
+					t.Fatalf("SaveSettings error = %#v, want safe message %q", err, tt.wantError)
+				}
 			}
 		})
 	}
