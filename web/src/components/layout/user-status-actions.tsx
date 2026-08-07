@@ -2,7 +2,7 @@
 
 import type { CSSProperties, RefObject } from "react";
 import { Avatar, Dropdown, Tooltip } from "antd";
-import { Keyboard, LogOut, Settings2, Shield } from "lucide-react";
+import { BarChart3, Keyboard, LogOut, Settings2, Shield } from "lucide-react";
 import type { ItemType } from "antd/es/menu/interface";
 import Link from "next/link";
 
@@ -14,6 +14,7 @@ import { useConfigStore } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { useActivityAudit } from "@/hooks/use-activity-audit";
+import { accountDestinationItems } from "./user-status-actions-view";
 
 type UserStatusActionsProps = {
     showConfig?: boolean;
@@ -47,7 +48,13 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
     const themeToggleLabel = theme === "dark" ? "切换到全局浅色主题" : "切换到全局深色主题";
     const menuItems: ItemType[] = [
         { key: "user", disabled: true, label: <span className="font-medium text-current">{userName}</span> },
-        ...(user?.role === "admin" || user?.role === "superadmin" ? [{ key: "admin", icon: <Shield className="size-4" />, label: <Link href="/admin">管理后台</Link> }] : []),
+        ...(user
+            ? accountDestinationItems(user.role).map((item) => ({
+                  key: item.key,
+                  icon: item.key === "data-center" ? <BarChart3 className="size-4" /> : <Shield className="size-4" />,
+                  label: <Link href={item.href}>{item.label}</Link>,
+              }))
+            : []),
         ...(onOpenShortcuts ? [{ key: "shortcuts", icon: <Keyboard className="size-4" />, label: "快捷键", onClick: onOpenShortcuts }] : []),
         { type: "divider" },
         {
@@ -71,11 +78,11 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
             <AnimatedThemeToggler theme={theme} onThemeChange={setTheme} className={naturalIconClass} style={iconStyle} aria-label={themeToggleLabel} title={themeToggleLabel} />
             <VersionReleaseModal style={versionStyle} />
             {variant === "canvas" && user ? (
-                <Tooltip title="当前算力点余额" placement="bottom">
-                    <div className="flex h-8 shrink-0 items-center gap-1.5 px-1.5 text-xs font-medium tabular-nums opacity-75 transition hover:opacity-100" style={{ color: canvasTheme.node.text }}>
+                <Tooltip title="查看数据中心" placement="bottom">
+                    <Link href="/data-center" className="flex h-8 shrink-0 items-center gap-1.5 px-1.5 text-xs font-medium tabular-nums opacity-75 transition hover:opacity-100" style={{ color: canvasTheme.node.text }}>
                         <CreditSymbol className="text-sm leading-none" />
                         <span>{credits.toLocaleString()}</span>
-                    </div>
+                    </Link>
                 </Tooltip>
             ) : null}
             {!user && onOpenShortcuts ? (

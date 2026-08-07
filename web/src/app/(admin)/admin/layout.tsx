@@ -26,7 +26,7 @@ import { useUserStore } from "@/stores/use-user-store";
 
 const baseAdminMenus = [
     { key: "/admin/login-approvals", icon: <AuditOutlined />, label: "登录审批" },
-    { key: "/admin/ai-tasks", icon: <RobotOutlined />, label: "AI 使用" },
+    { key: "/admin/ai-tasks", icon: <RobotOutlined />, label: "任务运维" },
     { key: "/admin/prompts", icon: <FileTextOutlined />, label: "提示词管理" },
     { key: "/admin/assets", icon: <PictureOutlined />, label: "素材管理" },
     { key: "/admin/skills", icon: <ApartmentOutlined />, label: "Skill 中心" },
@@ -87,7 +87,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                 : pathname.startsWith("/admin/prompts")
                   ? "提示词管理"
                   : pathname.startsWith("/admin/ai-tasks")
-                    ? "AI 使用"
+                    ? "任务运维"
                     : "用户管理";
 
     useEffect(() => {
