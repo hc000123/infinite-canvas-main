@@ -673,7 +673,7 @@ func validateArkSeedanceContent(content []any, modelName string, requireInput bo
 	if requireInput && !hasText && imageCount+videoCount+audioCount == 0 {
 		return errors.New("缺少视频提示词或参考素材")
 	}
-	seedance25 := isArkSeedance25Model(modelName)
+	seedance25 := IsArkSeedance25Model(modelName)
 	version := "2.0"
 	imageLimit, videoLimit, audioLimit := 9, 3, 3
 	if seedance25 {
@@ -713,7 +713,7 @@ func arkVideoContentHasURL(entry map[string]any, key string) bool {
 	return false
 }
 
-func isArkSeedance25Model(modelName string) bool {
+func IsArkSeedance25Model(modelName string) bool {
 	normalized := strings.Map(func(char rune) rune {
 		if unicode.IsSpace(char) || char == '.' || char == '_' || char == '-' {
 			return -1
@@ -751,7 +751,7 @@ func appendArkVideoControls(payload map[string]any, modelName string, taskMode s
 func normalizeArkVideoDerivedControls(modelName string, taskMode string, content []any, seconds string, size string) (int, string) {
 	duration := normalizeArkVideoDurationForModel(seconds, modelName)
 	ratio := normalizeArkVideoRatio(size)
-	if !isArkSeedance25Model(modelName) {
+	if !IsArkSeedance25Model(modelName) {
 		return duration, ratio
 	}
 	switch strings.TrimSpace(taskMode) {
@@ -792,7 +792,7 @@ func normalizeArkVideoDurationForModel(value string, modelName string) int {
 		return 6
 	}
 	maximum := 15
-	if isArkSeedance25Model(modelName) {
+	if IsArkSeedance25Model(modelName) {
 		maximum = 30
 	}
 	return max(4, min(maximum, seconds))
@@ -842,7 +842,7 @@ func normalizeArkVideoRatio(value string) string {
 }
 
 func normalizeArkVideoResolution(value string, modelName string) string {
-	if isArkSeedance25Model(modelName) {
+	if IsArkSeedance25Model(modelName) {
 		trimmed := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(value)), "p")
 		resolution, err := strconv.Atoi(trimmed)
 		if err == nil && resolution > 0 && resolution <= 480 {

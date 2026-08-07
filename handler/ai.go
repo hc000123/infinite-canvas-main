@@ -26,6 +26,7 @@ import (
 const (
 	maxAIRequestBodyBytes = 100 * 1024 * 1024
 	maxAIRequestCount     = 15
+	maxArkSeedance25Usage = 30
 	maxImageDownloadBytes = 50 * 1024 * 1024
 	maxVideoDownloadBytes = 1024 * 1024 * 1024
 )
@@ -189,14 +190,14 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 		Fail(w, "AI 接口请求失败")
 		return
 	}
-	credits, err = multiplyAICredits(credits, readAIRequestUsage(path, r.Header.Get("X-Infinite-Canvas-Request-Kind"), body, contentType))
-	if err != nil {
-		Fail(w, "AI 接口请求失败")
-		return
-	}
 	channel, err := service.SelectModelChannel(modelName)
 	if err != nil {
 		log.Printf("AI proxy select channel failed: model=%s err=%v", modelName, err)
+		Fail(w, "AI 接口请求失败")
+		return
+	}
+	credits, err = multiplyAICredits(credits, readAIRequestUsageForModel(path, r.Header.Get("X-Infinite-Canvas-Request-Kind"), body, contentType, modelName, channel.Protocol))
+	if err != nil {
 		Fail(w, "AI 接口请求失败")
 		return
 	}
@@ -1237,6 +1238,18 @@ func readMultipartModel(body []byte, contentType string) string {
 }
 
 func readAIRequestUsage(path string, requestKind string, body []byte, contentType string) int {
+	return readAIRequestUsageWithLimit(path, requestKind, body, contentType, maxAIRequestCount)
+}
+
+func readAIRequestUsageForModel(path string, requestKind string, body []byte, contentType string, modelName string, protocol string) int {
+	limit := maxAIRequestCount
+	if path == "/videos" && service.IsVolcengineArkProtocol(protocol) && service.IsArkSeedance25Model(modelName) {
+		limit = maxArkSeedance25Usage
+	}
+	return readAIRequestUsageWithLimit(path, requestKind, body, contentType, limit)
+}
+
+func readAIRequestUsageWithLimit(path string, requestKind string, body []byte, contentType string, limit int) int {
 	keys := []string{}
 	switch {
 	case path == "/videos":
@@ -1250,8 +1263,8 @@ func readAIRequestUsage(path string, requestKind string, body []byte, contentTyp
 	if usage < 1 {
 		return 1
 	}
-	if usage > maxAIRequestCount {
-		return maxAIRequestCount
+	if usage > limit {
+		return limit
 	}
 	return usage
 }

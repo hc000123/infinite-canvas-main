@@ -231,11 +231,15 @@ func TestArkSeedance25ProxyUsesLocalCapabilitiesBeforeEndpointRouting(t *testing
 	}))
 	defer upstream.Close()
 	saveArk25HandlerSettings(t, upstream.URL)
+	now := time.Now().Format(time.RFC3339)
+	if _, err := repository.SaveUser(model.User{ID: "user-seedance-25", Username: "seedance-25", Role: model.UserRoleUser, Status: model.UserStatusActive, Credits: 100, AffCode: "SEEDANCE25", CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
 
 	body := []byte(`{
 		"model": "doubao-seedance-2-5",
 		"content": [{"type":"text","text":"编辑短视频"},{"type":"video_url","video_url":{"url":"asset://video-id"},"role":"reference_video"}],
-		"duration": 12,
+		"duration": 30,
 		"ratio": "16:9",
 		"_seedance_task_mode": "edit",
 		"resolution": "480p"
@@ -275,6 +279,12 @@ func TestArkSeedance25ProxyUsesLocalCapabilitiesBeforeEndpointRouting(t *testing
 	}
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if credits := rec.Header().Get("X-AI-Task-Credits"); credits != "30" {
+		t.Fatalf("task credits = %q, want 30", credits)
+	}
+	if user, ok, err := repository.GetUserByID("user-seedance-25"); err != nil || !ok || user.Credits != 70 {
+		t.Fatalf("user = %#v ok=%v err=%v, want balance 70", user, ok, err)
 	}
 	responsePayload := readJSONMap(t, rec.Body.Bytes())
 	if responsePayload["id"] != "task-seedance-25" || responsePayload["status"] != "queued" {
@@ -750,6 +760,31 @@ func TestReadAIRequestUsageUsesRequestBillingUnit(t *testing.T) {
 	}
 }
 
+func TestReadAIRequestUsageForModelUsesArkSeedance25Limit(t *testing.T) {
+	tests := []struct {
+		name      string
+		path      string
+		body      string
+		modelName string
+		protocol  string
+		want      int
+	}{
+		{name: "Ark Seedance 2.5 full duration", path: "/videos", body: `{"duration":30}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 30},
+		{name: "Ark Seedance 2.5 capped duration", path: "/videos", body: `{"duration":999}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 30},
+		{name: "Ark Seedance 2.0 keeps default limit", path: "/videos", body: `{"duration":30}`, modelName: "doubao-seedance-2-0", protocol: string(model.ModelProtocolVolcengineArk), want: maxAIRequestCount},
+		{name: "Jimeng Seedance 2.5 keeps default limit", path: "/videos", body: `{"duration":30}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolJimengCLI), want: maxAIRequestCount},
+		{name: "image count keeps default limit", path: "/images/generations", body: `{"n":999}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: maxAIRequestCount},
+		{name: "Ark Seedance 2.50 keeps default limit", path: "/videos", body: `{"duration":30}`, modelName: "doubao-seedance-2-50", protocol: string(model.ModelProtocolVolcengineArk), want: maxAIRequestCount},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := readAIRequestUsageForModel(tt.path, "", []byte(tt.body), "application/json", tt.modelName, tt.protocol); got != tt.want {
+				t.Fatalf("usage = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestValidateProxyVideoContentResponseRejectsOversizedAndNonVideo(t *testing.T) {
 	if err := validateProxyVideoContentResponse(&http.Response{ContentLength: maxVideoDownloadBytes + 1}); err == nil {
 		t.Fatal("validateProxyVideoContentResponse accepted oversized response")
@@ -838,7 +873,7 @@ func saveArk25HandlerSettings(t *testing.T, upstreamURL string) {
 		Public: model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{
 			AvailableModels:   []string{"doubao-seedance-2-5"},
 			DefaultVideoModel: "doubao-seedance-2-5",
-			ModelCosts:        []model.ModelCost{{Model: "doubao-seedance-2-5", Credits: 0}},
+			ModelCosts:        []model.ModelCost{{Model: "doubao-seedance-2-5", Credits: 1}},
 		}},
 		Private: model.PrivateSetting{Channels: []model.ModelChannel{{
 			Protocol:         string(model.ModelProtocolVolcengineArk),
