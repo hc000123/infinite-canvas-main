@@ -12,6 +12,7 @@ type UserStore = {
     isReady: boolean;
     isLoading: boolean;
     setSession: (token: string, user: AuthUser) => void;
+    updateCredits: (credits: number) => void;
     clearSession: () => void;
     hydrateUser: () => Promise<void>;
     login: (payload: AuthPayload) => Promise<LoginResult>;
@@ -33,6 +34,7 @@ export const useUserStore = create<UserStore>()(
             isReady: false,
             isLoading: false,
             setSession: (token, user) => set({ token, user, isReady: true }),
+            updateCredits: (credits) => set((state) => ({ user: state.user ? { ...state.user, credits } : null })),
             clearSession: () => {
                 clearActiveUserStorageScope();
                 set({ token: "", user: null, isReady: true });
