@@ -1,7 +1,6 @@
 import { NODE_DEFAULT_SIZE } from "../canvas/constants.ts";
 import { buildCanvasVideoConfig } from "../canvas/utils/canvas-video-config.ts";
 import type { CanvasNodeData, CanvasNodeMetadata, CanvasNodeType } from "../canvas/types.ts";
-import { protocolForModel } from "../../../lib/ai-model-catalog.ts";
 import { isSeedance25Model } from "../../../services/api/video-normalizers.ts";
 import type { AiTaskLedger } from "@/services/api/ai-task-trace";
 import type { NormalizedVideoTask } from "@/services/api/video";
@@ -301,13 +300,12 @@ export function buildPackageVideoConfig(baseConfig: AiConfig, item: ProductionPa
     const configuredProvider = baseConfig.videoProtocol || "openai";
     const packageDuration = item.config.videoSeconds || item.config.duration || item.duration || baseConfig.videoSeconds;
     const packageModel = resolvePackageConfigModel(baseConfig, item, configuredProvider);
-    const resolvedProvider = protocolForModel(baseConfig, packageModel);
+    const rawResolution = item.config.vquality || item.config.resolution || baseConfig.vquality;
     const metadata: Partial<CanvasNodeMetadata> = {
         duration: packageSeconds(packageDuration),
         generateAudio: item.config.videoGenerateAudio || baseConfig.videoGenerateAudio || "true",
         generationMode: "video",
         model: packageModel,
-        provider: resolvedProvider,
         returnLastFrame: item.config.returnLastFrame || baseConfig.returnLastFrame,
         seed: item.config.videoSeed || baseConfig.videoSeed,
         seconds: packageSeconds(packageDuration),
@@ -317,13 +315,15 @@ export function buildPackageVideoConfig(baseConfig: AiConfig, item: ProductionPa
         videoPromptReviewEnabled: item.config.videoPromptReviewEnabled || baseConfig.videoPromptReviewEnabled || "true",
         videoReferenceImageMode: item.config.videoReferenceImageMode || baseConfig.videoReferenceImageMode,
         videoTaskMode: item.config.videoTaskMode || "generate",
-        vquality: packageResolution(item.config.vquality || item.config.resolution || baseConfig.vquality, resolvedProvider, packageModel),
+        vquality: rawResolution,
         watermark: item.config.videoWatermark || baseConfig.videoWatermark,
     };
     const config = buildCanvasVideoConfig(baseConfig, metadata as CanvasNodeMetadata);
+    const finalModel = (config.videoProtocol === "volcengine-ark" ? config.seedanceModel || config.videoModel || config.model : config.videoModel || config.model).trim();
     return {
         ...config,
-        model: resolvedProvider === "volcengine-ark" ? config.seedanceEndpointId || config.seedanceModel || config.model : config.videoModel || config.model,
+        model: finalModel,
+        vquality: packageResolution(rawResolution, config.videoProtocol, finalModel),
     };
 }
 

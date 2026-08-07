@@ -100,3 +100,15 @@ test("buildPackageVideoConfig resolves stale providers from the selected model",
     assert.equal(mappedOpenAI.videoModel, "openai-video");
     assert.equal(mappedOpenAI.vquality, "720");
 });
+
+test("buildPackageVideoConfig normalizes resolution after stale package model fallback", () => {
+    const arkFallback = buildPackageVideoConfig(configFixture("doubao-seedance-2-5", "openai", "volcengine-ark"), packageFixture("retired-openai-video", "480p", "24"));
+    const openaiFallback = buildPackageVideoConfig(configFixture("openai-video", "openai"), packageFixture("doubao-seedance-2-5", "480", "6"));
+
+    assert.equal(arkFallback.videoProtocol, "volcengine-ark");
+    assert.equal(arkFallback.videoModel, "doubao-seedance-2-5");
+    assert.equal(arkFallback.vquality, "480");
+    assert.equal(openaiFallback.videoProtocol, "openai");
+    assert.equal(openaiFallback.videoModel, "openai-video");
+    assert.equal(openaiFallback.vquality, "720");
+});
