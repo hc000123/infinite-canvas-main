@@ -1,4 +1,4 @@
-import { normalizeSeedanceDuration, normalizeSeedanceRatio, normalizeSeedanceResolution, normalizeSeedanceSeed } from "./video-normalizers.ts";
+import { isSeedance25Model, normalizeSeedanceDuration, normalizeSeedanceRatio, normalizeSeedanceResolution, normalizeSeedanceSeed } from "./video-normalizers.ts";
 
 export type SeedanceImageRole = "reference_image" | "first_frame" | "last_frame";
 export type SeedanceImageRoleMode = "reference" | "first_frame" | "first_last_frame" | "continue";
@@ -38,7 +38,13 @@ type SeedanceVideoTaskConfig = {
     videoTaskMode?: string;
     videoEditType?: string;
     videoExtendDirection?: string;
+    videoReferenceImageMode?: string;
 };
+
+const SEEDANCE_REFERENCE_LIMITS = {
+    "2.0": { image: 9, video: 3, audio: 3, total: 12, audioOnly: false },
+    "2.5": { image: 30, video: 10, audio: 10, total: 50, audioOnly: true },
+} as const;
 
 export function seedanceReferenceLabel(kind: SeedanceReferenceKind, index: number) {
     return `${SEEDANCE_REFERENCE_KIND_LABELS[kind]} ${Math.max(1, Math.floor(index) || 1)}`;
@@ -110,43 +116,39 @@ export function inferVideoReferenceMode(input: { imageCount: number; videoCount?
     return "text2video";
 }
 
-export function buildSeedanceContent(prompt: string, imageUrls: SeedanceReferenceInput[], videoUrls: string[] = [], audioUrls: string[] = []): SeedanceContentItem[] {
-    validateSeedanceReferenceMix(imageUrls, videoUrls, audioUrls);
+export function buildSeedanceContent(prompt: string, imageUrls: SeedanceReferenceInput[], videoUrls: string[] = [], audioUrls: string[] = [], model?: string): SeedanceContentItem[] {
+    validateSeedanceReferenceMix(imageUrls, videoUrls, audioUrls, model);
     if (imageUrls.some(isOrderedSeedanceReference)) {
-        return [
-            { type: "text", text: normalizeSeedancePromptReferenceMentions(prompt) },
-            ...normalizeOrderedSeedanceReferences([...imageUrls, ...videoUrls.map((url) => ({ type: "video" as const, url })), ...audioUrls.map((url) => ({ type: "audio" as const, url }))]).map(seedanceContentItemFromReference),
-        ];
+        return buildSeedanceContentItems(
+            prompt,
+            normalizeOrderedSeedanceReferences([...imageUrls, ...videoUrls.map((url) => ({ type: "video" as const, url })), ...audioUrls.map((url) => ({ type: "audio" as const, url }))], model),
+        );
     }
     const images = imageUrls
         .map(normalizeSeedanceImageReference)
-        .filter((image): image is { url: string; role: SeedanceImageRole } => Boolean(image))
-        .slice(0, 9);
-    const videos = videoUrls
-        .filter(Boolean)
-        .slice(0, Math.max(0, 12 - images.length))
-        .slice(0, 3);
-    const audios = audioUrls
-        .filter(Boolean)
-        .slice(0, Math.max(0, 12 - images.length - videos.length))
-        .slice(0, 3);
-    return [
-        { type: "text", text: normalizeSeedancePromptReferenceMentions(prompt) },
-        ...images.map((image) => ({ type: "image_url" as const, image_url: { url: image.url }, role: image.role })),
-        ...videos.map((url) => ({ type: "video_url" as const, video_url: { url }, role: "reference_video" as const })),
-        ...audios.map((url) => ({ type: "audio_url" as const, audio_url: { url }, role: "reference_audio" as const })),
-    ];
+        .filter((image): image is { url: string; role: SeedanceImageRole } => Boolean(image));
+    return buildSeedanceContentItems(prompt, [
+        ...images.map((image) => ({ type: "image" as const, url: image.url, role: image.role })),
+        ...videoUrls.filter(Boolean).map((url) => ({ type: "video" as const, url })),
+        ...audioUrls.filter(Boolean).map((url) => ({ type: "audio" as const, url })),
+    ]);
 }
 
 export function buildSeedanceVideoTaskPayload(config: SeedanceVideoTaskConfig, prompt: string, imageUrls: SeedanceReferenceInput[], videoUrls: string[] = [], audioUrls: string[] = []) {
     const taskMode = normalizeSeedanceVideoTaskMode(config.videoTaskMode);
     const model = resolveSeedanceRequestModel(config);
+    const capabilityModel = resolveSeedanceCapabilityModel(config, model);
+    const content =
+        taskMode === "generate"
+            ? buildSeedanceContent(prompt, imageUrls, videoUrls, audioUrls, capabilityModel)
+            : buildSeedanceDerivedContent(prompt, imageUrls, videoUrls, audioUrls, capabilityModel);
+    const imageRoleMode = content.some((item) => item.type === "image_url" && (item.role === "first_frame" || item.role === "last_frame")) ? "first_frame" : config.videoReferenceImageMode;
     const payload: Record<string, unknown> = {
         model,
-        content: taskMode === "generate" ? buildSeedanceContent(prompt, imageUrls, videoUrls, audioUrls) : buildSeedanceDerivedContent(prompt, imageUrls, videoUrls, audioUrls),
-        duration: normalizeSeedanceDuration(config.videoSeconds || ""),
-        ratio: normalizeSeedanceRatio(config.size || ""),
-        resolution: normalizeSeedanceResolution(config.vquality || "", resolveSeedanceCapabilityModel(config, model)),
+        content,
+        duration: normalizeSeedanceDuration(config.videoSeconds || "", capabilityModel, taskMode),
+        ratio: normalizeSeedanceRatio(config.size || "", capabilityModel, taskMode, imageRoleMode),
+        resolution: normalizeSeedanceResolution(config.vquality || "", capabilityModel),
         generate_audio: config.videoGenerateAudio === "true",
         watermark: config.videoWatermark === "true",
         return_last_frame: config.returnLastFrame === "true",
@@ -176,17 +178,13 @@ function isOrderedSeedanceReference(input: SeedanceReferenceInput): input is See
     return typeof input === "object" && "type" in input && (input.type === "image" || input.type === "video" || input.type === "audio");
 }
 
-function normalizeOrderedSeedanceReferences(inputs: SeedanceReferenceInput[]) {
-    const counts: Record<SeedanceReferenceKind, number> = { image: 0, video: 0, audio: 0 };
-    const limits: Record<SeedanceReferenceKind, number> = { image: 9, video: 3, audio: 3 };
+function normalizeOrderedSeedanceReferences(inputs: SeedanceReferenceInput[], model?: string) {
     const references: SeedanceOrderedReferenceInput[] = [];
     for (const input of inputs) {
-        if (references.length >= 12) break;
         const reference = normalizeOrderedSeedanceReference(input);
-        if (!reference || counts[reference.type] >= limits[reference.type]) continue;
-        counts[reference.type] += 1;
-        references.push(reference);
+        if (reference) references.push(reference);
     }
+    validateSeedanceReferenceCounts(references, model);
     return references;
 }
 
@@ -206,10 +204,10 @@ function seedanceContentItemFromReference(reference: SeedanceOrderedReferenceInp
     return { type: "audio_url", audio_url: { url: reference.url }, role: "reference_audio" };
 }
 
-function buildSeedanceDerivedContent(prompt: string, imageUrls: SeedanceReferenceInput[], videoUrls: string[], audioUrls: string[]): SeedanceContentItem[] {
-    validateSeedanceReferenceMix(imageUrls, videoUrls, audioUrls);
+function buildSeedanceDerivedContent(prompt: string, imageUrls: SeedanceReferenceInput[], videoUrls: string[], audioUrls: string[], model?: string): SeedanceContentItem[] {
+    validateSeedanceReferenceMix(imageUrls, videoUrls, audioUrls, model);
     const orderedInputs = imageUrls.some(isOrderedSeedanceReference)
-        ? normalizeOrderedSeedanceReferences([...imageUrls, ...videoUrls.map((url) => ({ type: "video" as const, url })), ...audioUrls.map((url) => ({ type: "audio" as const, url }))])
+        ? normalizeOrderedSeedanceReferences([...imageUrls, ...videoUrls.map((url) => ({ type: "video" as const, url })), ...audioUrls.map((url) => ({ type: "audio" as const, url }))], model)
         : [
               ...videoUrls.filter(Boolean).map((url) => ({ type: "video" as const, url })),
               ...imageUrls
@@ -218,18 +216,50 @@ function buildSeedanceDerivedContent(prompt: string, imageUrls: SeedanceReferenc
                   .map((image) => ({ type: "image" as const, url: image.url, role: image.role })),
               ...audioUrls.filter(Boolean).map((url) => ({ type: "audio" as const, url })),
           ];
-    return [
-        { type: "text", text: normalizeSeedancePromptReferenceMentions(prompt) },
-        ...orderedInputs.map(seedanceContentItemFromReference),
-    ];
+    return buildSeedanceContentItems(prompt, orderedInputs);
 }
 
-function validateSeedanceReferenceMix(imageUrls: SeedanceReferenceInput[], videoUrls: string[], audioUrls: string[]) {
-    const ordered = imageUrls.some(isOrderedSeedanceReference) ? normalizeOrderedSeedanceReferences([...imageUrls, ...videoUrls.map((url) => ({ type: "video" as const, url })), ...audioUrls.map((url) => ({ type: "audio" as const, url }))]) : [];
+function validateSeedanceReferenceMix(imageUrls: SeedanceReferenceInput[], videoUrls: string[], audioUrls: string[], model?: string) {
+    const ordered = imageUrls.some(isOrderedSeedanceReference) ? normalizeOrderedSeedanceReferences([...imageUrls, ...videoUrls.map((url) => ({ type: "video" as const, url })), ...audioUrls.map((url) => ({ type: "audio" as const, url }))], model) : [];
+    if (!ordered.length) {
+        validateSeedanceReferenceCounts(
+            [
+                ...imageUrls.map(normalizeSeedanceImageReference).filter((image): image is { url: string; role: SeedanceImageRole } => Boolean(image)).map((image) => ({ type: "image" as const, ...image })),
+                ...videoUrls.filter(Boolean).map((url) => ({ type: "video" as const, url })),
+                ...audioUrls.filter(Boolean).map((url) => ({ type: "audio" as const, url })),
+            ],
+            model,
+        );
+    }
     const hasAudio = ordered.length ? ordered.some((reference) => reference.type === "audio") : audioUrls.some(Boolean);
     if (!hasAudio) return;
     const hasVisual = ordered.length ? ordered.some((reference) => reference.type === "image" || reference.type === "video") : imageUrls.some((input) => Boolean(normalizeSeedanceImageReference(input))) || videoUrls.some(Boolean);
-    if (!hasVisual) throw new Error("Seedance 2.0 不支持纯音频或文本加音频输入，请至少添加图片或视频参考");
+    if (!hasVisual && !seedanceReferenceLimits(model).audioOnly) throw new Error("Seedance 2.0 不支持纯音频或文本加音频输入，请至少添加图片或视频参考");
+}
+
+function buildSeedanceContentItems(prompt: string, references: SeedanceOrderedReferenceInput[]) {
+    const text = prompt.trim();
+    const content: SeedanceContentItem[] = [
+        ...(text ? [{ type: "text" as const, text: normalizeSeedancePromptReferenceMentions(text) }] : []),
+        ...references.map(seedanceContentItemFromReference),
+    ];
+    if (!content.length) throw new Error("缺少视频提示词或参考素材");
+    return content;
+}
+
+function validateSeedanceReferenceCounts(references: SeedanceOrderedReferenceInput[], model?: string) {
+    const limits = seedanceReferenceLimits(model);
+    const version = isSeedance25Model(model) ? "2.5" : "2.0";
+    const counts: Record<SeedanceReferenceKind, number> = { image: 0, video: 0, audio: 0 };
+    references.forEach((reference) => (counts[reference.type] += 1));
+    if (counts.image > limits.image) throw new Error(`Seedance ${version} 最多支持 ${limits.image} 张图片`);
+    if (counts.video > limits.video) throw new Error(`Seedance ${version} 最多支持 ${limits.video} 个视频`);
+    if (counts.audio > limits.audio) throw new Error(`Seedance ${version} 最多支持 ${limits.audio} 个音频`);
+    if (references.length > limits.total) throw new Error(`Seedance ${version} 最多支持 ${limits.total} 个参考素材`);
+}
+
+function seedanceReferenceLimits(model?: string) {
+    return isSeedance25Model(model) ? SEEDANCE_REFERENCE_LIMITS["2.5"] : SEEDANCE_REFERENCE_LIMITS["2.0"];
 }
 
 function normalizeSeedanceVideoTaskMode(mode?: string): SeedanceVideoTaskMode {

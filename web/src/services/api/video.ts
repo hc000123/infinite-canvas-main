@@ -469,12 +469,12 @@ function normalizeVideoGenerationReferences(references: VideoGenerationReference
 
 async function buildSeedanceVideoPayload(config: AiConfig, prompt: string, references: NormalizedVideoReferences) {
     if (references.inputs.length) {
-        const orderedReferences = (await Promise.all(references.inputs.slice(0, 12).map(seedanceOrderedReferenceInput))).filter((item): item is SeedanceOrderedReferenceInput => Boolean(item));
+        const orderedReferences = (await Promise.all(references.inputs.map(seedanceOrderedReferenceInput))).filter((item): item is SeedanceOrderedReferenceInput => Boolean(item));
         return buildSeedanceVideoTaskPayload(config, prompt, orderedReferences);
     }
-    const imageUrls = (await Promise.all(references.images.slice(0, 9).map(seedanceImageReferenceInput))).filter((image): image is SeedanceImageReferenceInput => Boolean(image));
-    const videoUrls = (await Promise.all(references.videos.slice(0, 3).map(videoToDataUrl))).filter((url): url is string => Boolean(url));
-    const audioUrls = (await Promise.all(references.audios.slice(0, 3).map(audioToDataUrl))).filter((url): url is string => Boolean(url));
+    const imageUrls = (await Promise.all(references.images.map(seedanceImageReferenceInput))).filter((image): image is SeedanceImageReferenceInput => Boolean(image));
+    const videoUrls = (await Promise.all(references.videos.map(videoToDataUrl))).filter((url): url is string => Boolean(url));
+    const audioUrls = (await Promise.all(references.audios.map(audioToDataUrl))).filter((url): url is string => Boolean(url));
     return buildSeedanceVideoTaskPayload(config, prompt, imageUrls, videoUrls, audioUrls);
 }
 
