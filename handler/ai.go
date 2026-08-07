@@ -184,15 +184,16 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 			}
 		}
 	}
-	credits, err := service.ModelCost(modelName)
-	if err != nil {
-		log.Printf("AI proxy read model cost failed: model=%s err=%v", modelName, err)
-		Fail(w, "AI 接口请求失败")
-		return
-	}
 	channel, err := service.SelectModelChannel(modelName)
 	if err != nil {
 		log.Printf("AI proxy select channel failed: model=%s err=%v", modelName, err)
+		Fail(w, "AI 接口请求失败")
+		return
+	}
+	modelName = service.ModelChannelLogicalModel(channel, modelName)
+	credits, err := service.ModelCost(modelName)
+	if err != nil {
+		log.Printf("AI proxy read model cost failed: model=%s err=%v", modelName, err)
 		Fail(w, "AI 接口请求失败")
 		return
 	}
@@ -1245,6 +1246,9 @@ func readAIRequestUsageForModel(path string, requestKind string, body []byte, co
 	limit := maxAIRequestCount
 	if path == "/videos" && service.IsVolcengineArkProtocol(protocol) && service.IsArkSeedance25Model(modelName) {
 		limit = maxArkSeedance25Usage
+		if billingDuration := readAIRequestInt(body, contentType, "_seedance_billing_duration"); billingDuration > 0 {
+			return clampAIRequestUsage(billingDuration, limit)
+		}
 	}
 	return readAIRequestUsageWithLimit(path, requestKind, body, contentType, limit)
 }
@@ -1260,6 +1264,10 @@ func readAIRequestUsageWithLimit(path string, requestKind string, body []byte, c
 		return 1
 	}
 	usage := readAIRequestInt(body, contentType, keys...)
+	return clampAIRequestUsage(usage, limit)
+}
+
+func clampAIRequestUsage(usage int, limit int) int {
 	if usage < 1 {
 		return 1
 	}

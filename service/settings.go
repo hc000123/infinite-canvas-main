@@ -1050,6 +1050,21 @@ func ModelChannelEndpointForModel(channel model.ModelChannel, modelName string) 
 	return strings.TrimSpace(channel.EndpointID)
 }
 
+// ModelChannelLogicalModel resolves an Ark endpoint ID back to its configured logical model.
+func ModelChannelLogicalModel(channel model.ModelChannel, requestedModel string) string {
+	requestedModel = strings.TrimSpace(requestedModel)
+	channel = normalizeModelChannel(channel)
+	if !IsVolcengineArkProtocol(channel.Protocol) {
+		return requestedModel
+	}
+	for _, item := range channel.EndpointMappings {
+		if strings.TrimSpace(item.EndpointID) == requestedModel {
+			return strings.TrimSpace(item.Model)
+		}
+	}
+	return requestedModel
+}
+
 func IsVolcengineArkProtocol(protocol string) bool {
 	return normalizeModelProtocol(protocol) == modelProtocolVolcengineArk
 }

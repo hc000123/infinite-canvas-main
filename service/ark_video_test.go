@@ -14,7 +14,8 @@ func TestReadArkLocalVideoConfigJSONStripsPrivateConfig(t *testing.T) {
 		"content": [{"type": "text", "text": "生成短视频"}],
 		"_volcengine_api_key": "frontend-key",
 		"_volcengine_base_url": "https://ark.example.com/api/v3",
-		"_seedance_task_mode": "generate"
+		"_seedance_task_mode": "generate",
+		"_seedance_billing_duration": 30
 	}`)
 
 	apiKey, baseURL, payload, err := ReadArkLocalVideoConfig(body, "application/json")
@@ -33,6 +34,9 @@ func TestReadArkLocalVideoConfigJSONStripsPrivateConfig(t *testing.T) {
 	}
 	if _, ok := payload["_seedance_task_mode"]; ok {
 		t.Fatalf("payload still contains private task mode: %#v", payload)
+	}
+	if _, ok := payload["_seedance_billing_duration"]; ok {
+		t.Fatalf("payload still contains private billing duration: %#v", payload)
 	}
 	if payload["model"] != "ep-test" {
 		t.Fatalf("model = %#v", payload["model"])

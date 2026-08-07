@@ -486,6 +486,31 @@ func TestArkEndpointIDCanSelectChannel(t *testing.T) {
 	}
 }
 
+func TestModelChannelLogicalModelResolvesArkEndpointMappings(t *testing.T) {
+	channel := model.ModelChannel{
+		Protocol: string(model.ModelProtocolVolcengineArk),
+		EndpointMappings: []model.ModelEndpointMapping{
+			{Model: "doubao-seedance-2-0", EndpointID: "ep-20"},
+			{Model: "doubao-seedance-2-5", EndpointID: "ep-25"},
+		},
+	}
+	tests := map[string]string{
+		"ep-20":               "doubao-seedance-2-0",
+		"ep-25":               "doubao-seedance-2-5",
+		"doubao-seedance-2-5": "doubao-seedance-2-5",
+		"ep-unknown":          "ep-unknown",
+	}
+	for requested, want := range tests {
+		if got := ModelChannelLogicalModel(channel, requested); got != want {
+			t.Fatalf("ModelChannelLogicalModel(%q) = %q, want %q", requested, got, want)
+		}
+	}
+	openAI := model.ModelChannel{Protocol: string(model.ModelProtocolOpenAI), EndpointMappings: channel.EndpointMappings}
+	if got := ModelChannelLogicalModel(openAI, "ep-25"); got != "ep-25" {
+		t.Fatalf("non-Ark logical model = %q, want ep-25", got)
+	}
+}
+
 func TestArkEndpointIDUsesDefaultVideoModelCost(t *testing.T) {
 	setupAITaskTestDB(t)
 	saveArkEndpointSettings(t)

@@ -133,6 +133,7 @@ export function buildSeedanceVideoTaskPayload(config: SeedanceVideoTaskConfig, p
         model,
         content,
         _seedance_task_mode: taskMode,
+        _seedance_billing_duration: normalizeSeedanceDuration(config.videoSeconds || "", capabilityModel, "generate"),
         duration: normalizeSeedanceDuration(config.videoSeconds || "", capabilityModel, taskMode),
         ratio: normalizeSeedanceRatio(config.size || "", capabilityModel, taskMode, imageRoleMode),
         resolution: normalizeSeedanceResolution(config.vquality || "", capabilityModel),

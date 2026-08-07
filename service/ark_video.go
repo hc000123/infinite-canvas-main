@@ -200,6 +200,7 @@ func removeArkLocalConfigFields(payload map[string]any) {
 	delete(payload, arkLocalAPIKeyField)
 	delete(payload, arkLocalBaseURLField)
 	delete(payload, "_seedance_task_mode")
+	delete(payload, "_seedance_billing_duration")
 }
 
 func NormalizeArkVideoTaskResponse(body []byte) ([]byte, error) {

@@ -121,6 +121,7 @@ test("builds Seedance video task payload with image and video references", () =>
     assert.equal(payload.resolution, "720p");
     assert.equal(payload.generate_audio, true);
     assert.equal(payload._seedance_task_mode, "generate");
+    assert.equal(payload._seedance_billing_duration, 11);
 });
 
 test("builds Seedance edit payload with the upstream video as source content", () => {
@@ -294,6 +295,7 @@ test("builds Seedance 2.5 edit and extend payloads with adaptive derived setting
     const extend = buildSeedanceVideoTaskPayload({ ...baseConfig, videoTaskMode: "extend" }, "extend", [{ type: "video", url: "source-video" }]);
 
     assert.equal(edit.duration, -1);
+    assert.equal(edit._seedance_billing_duration, 20);
     assert.equal(edit._seedance_task_mode, "edit");
     assert.equal(edit.ratio, "adaptive");
     assert.equal(edit.resolution, "720p");
