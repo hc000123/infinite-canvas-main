@@ -243,6 +243,16 @@ test("Seedance 2.5 keeps Dreamina durations up to 30 seconds", () => {
     assert.equal(buildCanvasVideoModePatch({ ...config, videoSeconds: "24" }).seconds, "24");
 });
 
+test("Ark Seedance 2.5 keeps durations up to 30 seconds", () => {
+    const config = routedVideoConfig("doubao-seedance-2-5", "volcengine-ark");
+
+    assert.equal(buildCanvasVideoConfig(config, { seconds: "30" }).videoSeconds, "30");
+    assert.equal(buildCanvasVideoConfig(config, { seconds: "40" }).videoSeconds, "30");
+    assert.equal(buildCanvasVideoModePatch({ ...config, videoSeconds: "24" }).seconds, "24");
+    assert.equal(buildCanvasVideoConfig(routedVideoConfig("doubao-seedance-2-0", "volcengine-ark"), { seconds: "30" }).videoSeconds, "15");
+    assert.equal(buildCanvasVideoConfig(routedVideoConfig("doubao-seedance-model", "volcengine-ark"), { seconds: "30" }).videoSeconds, "15");
+});
+
 test("normalizes duration and resolution when changing Dreamina models", () => {
     const config = {
         ...routedVideoConfig("seedance2.0fast", "jimeng-cli"),

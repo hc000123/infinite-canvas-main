@@ -234,8 +234,10 @@ func TestArkSeedance25ProxyUsesLocalCapabilitiesBeforeEndpointRouting(t *testing
 
 	body := []byte(`{
 		"model": "doubao-seedance-2-5",
-		"content": [{"type":"text","text":"生成短视频"}],
-		"duration": 30,
+		"content": [{"type":"text","text":"编辑短视频"},{"type":"video_url","video_url":{"url":"asset://video-id"},"role":"reference_video"}],
+		"duration": 12,
+		"ratio": "16:9",
+		"_seedance_task_mode": "edit",
 		"resolution": "480p"
 	}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/videos", bytes.NewReader(body))
@@ -265,8 +267,14 @@ func TestArkSeedance25ProxyUsesLocalCapabilitiesBeforeEndpointRouting(t *testing
 		t.Fatalf("upstream headers authorization=%q content-type=%q", captured.authorization, captured.contentType)
 	}
 	upstreamPayload := readJSONMap(t, captured.body)
-	if upstreamPayload["model"] != "ep-25" || upstreamPayload["duration"] != float64(30) || upstreamPayload["resolution"] != "480p" {
+	if upstreamPayload["model"] != "ep-25" || upstreamPayload["duration"] != float64(-1) || upstreamPayload["ratio"] != "adaptive" || upstreamPayload["resolution"] != "480p" {
 		t.Fatalf("upstream payload = %#v", upstreamPayload)
+	}
+	if _, ok := upstreamPayload["_seedance_task_mode"]; ok {
+		t.Fatalf("private task mode leaked upstream: %#v", upstreamPayload)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
 	responsePayload := readJSONMap(t, rec.Body.Bytes())
 	if responsePayload["id"] != "task-seedance-25" || responsePayload["status"] != "queued" {

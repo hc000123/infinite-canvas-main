@@ -23,6 +23,7 @@ const (
 type arkVideoCreateFields struct {
 	ModelName       string
 	Prompt          string
+	TaskMode        string
 	Duration        string
 	Ratio           string
 	Resolution      string
@@ -113,6 +114,7 @@ func arkVideoFieldsFromMap(payload map[string]any) arkVideoCreateFields {
 	fields := arkVideoCreateFields{
 		ModelName:       arkStringMapValue(payload, "model"),
 		Prompt:          arkStringMapValue(payload, "prompt"),
+		TaskMode:        arkStringMapValue(payload, "_seedance_task_mode"),
 		Duration:        arkStringMapValue(payload, "duration", "seconds"),
 		Ratio:           arkStringMapValue(payload, "ratio", "size"),
 		Resolution:      arkStringMapValue(payload, "resolution", "resolution_name"),
@@ -131,6 +133,7 @@ func arkVideoFieldsFromForm(form *multipart.Form, failOnFileError bool) (arkVide
 	fields := arkVideoCreateFields{
 		ModelName:       firstArkFormValue(form.Value, "model"),
 		Prompt:          firstArkFormValue(form.Value, "prompt"),
+		TaskMode:        firstArkFormValue(form.Value, "_seedance_task_mode"),
 		Duration:        firstArkFormAliasValue(form.Value, "duration", "seconds"),
 		Ratio:           firstArkFormAliasValue(form.Value, "ratio", "size"),
 		Resolution:      firstArkFormAliasValue(form.Value, "resolution", "resolution_name"),
@@ -174,7 +177,7 @@ func buildArkVideoPayload(fields arkVideoCreateFields, requirePrompt bool, capab
 	if err := validateArkSeedanceContent(content, capabilityModelName, requirePrompt); err != nil {
 		return nil, err
 	}
-	appendArkVideoControls(payload, capabilityModelName, fields.Duration, fields.Ratio, fields.Resolution, fields.GenerateAudio, fields.Watermark, fields.Seed, fields.ReturnLastFrame)
+	appendArkVideoControls(payload, capabilityModelName, fields.TaskMode, content, fields.Duration, fields.Ratio, fields.Resolution, fields.GenerateAudio, fields.Watermark, fields.Seed, fields.ReturnLastFrame)
 	return payload, nil
 }
 
@@ -196,6 +199,7 @@ func requireArkLocalConfig(apiKey string, baseURL string) (string, string, error
 func removeArkLocalConfigFields(payload map[string]any) {
 	delete(payload, arkLocalAPIKeyField)
 	delete(payload, arkLocalBaseURLField)
+	delete(payload, "_seedance_task_mode")
 }
 
 func NormalizeArkVideoTaskResponse(body []byte) ([]byte, error) {
@@ -719,11 +723,12 @@ func isArkSeedance25Model(modelName string) bool {
 	return normalized == "seedance25" || normalized == "doubaoseedance25"
 }
 
-func appendArkVideoControls(payload map[string]any, modelName string, seconds string, size string, resolution string, generateAudio string, watermark string, seed string, returnLastFrame string) {
-	if duration := normalizeArkVideoDurationForModel(seconds, modelName); duration != 0 {
+func appendArkVideoControls(payload map[string]any, modelName string, taskMode string, content []any, seconds string, size string, resolution string, generateAudio string, watermark string, seed string, returnLastFrame string) {
+	duration, ratio := normalizeArkVideoDerivedControls(modelName, taskMode, content, seconds, size)
+	if duration != 0 {
 		payload["duration"] = duration
 	}
-	if ratio := normalizeArkVideoRatio(size); ratio != "" {
+	if ratio != "" {
 		payload["ratio"] = ratio
 	}
 	if normalizedResolution := normalizeArkVideoResolution(resolution, modelName); normalizedResolution != "" {
@@ -741,6 +746,39 @@ func appendArkVideoControls(payload map[string]any, modelName string, seconds st
 	if value, ok := arkOptionalBool(returnLastFrame); ok {
 		payload["return_last_frame"] = value
 	}
+}
+
+func normalizeArkVideoDerivedControls(modelName string, taskMode string, content []any, seconds string, size string) (int, string) {
+	duration := normalizeArkVideoDurationForModel(seconds, modelName)
+	ratio := normalizeArkVideoRatio(size)
+	if !isArkSeedance25Model(modelName) {
+		return duration, ratio
+	}
+	switch strings.TrimSpace(taskMode) {
+	case "edit":
+		duration = -1
+		ratio = "adaptive"
+	case "extend":
+		ratio = "adaptive"
+	}
+	if arkVideoContentHasFrameRole(content) {
+		ratio = "adaptive"
+	}
+	return duration, ratio
+}
+
+func arkVideoContentHasFrameRole(content []any) bool {
+	for _, item := range content {
+		entry, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		role := strings.TrimSpace(fmt.Sprint(entry["role"]))
+		if strings.TrimSpace(fmt.Sprint(entry["type"])) == "image_url" && (role == "first_frame" || role == "last_frame") {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeArkVideoDuration(value string) int {

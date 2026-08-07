@@ -1,13 +1,13 @@
-import { buildCanvasVideoConfig } from "@/app/(user)/canvas/utils/canvas-video-config";
-import { NODE_DEFAULT_SIZE } from "@/app/(user)/canvas/constants";
-import { CanvasNodeType, type CanvasNodeData, type CanvasNodeMetadata } from "@/app/(user)/canvas/types";
+import { NODE_DEFAULT_SIZE } from "../canvas/constants.ts";
+import { buildCanvasVideoConfig } from "../canvas/utils/canvas-video-config.ts";
+import type { CanvasNodeData, CanvasNodeMetadata, CanvasNodeType } from "../canvas/types.ts";
 import type { AiTaskLedger } from "@/services/api/ai-task-trace";
 import type { NormalizedVideoTask } from "@/services/api/video";
 import type { UploadedImage } from "@/services/image-storage";
 import type { Asset, AssetWriteInput } from "@/stores/use-asset-store";
 import type { AiConfig } from "@/stores/use-config-store";
-import { normalizeVideoGenerationErrorMessage } from "./video-generation-errors";
-import { isWorkflowReferenceAssetBound } from "./video-package-builders";
+import { normalizeVideoGenerationErrorMessage } from "./video-generation-errors.ts";
+import { isWorkflowReferenceAssetBound } from "./video-package-builders.ts";
 import type { AssetStatus, PackageGenerationStatus, ProductionPackage, WorkflowVideoReference } from "./use-video-package-store";
 import type { FilterKey, PackageAssetSlot, PackageUploadedVideo } from "./video-page-types";
 
@@ -41,7 +41,7 @@ function buildVideoPackageConfigNode(item: ProductionPackage, baseConfig: AiConf
     const videoConfig = buildPackageVideoConfig(baseConfig, item);
     const packageDuration = videoConfig.videoSeconds;
     return {
-        height: NODE_DEFAULT_SIZE[CanvasNodeType.Config].height,
+        height: NODE_DEFAULT_SIZE.config.height,
         id: videoPackageCanvasNodeId(item),
         metadata: {
             content: "",
@@ -74,8 +74,8 @@ function buildVideoPackageConfigNode(item: ProductionPackage, baseConfig: AiConf
         },
         position,
         title: `${item.id} · 视频配置`,
-        type: CanvasNodeType.Config,
-        width: NODE_DEFAULT_SIZE[CanvasNodeType.Config].width,
+        type: "config" as CanvasNodeType,
+        width: NODE_DEFAULT_SIZE.config.width,
     };
 }
 
@@ -343,7 +343,9 @@ function packageRatio(value: string) {
 }
 
 function packageResolution(value: string) {
-    return value.match(/1080/) ? "1080" : "720";
+    const resolution = value.trim().toLowerCase();
+    if (resolution === "480" || resolution === "480p") return "480";
+    return resolution.match(/1080/) ? "1080" : "720";
 }
 
 export function originalWorkflowHref(episode: string, options: { projectSlug?: string; sourceEpisodeId?: string; sourceProjectId?: string } = {}) {

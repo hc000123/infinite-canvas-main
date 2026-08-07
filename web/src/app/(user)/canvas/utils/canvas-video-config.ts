@@ -1,6 +1,6 @@
 import type { AiConfig } from "../../../../stores/use-config-store.ts";
 import { protocolForModel, resolveGenerationModel } from "../../../../lib/ai-model-catalog.ts";
-import { normalizeDreaminaVideoSettings } from "../../../../lib/dreamina-video-capabilities.ts";
+import { normalizeDreaminaVideoSettings, resolveDreaminaVideoCapability } from "../../../../lib/dreamina-video-capabilities.ts";
 import type { AdminPublicSettings } from "../../../../services/api/admin.ts";
 import { inferVideoReferenceMode, normalizeSeedanceImageRoleMode, normalizeVideoReferenceMode } from "../../../../services/api/video-reference.ts";
 import type { CanvasNodeMetadata } from "../types";
@@ -140,8 +140,9 @@ function resolveCanvasVideoReferenceMode(config: AiConfig, metadata: CanvasNodeM
 function normalizeCanvasVideoSeconds(value: string, provider: CanvasVideoProvider, model: string) {
     const fallback = 6;
     const seconds = Math.floor(Number(value) || fallback);
-    const min = isSeedanceDurationProtocol(provider) ? 4 : 1;
-    const max = provider === "jimeng-cli" && model === "seedance2.5" ? 30 : isSeedanceDurationProtocol(provider) ? 15 : 20;
+    const capability = resolveDreaminaVideoCapability({ protocol: provider, model, mode: "text2video" });
+    const min = capability?.duration.min ?? (isSeedanceDurationProtocol(provider) ? 4 : 1);
+    const max = capability?.duration.max ?? (isSeedanceDurationProtocol(provider) ? 15 : 20);
     return String(Math.max(min, Math.min(max, seconds)));
 }
 

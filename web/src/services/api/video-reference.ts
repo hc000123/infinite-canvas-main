@@ -132,6 +132,7 @@ export function buildSeedanceVideoTaskPayload(config: SeedanceVideoTaskConfig, p
     const payload: Record<string, unknown> = {
         model,
         content,
+        _seedance_task_mode: taskMode,
         duration: normalizeSeedanceDuration(config.videoSeconds || "", capabilityModel, taskMode),
         ratio: normalizeSeedanceRatio(config.size || "", capabilityModel, taskMode, imageRoleMode),
         resolution: normalizeSeedanceResolution(config.vquality || "", capabilityModel),

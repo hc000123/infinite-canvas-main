@@ -120,6 +120,7 @@ test("builds Seedance video task payload with image and video references", () =>
     assert.equal(payload.ratio, "16:9");
     assert.equal(payload.resolution, "720p");
     assert.equal(payload.generate_audio, true);
+    assert.equal(payload._seedance_task_mode, "generate");
 });
 
 test("builds Seedance edit payload with the upstream video as source content", () => {
@@ -143,6 +144,7 @@ test("builds Seedance edit payload with the upstream video as source content", (
     );
 
     assert.equal("task_mode" in payload, false);
+    assert.equal(payload._seedance_task_mode, "edit");
     assert.equal("edit_type" in payload, false);
     assert.deepEqual(payload.content, [
         { type: "text", text: "移除画面里的路牌" },
@@ -169,6 +171,7 @@ test("builds Seedance extend payload with source video and direction", () => {
     );
 
     assert.equal("task_mode" in payload, false);
+    assert.equal(payload._seedance_task_mode, "extend");
     assert.equal("extend_direction" in payload, false);
     assert.deepEqual(payload.content, [
         { type: "text", text: "向前补出镜头开始前的街道环境" },
@@ -291,9 +294,11 @@ test("builds Seedance 2.5 edit and extend payloads with adaptive derived setting
     const extend = buildSeedanceVideoTaskPayload({ ...baseConfig, videoTaskMode: "extend" }, "extend", [{ type: "video", url: "source-video" }]);
 
     assert.equal(edit.duration, -1);
+    assert.equal(edit._seedance_task_mode, "edit");
     assert.equal(edit.ratio, "adaptive");
     assert.equal(edit.resolution, "720p");
     assert.equal(extend.duration, 20);
+    assert.equal(extend._seedance_task_mode, "extend");
     assert.equal(extend.ratio, "adaptive");
 });
 
