@@ -3,11 +3,11 @@ import fs from "node:fs";
 import test from "node:test";
 
 import type { SkillAdminItem, SkillOwnerType } from "@/services/api/admin-skills.ts";
-import { canPublishSkill, filterSkillItems, nextDraftVersion, nextPatchVersion, skillLifecycleLabel } from "./skill-view.ts";
+import { canPublishSkill, filterSkillItems, groupSkillItemsByStage, nextDraftVersion, nextPatchVersion, resolveOpenSkillStageKeys, skillLifecycleLabel } from "./skill-view.ts";
 
-function skillItem(id: string, ownerType: SkillOwnerType, capabilities: string[], inputArtifactTypes: string[], outputArtifactTypes: string[], projectTags: string[]): SkillAdminItem {
+function skillItem(id: string, ownerType: SkillOwnerType, capabilities: string[], inputArtifactTypes: string[], outputArtifactTypes: string[], projectTags: string[], stageKey = ""): SkillAdminItem {
     return {
-        skill: { id, name: id, summary: id, ownerType, ownerUserId: "", ownerProjectId: ownerType === "project" ? "p1" : "", stageKey: "script", enabled: true, recommendedVersionId: `${id}-v1`, createdAt: "", updatedAt: "" },
+        skill: { id, name: id, summary: id, ownerType, ownerUserId: "", ownerProjectId: ownerType === "project" ? "p1" : "", stageKey, enabled: true, recommendedVersionId: `${id}-v1`, createdAt: "", updatedAt: "" },
         versions: [],
         bindings: [],
         evaluations: [],
@@ -79,4 +79,44 @@ test("folder-imported admin versions keep technical contracts read-only", () => 
     assert.match(page, /const importedFolderVersion = activeVersion\?\.sourceKind === "folder_import";/);
     assert.match(page, /readOnly=\{activeVersion\?\.status !== "draft" \|\| importedFolderVersion\}/);
     assert.match(page, /activeVersion\?\.status === "draft" && !importedFolderVersion/);
+});
+
+test("groups skills by explicit stage before manifest fallback", () => {
+    const groups = groupSkillItemsByStage([
+        skillItem("explicit-rendition", "system", ["workflow.stage.script"], [], ["production_script"], [], "asset-rendition-scene"),
+        skillItem("content", "system", ["content.classify"], ["production_script"], ["content_profile"], []),
+        skillItem("extract", "project", ["workflow.stage.art"], ["production_script"], ["asset_catalog"], []),
+        skillItem("brief", "system", ["asset.scene.brief"], ["asset_catalog"], ["asset_brief"], []),
+        skillItem("storyboard", "project", ["storyboard.vertical.short"], [], ["storyboard_package"], []),
+        skillItem("video", "system", [], [], ["video_prompt_package"], []),
+        skillItem("delivery", "system", [], [], ["delivery_report"], []),
+        skillItem("unknown", "project", ["custom.general"], [], ["custom_result"], []),
+    ]);
+
+    assert.deepEqual(groups.map((group) => [group.key, group.items.map((item) => item.skill.id)]), [
+        ["script", ["content"]],
+        ["asset-extraction", ["extract"]],
+        ["asset-brief", ["brief"]],
+        ["asset-rendition", ["explicit-rendition"]],
+        ["storyboard", ["storyboard"]],
+        ["video", ["video"]],
+        ["delivery", ["delivery"]],
+        ["other", ["unknown"]],
+    ]);
+});
+
+test("stage groups expose visible owner counts and default open keys", () => {
+    const groups = groupSkillItemsByStage([
+        skillItem("system-script", "system", ["workflow.stage.script"], [], ["production_script"], []),
+        skillItem("project-script", "project", ["content.classify"], [], ["content_profile"], []),
+        skillItem("scene-image", "system", ["asset.rendition.generate"], [], ["asset_rendition"], []),
+    ]);
+
+    assert.deepEqual(groups.map(({ key, totalCount, systemCount, projectCount }) => ({ key, totalCount, systemCount, projectCount })), [
+        { key: "script", totalCount: 2, systemCount: 1, projectCount: 1 },
+        { key: "asset-rendition", totalCount: 1, systemCount: 1, projectCount: 0 },
+    ]);
+    assert.deepEqual(resolveOpenSkillStageKeys(groups, "scene-image", false), ["asset-rendition"]);
+    assert.deepEqual(resolveOpenSkillStageKeys(groups, "", false), ["script"]);
+    assert.deepEqual(resolveOpenSkillStageKeys(groups, "scene-image", true), ["script", "asset-rendition"]);
 });
