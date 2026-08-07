@@ -786,9 +786,6 @@ func normalizeArkVideoDuration(value string) int {
 }
 
 func normalizeArkVideoDurationForModel(value string, modelName string) int {
-	if isArkSeedance25Model(modelName) && strings.TrimSpace(value) == "-1" {
-		return -1
-	}
 	var seconds int
 	_, _ = fmt.Sscan(value, &seconds)
 	if seconds <= 0 {

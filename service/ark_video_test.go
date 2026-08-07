@@ -218,7 +218,8 @@ func TestBuildArkVideoCreateRequestKeepsSeedance25EditControls(t *testing.T) {
 		"model": "doubao seedance-2_5",
 		"content": [{"type": "video_url", "video_url": {"url": "asset://video-id"}}],
 		"duration": -1,
-		"ratio": "adaptive"
+		"ratio": "adaptive",
+		"_seedance_task_mode": "edit"
 	}`), "application/json")
 	if err != nil {
 		t.Fatalf("BuildArkVideoCreateRequest returned error: %v", err)
@@ -263,6 +264,36 @@ func TestBuildArkVideoCreateRequestDerivesSeedance25ExtendRatio(t *testing.T) {
 	payload := readJSONMap(t, body)
 	if payload["duration"] != float64(24) || payload["ratio"] != "adaptive" {
 		t.Fatalf("payload controls = %#v", payload)
+	}
+}
+
+func TestBuildArkVideoCreateRequestDefaultsSeedance25NonEditAutomaticDuration(t *testing.T) {
+	body, _, err := BuildArkVideoCreateRequest([]byte(`{
+		"model": "doubao-seedance-2-5",
+		"content": [{"type": "video_url", "video_url": {"url": "asset://video-id"}}],
+		"duration": -1,
+		"ratio": "16:9",
+		"_seedance_task_mode": "extend"
+	}`), "application/json")
+	if err != nil {
+		t.Fatalf("BuildArkVideoCreateRequest returned error: %v", err)
+	}
+	payload := readJSONMap(t, body)
+	if payload["duration"] != float64(6) || payload["ratio"] != "adaptive" {
+		t.Fatalf("payload controls = %#v", payload)
+	}
+	generateBody, _, err := BuildArkVideoCreateRequest([]byte(`{
+		"model": "doubao-seedance-2-5",
+		"content": [{"type": "text", "text": "生成短视频"}],
+		"duration": -1,
+		"ratio": "16:9",
+		"_seedance_task_mode": "generate"
+	}`), "application/json")
+	if err != nil {
+		t.Fatalf("generate request returned error: %v", err)
+	}
+	if generatePayload := readJSONMap(t, generateBody); generatePayload["duration"] != float64(6) || generatePayload["ratio"] != "16:9" {
+		t.Fatalf("generate payload controls = %#v", generatePayload)
 	}
 }
 
