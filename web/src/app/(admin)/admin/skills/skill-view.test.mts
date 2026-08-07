@@ -120,3 +120,11 @@ test("stage groups expose visible owner counts and default open keys", () => {
     assert.deepEqual(resolveOpenSkillStageKeys(groups, "", false), ["script"]);
     assert.deepEqual(resolveOpenSkillStageKeys(groups, "scene-image", true), ["script", "asset-rendition"]);
 });
+
+test("admin registry renders production-stage collapse groups", () => {
+    const page = fs.readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
+    for (const text of ["groupSkillItemsByStage", "resolveOpenSkillStageKeys", "openStageKeys", "group.systemCount", "group.projectCount", "group.items.map"]) {
+        assert.ok(page.includes(text), `missing stage group wiring ${text}`);
+    }
+    assert.equal(page.includes("visibleItems.map((item) => <SkillCard"), false);
+});

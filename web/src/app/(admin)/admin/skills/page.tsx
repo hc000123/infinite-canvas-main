@@ -25,7 +25,7 @@ import { SkillEvaluationPanel } from "./components/skill-evaluation";
 import { SkillFolderImport } from "@/components/skills/skill-folder-import";
 import { SkillSourceBrowser } from "@/components/skills/skill-source-browser";
 import { SkillTrialPanel } from "@/components/skills/skill-trial-panel";
-import { canPublishSkill, filterSkillItems, latestPassingEvaluation, shortSkillHash, skillLifecycleLabel, type SkillFilter } from "./skill-view";
+import { canPublishSkill, filterSkillItems, groupSkillItemsByStage, latestPassingEvaluation, resolveOpenSkillStageKeys, shortSkillHash, skillLifecycleLabel, type SkillFilter } from "./skill-view";
 
 const initialFilters: SkillFilter = { search: "", capability: "", inputArtifactType: "", outputArtifactType: "", projectTag: "", ownerType: "" };
 
@@ -55,11 +55,14 @@ export default function AdminSkillsPage() {
     const [bindingForm, setBindingForm] = useState({ scope: "project" as "global" | "project", scopeId: "" });
     const [folderImportMode, setFolderImportMode] = useState<"new" | "version" | "">("");
     const [trialOpen, setTrialOpen] = useState(false);
+    const [openStageKeys, setOpenStageKeys] = useState<string[]>([]);
 
     const skillsQuery = useQuery({ queryKey: ["admin", "skills", token], queryFn: () => fetchAdminSkills(token), enabled: Boolean(token), retry: false });
     const allItems = skillsQuery.data || [];
     const visibleItems = useMemo(() => filterSkillItems(allItems, filters), [allItems, filters]);
     const activeItem = visibleItems.find((item) => item.skill.id === activeSkillId) || visibleItems[0];
+    const stageGroups = useMemo(() => groupSkillItemsByStage(visibleItems), [visibleItems]);
+    const hasActiveFilters = Object.values(filters).some(Boolean);
     const visibleVersions = useMemo(() => activeItem?.versions.filter((version) => showArchivedVersions || version.status !== "archived") || [], [activeItem, showArchivedVersions]);
     const activeVersion = activeItem?.versions.find((item) => item.id === activeVersionId);
     const detailQuery = useQuery({ queryKey: ["admin", "skill-version", activeVersionId, token], queryFn: () => fetchAdminSkillVersion(token, activeVersionId), enabled: Boolean(token && activeVersionId), retry: false });
@@ -68,6 +71,9 @@ export default function AdminSkillsPage() {
         if (!activeItem) return;
         if (activeSkillId !== activeItem.skill.id) setActiveSkillId(activeItem.skill.id);
     }, [activeItem, activeSkillId]);
+    useEffect(() => {
+        setOpenStageKeys(resolveOpenSkillStageKeys(stageGroups, activeItem?.skill.id || "", hasActiveFilters));
+    }, [activeItem?.skill.id, hasActiveFilters, stageGroups]);
     useEffect(() => {
         if (!activeItem || visibleVersions.some((version) => version.id === activeVersionId)) return;
         const draft = visibleVersions.find((version) => version.status === "draft");
@@ -156,7 +162,16 @@ export default function AdminSkillsPage() {
                     <div className="grid grid-cols-[290px_minmax(540px,1fr)_290px] gap-4 max-2xl:grid-cols-[260px_minmax(500px,1fr)] max-xl:grid-cols-1">
                         <Flex vertical gap={12}>
                             <Card className="studio-panel" variant="borderless" title={`注册表 · ${visibleItems.length}`} extra={<Button type="text" icon={<ReloadOutlined />} onClick={() => skillsQuery.refetch()} />}>
-                                <Flex vertical gap={8}>{visibleItems.map((item) => <SkillCard key={item.skill.id} item={item} active={item.skill.id === activeItem.skill.id} onClick={() => { setActiveSkillId(item.skill.id); setActiveVersionId(""); }} />)}</Flex>
+                                <Collapse
+                                    ghost
+                                    activeKey={openStageKeys}
+                                    onChange={(keys) => setOpenStageKeys(Array.isArray(keys) ? keys : [keys])}
+                                    items={stageGroups.map((group) => ({
+                                        key: group.key,
+                                        label: <Flex justify="space-between" align="center" gap={8} wrap><Typography.Text strong>{group.label}</Typography.Text><Space size={4} wrap><Tag>{group.totalCount} 个</Tag>{group.systemCount ? <Tag color="blue">系统 {group.systemCount}</Tag> : null}{group.projectCount ? <Tag color="gold">项目 {group.projectCount}</Tag> : null}</Space></Flex>,
+                                        children: <Flex vertical gap={8}>{group.items.map((item) => <SkillCard key={item.skill.id} item={item} active={item.skill.id === activeItem.skill.id} onClick={() => { setActiveSkillId(item.skill.id); setActiveVersionId(""); }} />)}</Flex>,
+                                    }))}
+                                />
                             </Card>
                             <Card className="studio-panel" variant="borderless" title="版本轨道" extra={<Space size={6}><Typography.Text type="secondary" className="text-xs">显示已停用</Typography.Text><Switch size="small" checked={showArchivedVersions} onChange={setShowArchivedVersions} /><Button type="text" size="small" icon={<FileAddOutlined />} onClick={() => setFolderImportMode("version")}>导入新版本</Button></Space>}>
                                 {visibleVersions.length ? <Flex vertical gap={7}>{visibleVersions.map((version) => <VersionButton key={version.id} version={version} active={version.id === activeVersionId} label={skillLifecycleLabel(version, Boolean(latestPassingEvaluation(version, activeItem.evaluations)), version.id === activeItem.skill.recommendedVersionId)} onClick={() => setActiveVersionId(version.id)} />)}</Flex> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有可见版本，请导入文件夹" />}
