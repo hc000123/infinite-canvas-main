@@ -63,6 +63,25 @@ func SaveAgentRun(run model.AgentRun) (model.AgentRun, error) {
 	return run, db.Save(&run).Error
 }
 
+func ListAgentRunsByIDs(ids []string) (map[string]model.AgentRun, error) {
+	result := make(map[string]model.AgentRun, len(ids))
+	if len(ids) == 0 {
+		return result, nil
+	}
+	db, err := DB()
+	if err != nil {
+		return nil, err
+	}
+	var runs []model.AgentRun
+	if err := db.Where("id IN ?", ids).Find(&runs).Error; err != nil {
+		return nil, err
+	}
+	for _, run := range runs {
+		result[run.ID] = run
+	}
+	return result, nil
+}
+
 func SaveAgentRunIdempotently(run model.AgentRun) (model.AgentRun, bool, error) {
 	db, err := DB()
 	if err != nil {

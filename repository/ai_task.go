@@ -42,6 +42,25 @@ func GetAITaskByUpstreamTaskID(upstreamTaskID string) (model.AITask, bool, error
 	return task, err == nil, err
 }
 
+func ListAITasksByIDs(ids []string) (map[string]model.AITask, error) {
+	result := make(map[string]model.AITask, len(ids))
+	if len(ids) == 0 {
+		return result, nil
+	}
+	db, err := DB()
+	if err != nil {
+		return nil, err
+	}
+	var tasks []model.AITask
+	if err := db.Where("id IN ?", ids).Find(&tasks).Error; err != nil {
+		return nil, err
+	}
+	for _, task := range tasks {
+		result[task.ID] = task
+	}
+	return result, nil
+}
+
 func ListAITasks(q model.AITaskQuery) ([]model.AITask, int64, error) {
 	db, err := DB()
 	if err != nil {
