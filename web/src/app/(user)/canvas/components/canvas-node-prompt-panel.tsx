@@ -7,7 +7,7 @@ import { Alert, Button, Modal } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
 import { defaultConfig, useConfigStore, type AiConfig } from "@/stores/use-config-store";
-import { CreditSymbol, requestCreditCost } from "@/constant/credits";
+import { CreditSymbol, requestCreditCost, requestCreditQuantity } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { resolveDreaminaVideoCapability, validateDreaminaReferences } from "@/lib/dreamina-video-capabilities";
 import { inferVideoReferenceMode, normalizeVideoReferenceMode } from "@/services/api/video-reference";
@@ -72,7 +72,7 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
     const [expandedEditorOpen, setExpandedEditorOpen] = useState(false);
     const latestNodeRef = useRef(node);
     latestNodeRef.current = node;
-    const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, fallbackModel: mode === "video" ? config.seedanceModel || config.videoModel : undefined, count: mode === "video" ? config.videoSeconds : mode === "image" ? config.count : 1 });
+    const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, fallbackModel: mode === "video" ? config.seedanceModel || config.videoModel : undefined, count: mode === "video" ? requestCreditQuantity({ count: config.videoSeconds, videoProtocol: config.videoProtocol, videoModel: config.seedanceModel || config.videoModel || config.model, videoTaskMode: config.videoTaskMode }) : mode === "image" ? config.count : 1 });
     const missingReferenceIds = validatePromptDocument(promptDocument, promptReferenceOptions);
     const canAutoMentionImages = mode === "video" && promptReferenceOptions.some((option) => option.previewType === "image");
     const videoCounts = {

@@ -1,6 +1,8 @@
 import type { ComponentProps } from "react";
 import { Zap } from "lucide-react";
 
+import { isSeedance25Model } from "@/services/api/video-normalizers";
+
 export function CreditSymbol({ className, ...props }: ComponentProps<"span">) {
     return (
         <span {...props} className={`inline-flex items-center justify-center ${className || ""}`}>
@@ -29,4 +31,9 @@ export function requestCreditCost(options: { channelMode: string; modelCosts?: M
     if (options.channelMode !== "remote") return 0;
     const count = Math.max(1, Math.floor(Math.abs(Number(options.count)) || 1));
     return modelCreditCost(options.modelCosts, options.model, options.fallbackModel) * count;
+}
+
+export function requestCreditQuantity(options: { count?: string | number; videoProtocol?: string; videoModel?: string; videoTaskMode?: string }) {
+    const count = Math.max(1, Math.floor(Math.abs(Number(options.count)) || 1));
+    return options.videoProtocol === "volcengine-ark" && options.videoTaskMode === "edit" && isSeedance25Model(options.videoModel) ? 30 : count;
 }

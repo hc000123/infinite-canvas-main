@@ -470,6 +470,49 @@ func TestValidateModelProtocolConflictsAllowsSameProtocolFallbackChannels(t *tes
 	}
 }
 
+func TestSaveSettingsValidatesArkEndpointMappingUniqueness(t *testing.T) {
+	tests := []struct {
+		name      string
+		channels  []model.ModelChannel
+		wantError string
+	}{
+		{
+			name: "rejects duplicate endpoint in one Ark channel",
+			channels: []model.ModelChannel{{
+				ID: "ark", Protocol: string(model.ModelProtocolVolcengineArk), Name: "Ark", BaseURL: "https://ark.example.com", APIKey: "ark-key", Enabled: true,
+				EndpointMappings: []model.ModelEndpointMapping{{Model: "doubao-seedance-2-0", EndpointID: "ep-shared"}, {Model: "doubao-seedance-2-5", EndpointID: "ep-shared"}},
+			}},
+			wantError: "同一火山渠道不能重复使用 Endpoint / EP：ep-shared",
+		},
+		{
+			name: "allows endpoint reused by different Ark channels",
+			channels: []model.ModelChannel{
+				{ID: "ark-first", Protocol: string(model.ModelProtocolVolcengineArk), Name: "Ark First", BaseURL: "https://ark-first.example.com", APIKey: "ark-first-key", Enabled: true, EndpointMappings: []model.ModelEndpointMapping{{Model: "doubao-seedance-2-0", EndpointID: "ep-shared"}}},
+				{ID: "ark-second", Protocol: string(model.ModelProtocolVolcengineArk), Name: "Ark Second", BaseURL: "https://ark-second.example.com", APIKey: "ark-second-key", Enabled: true, EndpointMappings: []model.ModelEndpointMapping{{Model: "doubao-seedance-2-5", EndpointID: "ep-shared"}}},
+			},
+		},
+		{
+			name: "allows empty endpoint and non Ark endpoint mappings",
+			channels: []model.ModelChannel{
+				{ID: "ark", Protocol: string(model.ModelProtocolVolcengineArk), Name: "Ark", BaseURL: "https://ark.example.com", APIKey: "ark-key", Enabled: true, EndpointMappings: []model.ModelEndpointMapping{{Model: "doubao-seedance-2-0"}, {Model: "doubao-seedance-2-5"}}},
+				{ID: "openai", Protocol: string(model.ModelProtocolOpenAI), Name: "OpenAI", BaseURL: "https://openai.example.com", APIKey: "openai-key", Enabled: true, EndpointMappings: []model.ModelEndpointMapping{{Model: "model-a", EndpointID: "ep-shared"}, {Model: "model-b", EndpointID: "ep-shared"}}},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setupAITaskTestDB(t)
+			_, err := SaveSettings(model.Settings{Private: model.PrivateSetting{Channels: tt.channels}})
+			if tt.wantError == "" && err != nil {
+				t.Fatalf("SaveSettings returned error: %v", err)
+			}
+			if tt.wantError != "" && (err == nil || !strings.Contains(err.Error(), tt.wantError)) {
+				t.Fatalf("SaveSettings error = %v, want %q", err, tt.wantError)
+			}
+		})
+	}
+}
+
 func TestArkEndpointIDCanSelectChannel(t *testing.T) {
 	setupAITaskTestDB(t)
 	saveArkEndpointSettings(t)

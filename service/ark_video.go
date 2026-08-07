@@ -714,6 +714,9 @@ func validateArkSeedanceContent(content []any, modelName string, requireInput bo
 	if audioCount > audioLimit {
 		return fmt.Errorf("Seedance %s 最多支持 %d 个音频", version, audioLimit)
 	}
+	if !seedance25 && imageCount+videoCount+audioCount > 12 {
+		return errors.New("Seedance 2.0 参考素材总数不能超过 12 个")
+	}
 	if !seedance25 && audioCount > 0 && imageCount+videoCount == 0 {
 		return errors.New("Seedance 2.0 不支持纯音频或文本加音频输入，请至少添加图片或视频参考")
 	}

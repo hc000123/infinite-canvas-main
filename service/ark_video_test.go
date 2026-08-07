@@ -141,6 +141,26 @@ func TestBuildArkVideoCreateRequestRejectsAudioOnlySeedanceInput(t *testing.T) {
 	}
 }
 
+func TestBuildArkVideoCreateRequestRejectsSeedance20MoreThanTwelveReferences(t *testing.T) {
+	content := []any{map[string]any{"type": "text", "text": "生成视频"}}
+	for _, item := range []struct {
+		contentType string
+		field       string
+		count       int
+	}{{"image_url", "image_url", 9}, {"video_url", "video_url", 3}, {"audio_url", "audio_url", 1}} {
+		for index := 0; index < item.count; index++ {
+			content = append(content, map[string]any{"type": item.contentType, item.field: map[string]string{"url": fmt.Sprintf("asset://%s-%d", item.field, index)}})
+		}
+	}
+	body, err := json.Marshal(map[string]any{"model": "doubao-seedance-2-0", "content": content})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := BuildArkVideoCreateRequest(body, "application/json"); err == nil || err.Error() != "Seedance 2.0 参考素材总数不能超过 12 个" {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestReadArkLocalVideoConfigMultipartKeepsInputReferenceRole(t *testing.T) {
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)

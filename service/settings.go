@@ -58,6 +58,9 @@ func SaveSettings(settings model.Settings) (model.Settings, error) {
 	if err := validateModelProtocolConflicts(settings.Private.Channels); err != nil {
 		return model.Settings{}, err
 	}
+	if err := validateArkEndpointMappingConflicts(settings.Private.Channels); err != nil {
+		return model.Settings{}, err
+	}
 	result, err := repository.SaveSettings(settings, now())
 	if err == nil {
 		RefreshPromptSyncScheduler()
@@ -81,6 +84,26 @@ func validateModelProtocolConflicts(channels []model.ModelChannel) error {
 				return fmt.Errorf("同名模型跨协议冲突：%s 同时属于 %s 和 %s", modelName, previous, protocol)
 			}
 			protocols[modelName] = protocol
+		}
+	}
+	return nil
+}
+
+func validateArkEndpointMappingConflicts(channels []model.ModelChannel) error {
+	for _, channel := range normalizePrivateSetting(model.PrivateSetting{Channels: channels}).Channels {
+		if !channel.Enabled || !IsVolcengineArkProtocol(channel.Protocol) {
+			continue
+		}
+		endpoints := map[string]bool{}
+		for _, mapping := range channel.EndpointMappings {
+			endpointID := strings.TrimSpace(mapping.EndpointID)
+			if endpointID == "" {
+				continue
+			}
+			if endpoints[endpointID] {
+				return fmt.Errorf("同一火山渠道不能重复使用 Endpoint / EP：%s", endpointID)
+			}
+			endpoints[endpointID] = true
 		}
 	}
 	return nil
