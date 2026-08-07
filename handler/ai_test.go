@@ -214,14 +214,18 @@ func TestCloudVideoProxyIgnoresFrontendVolcengineKey(t *testing.T) {
 
 func TestArkSeedance25ProxyUsesLocalCapabilitiesBeforeEndpointRouting(t *testing.T) {
 	setupAIHandlerTestDB(t)
+	type capturedRequest struct {
+		method        string
+		path          string
+		authorization string
+		contentType   string
+		body          []byte
+		err           error
+	}
+	requests := make(chan capturedRequest, 1)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/contents/generations/tasks" {
-			t.Fatalf("path = %s", r.URL.Path)
-		}
-		payload := readJSONMap(t, mustReadAll(t, r.Body))
-		if payload["model"] != "ep-25" || payload["duration"] != float64(30) || payload["resolution"] != "480p" {
-			t.Fatalf("upstream payload = %#v", payload)
-		}
+		body, err := io.ReadAll(r.Body)
+		requests <- capturedRequest{method: r.Method, path: r.URL.Path, authorization: r.Header.Get("Authorization"), contentType: r.Header.Get("Content-Type"), body: body, err: err}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"id":"task-seedance-25","status":"queued"}`))
 	}))
@@ -241,8 +245,32 @@ func TestArkSeedance25ProxyUsesLocalCapabilitiesBeforeEndpointRouting(t *testing
 
 	proxyAIRequest(rec, req, "/videos")
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	upstreamCalled := false
+	var captured capturedRequest
+	select {
+	case captured = <-requests:
+		upstreamCalled = true
+	default:
+	}
+	if !upstreamCalled {
+		t.Fatal("upstream was not called")
+	}
+	if captured.err != nil {
+		t.Fatalf("read upstream body: %v", captured.err)
+	}
+	if captured.method != http.MethodPost || captured.path != "/contents/generations/tasks" {
+		t.Fatalf("upstream request = %s %s", captured.method, captured.path)
+	}
+	if captured.authorization != "Bearer backend-key" || captured.contentType != "application/json" {
+		t.Fatalf("upstream headers authorization=%q content-type=%q", captured.authorization, captured.contentType)
+	}
+	upstreamPayload := readJSONMap(t, captured.body)
+	if upstreamPayload["model"] != "ep-25" || upstreamPayload["duration"] != float64(30) || upstreamPayload["resolution"] != "480p" {
+		t.Fatalf("upstream payload = %#v", upstreamPayload)
+	}
+	responsePayload := readJSONMap(t, rec.Body.Bytes())
+	if responsePayload["id"] != "task-seedance-25" || responsePayload["status"] != "queued" {
+		t.Fatalf("response status=%d payload=%#v", rec.Code, responsePayload)
 	}
 }
 
