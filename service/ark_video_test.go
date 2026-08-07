@@ -201,6 +201,50 @@ func TestBuildArkVideoCreateRequestTruncatesFractionalJSONDuration(t *testing.T)
 	}
 }
 
+func TestBuildArkVideoCreateRequestKeepsDurationAliasPrecedence(t *testing.T) {
+	tests := []struct {
+		name       string
+		jsonFields string
+		formFields map[string]string
+		want       float64
+	}{
+		{name: "zero duration", jsonFields: `"duration":0,"seconds":1`, formFields: map[string]string{"duration": "0", "seconds": "1"}, want: 6},
+		{name: "invalid duration", jsonFields: `"duration":"invalid","seconds":10`, formFields: map[string]string{"duration": "invalid", "seconds": "10"}, want: 6},
+		{name: "empty duration", jsonFields: `"duration":" ","seconds":10`, formFields: map[string]string{"duration": " ", "seconds": "10"}, want: 10},
+		{name: "seconds only", jsonFields: `"seconds":1`, formFields: map[string]string{"seconds": "1"}, want: 4},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name+" JSON", func(t *testing.T) {
+			body, _, err := BuildArkVideoCreateRequest([]byte(fmt.Sprintf(`{"model":"doubao-seedance-2-5","content":[{"type":"text","text":"生成短视频"}],%s}`, tt.jsonFields)), "application/json")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := readJSONMap(t, body)["duration"]; got != tt.want {
+				t.Fatalf("JSON duration = %#v, want %v", got, tt.want)
+			}
+		})
+		t.Run(tt.name+" multipart", func(t *testing.T) {
+			var form bytes.Buffer
+			writer := multipart.NewWriter(&form)
+			writeMultipartField(t, writer, "model", "doubao-seedance-2-5")
+			writeMultipartField(t, writer, "prompt", "生成短视频")
+			for key, value := range tt.formFields {
+				writeMultipartField(t, writer, key, value)
+			}
+			if err := writer.Close(); err != nil {
+				t.Fatal(err)
+			}
+			body, _, err := BuildArkVideoCreateRequest(form.Bytes(), writer.FormDataContentType())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := readJSONMap(t, body)["duration"]; got != tt.want {
+				t.Fatalf("multipart duration = %#v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestBuildArkVideoCreateRequestForModelUsesLocalSeedance25Capabilities(t *testing.T) {
 	body, _, err := BuildArkVideoCreateRequestForModel([]byte(`{
 		"model": "doubao-seedance-2-5",

@@ -134,7 +134,7 @@ func arkVideoFieldsFromForm(form *multipart.Form, failOnFileError bool) (arkVide
 		ModelName:       firstArkFormValue(form.Value, "model"),
 		Prompt:          firstArkFormValue(form.Value, "prompt"),
 		TaskMode:        firstArkFormValue(form.Value, "_seedance_task_mode"),
-		Duration:        firstArkFormAliasValue(form.Value, "duration", "seconds"),
+		Duration:        firstArkDurationFormValue(form.Value, "duration", "seconds"),
 		Ratio:           firstArkFormAliasValue(form.Value, "ratio", "size"),
 		Resolution:      firstArkFormAliasValue(form.Value, "resolution", "resolution_name"),
 		GenerateAudio:   firstArkFormValue(form.Value, "generate_audio"),
@@ -574,6 +574,15 @@ func firstArkFormValue(values map[string][]string, key string) string {
 func firstArkFormAliasValue(values map[string][]string, keys ...string) string {
 	for _, key := range keys {
 		if value := firstArkFormValue(values, key); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func firstArkDurationFormValue(values map[string][]string, keys ...string) string {
+	for _, key := range keys {
+		if value := firstArkFormValue(values, key); strings.TrimSpace(value) != "" {
 			return value
 		}
 	}

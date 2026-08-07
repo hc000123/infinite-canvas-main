@@ -1250,7 +1250,7 @@ func readAIRequestUsageForModel(path string, requestKind string, body []byte, co
 		if seedance25 && readAIRequestString(body, contentType, "_seedance_task_mode") == "edit" {
 			return maxArkSeedance25Usage
 		}
-		usage := readAIRequestInt(body, contentType, "duration", "seconds")
+		usage := readArkVideoRequestDuration(body, contentType)
 		if usage < 1 {
 			usage = defaultArkVideoUsage
 		}
@@ -1314,6 +1314,55 @@ func readAIRequestInt(body []byte, contentType string, keys ...string) int {
 	for _, key := range keys {
 		if value := aiRequestIntValue(payload[key]); value != 0 {
 			return value
+		}
+	}
+	return 0
+}
+
+func readArkVideoRequestDuration(body []byte, contentType string) int {
+	if strings.HasPrefix(contentType, "multipart/form-data") {
+		_, params, err := mime.ParseMediaType(contentType)
+		if err != nil {
+			return 0
+		}
+		form, err := multipart.NewReader(bytes.NewReader(body), params["boundary"]).ReadForm(32 << 20)
+		if err != nil {
+			return 0
+		}
+		defer form.RemoveAll()
+		for _, key := range []string{"duration", "seconds"} {
+			if values := form.Value[key]; len(values) > 0 {
+				raw := strings.TrimSpace(values[0])
+				if raw == "" {
+					continue
+				}
+				var value int
+				_, _ = fmt.Sscan(raw, &value)
+				return value
+			}
+		}
+		return 0
+	}
+	var payload map[string]any
+	_ = json.Unmarshal(body, &payload)
+	for _, key := range []string{"duration", "seconds"} {
+		value, ok := payload[key]
+		if !ok || value == nil {
+			continue
+		}
+		switch typed := value.(type) {
+		case string:
+			raw := strings.TrimSpace(typed)
+			if raw == "" {
+				continue
+			}
+			var parsed int
+			_, _ = fmt.Sscan(raw, &parsed)
+			return parsed
+		case float64:
+			return int(typed)
+		case int:
+			return typed
 		}
 	}
 	return 0

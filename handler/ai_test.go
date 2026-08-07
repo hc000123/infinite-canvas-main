@@ -785,6 +785,10 @@ func TestReadAIRequestUsageForModelUsesArkSeedance25Limit(t *testing.T) {
 		{name: "Ark Seedance 2.5 raises three second duration", path: "/videos", body: `{"duration":3}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 4},
 		{name: "Ark Seedance 2.5 truncates fractional duration", path: "/videos", body: `{"duration":14.9}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 14},
 		{name: "Ark Seedance 2.5 truncates fractional duration before minimum", path: "/videos", body: `{"duration":3.9}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 4},
+		{name: "Ark duration zero takes precedence over seconds", path: "/videos", body: `{"duration":0,"seconds":1}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 6},
+		{name: "Ark invalid duration takes precedence over seconds", path: "/videos", body: `{"duration":"invalid","seconds":10}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 6},
+		{name: "Ark empty duration falls back to seconds", path: "/videos", body: `{"duration":" ","seconds":10}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 10},
+		{name: "Ark seconds alias uses minimum duration", path: "/videos", body: `{"seconds":1}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 4},
 		{name: "Ark Seedance 2.5 generate ignores private duration", path: "/videos", body: `{"_seedance_task_mode":"generate","_seedance_billing_duration":1,"duration":30}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 30},
 		{name: "Ark Seedance 2.5 generate caps duration", path: "/videos", body: `{"_seedance_task_mode":"generate","duration":999}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 30},
 		{name: "Ark Seedance 2.0 keeps default limit", path: "/videos", body: `{"duration":30}`, modelName: "doubao-seedance-2-0", protocol: string(model.ModelProtocolVolcengineArk), want: maxAIRequestCount},
@@ -815,6 +819,34 @@ func TestReadAIRequestUsageForModelSupportsMultipartAutomaticEdit(t *testing.T) 
 	}
 	if got := readAIRequestUsageForModel("/videos", "", body.Bytes(), writer.FormDataContentType(), "doubao-seedance-2-5", string(model.ModelProtocolVolcengineArk)); got != 30 {
 		t.Fatalf("multipart usage = %d, want 30", got)
+	}
+}
+
+func TestReadAIRequestUsageForModelKeepsMultipartDurationAliasPrecedence(t *testing.T) {
+	tests := []struct {
+		name   string
+		fields map[string]string
+		want   int
+	}{
+		{name: "zero duration", fields: map[string]string{"duration": "0", "seconds": "1"}, want: 6},
+		{name: "invalid duration", fields: map[string]string{"duration": "invalid", "seconds": "10"}, want: 6},
+		{name: "empty duration", fields: map[string]string{"duration": " ", "seconds": "10"}, want: 10},
+		{name: "seconds only", fields: map[string]string{"seconds": "1"}, want: 4},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var body bytes.Buffer
+			writer := multipart.NewWriter(&body)
+			for key, value := range tt.fields {
+				writeMultipartField(t, writer, key, value)
+			}
+			if err := writer.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if got := readAIRequestUsageForModel("/videos", "", body.Bytes(), writer.FormDataContentType(), "doubao-seedance-2-5", string(model.ModelProtocolVolcengineArk)); got != tt.want {
+				t.Fatalf("multipart usage = %d, want %d", got, tt.want)
+			}
+		})
 	}
 }
 
