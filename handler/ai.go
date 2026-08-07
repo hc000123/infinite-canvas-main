@@ -27,6 +27,7 @@ const (
 	maxAIRequestBodyBytes = 100 * 1024 * 1024
 	maxAIRequestCount     = 15
 	maxArkSeedance25Usage = 30
+	minArkVideoUsage      = 4
 	defaultArkVideoUsage  = 6
 	maxImageDownloadBytes = 50 * 1024 * 1024
 	maxVideoDownloadBytes = 1024 * 1024 * 1024
@@ -1257,7 +1258,7 @@ func readAIRequestUsageForModel(path string, requestKind string, body []byte, co
 		if seedance25 {
 			limit = maxArkSeedance25Usage
 		}
-		return clampAIRequestUsage(usage, limit)
+		return max(minArkVideoUsage, clampAIRequestUsage(usage, limit))
 	}
 	return readAIRequestUsage(path, requestKind, body, contentType)
 }
