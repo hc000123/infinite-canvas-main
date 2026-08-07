@@ -146,6 +146,19 @@ test("preserves an existing Seedance 2.5 mapping when its input is left blank", 
     ]);
 });
 
+test("does not treat a structured Seedance 2.5 mapping as a 2.0 EP fallback", () => {
+    const settings = emptySettings();
+    settings.private.channels = [channel({
+        id: "volcengine-seedance",
+        protocol: "volcengine-ark",
+        baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+        endpointId: "ep-legacy",
+        endpointMappings: [{ model: VOLCENGINE_ARK_MODELS.seedance25, endpointId: "ep-25-existing" }],
+    })];
+
+    assert.throws(() => applyModelChannelPreset(settings, "volcengine", {}), /请填写 Seedance 2.0 Endpoint \/ EP/);
+});
+
 test("keeps Jimeng advanced runtime settings", () => {
     const settings = emptySettings();
     settings.private.channels = [channel({ id: "jimeng-video", protocol: "jimeng-cli", baseUrl: "", apiKey: "", cliPath: "/custom/dreamina", outputDir: "/custom/output", workDir: "/custom/work", timeoutSeconds: 420, sessionId: 7, concurrencyLimit: 1 })];

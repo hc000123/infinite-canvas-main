@@ -59,12 +59,12 @@ function applyVolcengine(settings: AdminSettings, input: ModelChannelPresetInput
     const current = settings.private.channels[index];
     const apiKey = credential(input.apiKey, current?.apiKey);
     const currentMappings = current?.endpointMappings || [];
-    const endpointId = firstValue(input.endpointId, currentMappings.find((item) => item.model === VOLCENGINE_ARK_MODELS.seedance20)?.endpointId, current?.endpointId);
+    const endpointId = firstValue(input.endpointId, currentMappings.find((item) => item.model === VOLCENGINE_ARK_MODELS.seedance20)?.endpointId, currentMappings.length ? "" : current?.endpointId);
     const seedance25EndpointId = firstValue(input.seedance25EndpointId, currentMappings.find((item) => item.model === VOLCENGINE_ARK_MODELS.seedance25)?.endpointId);
     const endpointMappings: AdminModelChannel["endpointMappings"] = [{ model: VOLCENGINE_ARK_MODELS.seedance20, endpointId }];
     if (seedance25EndpointId) endpointMappings.push({ model: VOLCENGINE_ARK_MODELS.seedance25, endpointId: seedance25EndpointId });
     requireValue(apiKey, "请填写火山 API Key");
-    requireValue(endpointId, "请填写火山 Endpoint / EP");
+    requireValue(endpointId, "请填写 Seedance 2.0 Endpoint / EP");
     upsertChannel(
         settings,
         index,
