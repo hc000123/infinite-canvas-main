@@ -36,10 +36,10 @@ const baseConfig = {
     modelProtocols: [{ model: "doubao-seedance-2-5", protocol: "volcengine-ark" }],
 } as Parameters<typeof buildPackageVideoConfig>[0];
 
-function configFixture(model: string, protocol: "openai" | "volcengine-ark") {
+function configFixture(model: string, videoProtocol: "openai" | "volcengine-ark", modelProtocol: "openai" | "volcengine-ark" = videoProtocol) {
     return {
         ...baseConfig,
-        videoProtocol: protocol,
+        videoProtocol,
         videoModel: model,
         seedanceModel: model,
         models: ["gpt-image-2", model, "gpt-5.5"],
@@ -49,7 +49,7 @@ function configFixture(model: string, protocol: "openai" | "volcengine-ark") {
             { model, capabilities: ["video"] },
             { model: "gpt-5.5", capabilities: ["text"] },
         ],
-        modelProtocols: [{ model, protocol }],
+        modelProtocols: [{ model, protocol: modelProtocol }],
     } as Parameters<typeof buildPackageVideoConfig>[0];
 }
 
@@ -87,4 +87,16 @@ test("buildPackageVideoConfig rejects 480p outside Ark Seedance 2.5", () => {
 
     assert.equal(ark20.vquality, "720");
     assert.equal(openai.vquality, "720");
+});
+
+test("buildPackageVideoConfig resolves stale providers from the selected model", () => {
+    const mappedArk = buildPackageVideoConfig(configFixture("doubao-seedance-2-5", "openai", "volcengine-ark"), packageFixture("doubao-seedance-2-5", "480p", "24"));
+    const mappedOpenAI = buildPackageVideoConfig(configFixture("openai-video", "volcengine-ark", "openai"), packageFixture("openai-video", "480", "6"));
+
+    assert.equal(mappedArk.videoProtocol, "volcengine-ark");
+    assert.equal(mappedArk.videoModel, "doubao-seedance-2-5");
+    assert.equal(mappedArk.vquality, "480");
+    assert.equal(mappedOpenAI.videoProtocol, "openai");
+    assert.equal(mappedOpenAI.videoModel, "openai-video");
+    assert.equal(mappedOpenAI.vquality, "720");
 });
