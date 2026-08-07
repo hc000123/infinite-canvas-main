@@ -3,6 +3,7 @@ package service
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/basketikun/infinite-canvas/model"
 	"github.com/basketikun/infinite-canvas/repository"
@@ -63,6 +64,45 @@ func TestListAIUsageRecordsPairsRefundsAndEnrichesSources(t *testing.T) {
 	}
 }
 
+func TestGetUserAIUsageSummaryIsScopedAndKindsMatchNetTotal(t *testing.T) {
+	setupAITaskTestDB(t)
+	seedUsageUser(t, "usage-user-1", "alice", 90)
+	seedUsageUser(t, "usage-user-2", "bob", 70)
+	seedUsageTaskAndConsume(t, "usage-user-1", "task-image", "image", 6, "2026-08-07T01:00:00Z")
+	seedUsageAgentAndConsume(t, "usage-user-1", "agent-director", 4, "2026-08-07T02:00:00Z")
+	seedUsageTaskAndConsume(t, "usage-user-2", "task-foreign", "video", 30, "2026-08-07T03:00:00Z")
+
+	result, err := getUserAIUsageSummaryAt(
+		"usage-user-1",
+		model.AIUsageQuery{Period: model.AIUsagePeriodDay},
+		time.Date(2026, 8, 7, 12, 0, 0, 0, time.FixedZone("CST", 8*60*60)),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Balance != 90 || result.SelectedPeriod != model.AIUsagePeriodDay {
+		t.Fatalf("summary = %#v", result)
+	}
+	if got := sumUsageKinds(result.Kinds); got != 10 {
+		t.Fatalf("kind total = %d, want 10", got)
+	}
+
+	records, err := ListUserAIUsageRecords("usage-user-1", model.AIUsageRecordQuery{
+		StartAt:  "2026-08-07T00:00:00Z",
+		EndAt:    "2026-08-08T00:00:00Z",
+		Page:     1,
+		PageSize: 20,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range records.Items {
+		if item.UserID != "usage-user-1" {
+			t.Fatalf("foreign record leaked: %#v", item)
+		}
+	}
+}
+
 func seedUsageUser(t *testing.T, id, username string, credits int) {
 	t.Helper()
 	stamp := "2026-08-07T00:00:00Z"
@@ -99,4 +139,24 @@ func usageRecordsByRelatedID(items []model.AIUsageRecord) map[string]model.AIUsa
 		result[item.RelatedID] = item
 	}
 	return result
+}
+
+func seedUsageTaskAndConsume(t *testing.T, userID, id, kind string, credits int, createdAt string) {
+	t.Helper()
+	seedUsageTask(t, model.AITask{ID: id, UserID: userID, Kind: kind, Model: kind + "-model", Provider: "cloud", Status: model.AITaskStatusSucceeded, Credits: credits, CreatedAt: createdAt})
+	seedUsageLog(t, model.CreditLog{ID: "consume-" + id, UserID: userID, Type: model.CreditLogTypeAIConsume, Amount: -credits, RelatedID: id, CreatedAt: createdAt})
+}
+
+func seedUsageAgentAndConsume(t *testing.T, userID, id string, credits int, createdAt string) {
+	t.Helper()
+	seedUsageAgentRun(t, model.AgentRun{ID: id, UserID: userID, AgentKind: "director", Model: "agent-model", Provider: "cloud", Status: model.AgentRunStatusApplied, Credits: credits, CreatedAt: createdAt})
+	seedUsageLog(t, model.CreditLog{ID: "consume-" + id, UserID: userID, Type: model.CreditLogTypeAIConsume, Amount: -credits, RelatedID: id, CreatedAt: createdAt})
+}
+
+func sumUsageKinds(items []model.AIUsageKindSummary) int {
+	total := 0
+	for _, item := range items {
+		total += item.NetCredits
+	}
+	return total
 }

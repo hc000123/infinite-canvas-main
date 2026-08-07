@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
 	"sort"
 	"strings"
 	"time"
@@ -11,6 +12,107 @@ import (
 )
 
 var aiUsagePeriods = []model.AIUsagePeriod{model.AIUsagePeriodDay, model.AIUsagePeriodWeek, model.AIUsagePeriodMonth}
+
+func GetUserAIUsageSummary(userID string, q model.AIUsageQuery) (model.UserAIUsageSummary, error) {
+	return getUserAIUsageSummaryAt(userID, q, time.Now())
+}
+
+func getUserAIUsageSummaryAt(userID string, q model.AIUsageQuery, current time.Time) (model.UserAIUsageSummary, error) {
+	q.Normalize()
+	user, ok, err := repository.GetUserByID(strings.TrimSpace(userID))
+	if err != nil {
+		return model.UserAIUsageSummary{}, err
+	}
+	if !ok {
+		return model.UserAIUsageSummary{}, errors.New("用户不存在")
+	}
+	result := model.UserAIUsageSummary{Balance: user.Credits, SelectedPeriod: q.Period, Kinds: []model.AIUsageKindSummary{}}
+	var selectedStart, selectedEnd time.Time
+	for _, period := range aiUsagePeriods {
+		start, end, err := aiUsagePeriodRange(period, current)
+		if err != nil {
+			return model.UserAIUsageSummary{}, err
+		}
+		rows, err := repository.ListAIUsageLedger(start.Format(time.RFC3339), end.Format(time.RFC3339), user.ID)
+		if err != nil {
+			return model.UserAIUsageSummary{}, err
+		}
+		usageRows := make([]model.AIUsageRow, 0, len(rows))
+		for _, row := range rows {
+			net := row.ConsumedCredits - row.RefundedCredits
+			if net > 0 {
+				usageRows = append(usageRows, model.AIUsageRow{UserID: row.UserID, NetCredits: net})
+			}
+		}
+		result.Periods = append(result.Periods, summarizeAIUsagePeriod(period, start, end, usageRows))
+		if period == q.Period {
+			selectedStart, selectedEnd = start, end
+		}
+	}
+	records, err := listAllAIUsageRecords(model.AIUsageRecordQuery{
+		ExactUserID: user.ID,
+		StartAt:     selectedStart.Format(time.RFC3339),
+		EndAt:       selectedEnd.Format(time.RFC3339),
+	})
+	if err != nil {
+		return model.UserAIUsageSummary{}, err
+	}
+	kinds := make(map[string]*model.AIUsageKindSummary)
+	selectedTotal := 0
+	for _, record := range records {
+		if record.NetCredits <= 0 {
+			continue
+		}
+		selectedTotal += record.NetCredits
+		item := kinds[record.Kind]
+		if item == nil {
+			item = &model.AIUsageKindSummary{Kind: record.Kind}
+			kinds[record.Kind] = item
+		}
+		item.NetCredits += record.NetCredits
+		item.UsageCount++
+	}
+	for _, item := range kinds {
+		if selectedTotal > 0 {
+			item.Ratio = float64(item.NetCredits) / float64(selectedTotal)
+		}
+		result.Kinds = append(result.Kinds, *item)
+	}
+	sort.Slice(result.Kinds, func(i, j int) bool {
+		if result.Kinds[i].NetCredits != result.Kinds[j].NetCredits {
+			return result.Kinds[i].NetCredits > result.Kinds[j].NetCredits
+		}
+		return result.Kinds[i].Kind < result.Kinds[j].Kind
+	})
+	return result, nil
+}
+
+func ListUserAIUsageRecords(userID string, q model.AIUsageRecordQuery) (model.AIUsageRecordList, error) {
+	q.ExactUserID = strings.TrimSpace(userID)
+	q.User = ""
+	return ListAIUsageRecords(q)
+}
+
+func listAllAIUsageRecords(q model.AIUsageRecordQuery) ([]model.AIUsageRecord, error) {
+	q.Page, q.PageSize = 1, model.MaxPageSize
+	first, err := ListAIUsageRecords(q)
+	if err != nil {
+		return nil, err
+	}
+	items := append([]model.AIUsageRecord(nil), first.Items...)
+	for len(items) < first.Total {
+		q.Page++
+		page, err := ListAIUsageRecords(q)
+		if err != nil {
+			return nil, err
+		}
+		if len(page.Items) == 0 {
+			break
+		}
+		items = append(items, page.Items...)
+	}
+	return items, nil
+}
 
 func ListAIUsageRecords(q model.AIUsageRecordQuery) (model.AIUsageRecordList, error) {
 	q.Normalize()

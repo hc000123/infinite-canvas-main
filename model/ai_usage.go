@@ -129,6 +129,20 @@ type AIUsageUser struct {
 	Ratio      float64     `json:"ratio"`
 }
 
+type AIUsageKindSummary struct {
+	Kind       string  `json:"kind"`
+	NetCredits int     `json:"netCredits"`
+	UsageCount int     `json:"usageCount"`
+	Ratio      float64 `json:"ratio"`
+}
+
+type UserAIUsageSummary struct {
+	Balance        int                    `json:"balance"`
+	Periods        []AIUsagePeriodSummary `json:"periods"`
+	SelectedPeriod AIUsagePeriod          `json:"selectedPeriod"`
+	Kinds          []AIUsageKindSummary   `json:"kinds"`
+}
+
 type AIUsageSummary struct {
 	Periods        []AIUsagePeriodSummary `json:"periods"`
 	SelectedPeriod AIUsagePeriod          `json:"selectedPeriod"`
