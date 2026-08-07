@@ -115,7 +115,7 @@ func arkVideoFieldsFromMap(payload map[string]any) arkVideoCreateFields {
 		ModelName:       arkStringMapValue(payload, "model"),
 		Prompt:          arkStringMapValue(payload, "prompt"),
 		TaskMode:        arkStringMapValue(payload, "_seedance_task_mode"),
-		Duration:        arkStringMapValue(payload, "duration", "seconds"),
+		Duration:        arkDurationMapValue(payload, "duration", "seconds"),
 		Ratio:           arkStringMapValue(payload, "ratio", "size"),
 		Resolution:      arkStringMapValue(payload, "resolution", "resolution_name"),
 		GenerateAudio:   arkStringMapValue(payload, "generate_audio"),
@@ -532,6 +532,22 @@ func arkStringMapValue(values map[string]any, keys ...string) string {
 			return fmt.Sprintf("%d", value)
 		case bool:
 			return fmt.Sprintf("%t", value)
+		}
+	}
+	return ""
+}
+
+func arkDurationMapValue(values map[string]any, keys ...string) string {
+	for _, key := range keys {
+		switch value := values[key].(type) {
+		case string:
+			if strings.TrimSpace(value) != "" {
+				return value
+			}
+		case float64:
+			return strconv.Itoa(int(value))
+		case int:
+			return strconv.Itoa(value)
 		}
 	}
 	return ""

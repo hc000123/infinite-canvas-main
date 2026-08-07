@@ -184,6 +184,23 @@ func TestNormalizeArkVideoDurationKeepsSeedanceRange(t *testing.T) {
 	}
 }
 
+func TestBuildArkVideoCreateRequestTruncatesFractionalJSONDuration(t *testing.T) {
+	tests := map[string]int{"14.9": 14, "3.9": 4}
+	for duration, want := range tests {
+		body, _, err := BuildArkVideoCreateRequest([]byte(fmt.Sprintf(`{
+			"model": "doubao-seedance-2-5",
+			"content": [{"type": "text", "text": "生成短视频"}],
+			"duration": %s
+		}`, duration)), "application/json")
+		if err != nil {
+			t.Fatalf("BuildArkVideoCreateRequest duration %s returned error: %v", duration, err)
+		}
+		if got := readJSONMap(t, body)["duration"]; got != float64(want) {
+			t.Fatalf("duration %s normalized to %#v, want %d", duration, got, want)
+		}
+	}
+}
+
 func TestBuildArkVideoCreateRequestForModelUsesLocalSeedance25Capabilities(t *testing.T) {
 	body, _, err := BuildArkVideoCreateRequestForModel([]byte(`{
 		"model": "doubao-seedance-2-5",
