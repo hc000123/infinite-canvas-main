@@ -1,6 +1,7 @@
 import { NODE_DEFAULT_SIZE } from "../canvas/constants.ts";
 import { buildCanvasVideoConfig } from "../canvas/utils/canvas-video-config.ts";
 import type { CanvasNodeData, CanvasNodeMetadata, CanvasNodeType } from "../canvas/types.ts";
+import { isSeedance25Model } from "../../../services/api/video-normalizers.ts";
 import type { AiTaskLedger } from "@/services/api/ai-task-trace";
 import type { NormalizedVideoTask } from "@/services/api/video";
 import type { UploadedImage } from "@/services/image-storage";
@@ -314,7 +315,7 @@ export function buildPackageVideoConfig(baseConfig: AiConfig, item: ProductionPa
         videoPromptReviewEnabled: item.config.videoPromptReviewEnabled || baseConfig.videoPromptReviewEnabled || "true",
         videoReferenceImageMode: item.config.videoReferenceImageMode || baseConfig.videoReferenceImageMode,
         videoTaskMode: item.config.videoTaskMode || "generate",
-        vquality: packageResolution(item.config.vquality || item.config.resolution || baseConfig.vquality),
+        vquality: packageResolution(item.config.vquality || item.config.resolution || baseConfig.vquality, provider, packageModel),
         watermark: item.config.videoWatermark || baseConfig.videoWatermark,
     };
     const config = buildCanvasVideoConfig(baseConfig, metadata as CanvasNodeMetadata);
@@ -342,9 +343,9 @@ function packageRatio(value: string) {
     return ratio || "9:16";
 }
 
-function packageResolution(value: string) {
+function packageResolution(value: string, provider: string, model: string) {
     const resolution = value.trim().toLowerCase();
-    if (resolution === "480" || resolution === "480p") return "480";
+    if (provider === "volcengine-ark" && isSeedance25Model(model) && (resolution === "480" || resolution === "480p")) return "480";
     return resolution.match(/1080/) ? "1080" : "720";
 }
 
