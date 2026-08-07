@@ -133,7 +133,6 @@ export function buildSeedanceVideoTaskPayload(config: SeedanceVideoTaskConfig, p
         model,
         content,
         _seedance_task_mode: taskMode,
-        _seedance_billing_duration: normalizeSeedanceDuration(config.videoSeconds || "", capabilityModel, "generate"),
         duration: normalizeSeedanceDuration(config.videoSeconds || "", capabilityModel, taskMode),
         ratio: normalizeSeedanceRatio(config.size || "", capabilityModel, taskMode, imageRoleMode),
         resolution: normalizeSeedanceResolution(config.vquality || "", capabilityModel),
@@ -141,6 +140,7 @@ export function buildSeedanceVideoTaskPayload(config: SeedanceVideoTaskConfig, p
         watermark: config.videoWatermark === "true",
         return_last_frame: config.returnLastFrame === "true",
     };
+    if (taskMode === "edit") payload._seedance_billing_duration = normalizeSeedanceDuration(config.videoSeconds || "", capabilityModel, "generate");
     const seed = normalizeSeedanceSeed(config.videoSeed || "");
     if (seed !== undefined) payload.seed = seed;
     return payload;

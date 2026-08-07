@@ -776,9 +776,11 @@ func TestReadAIRequestUsageForModelUsesArkSeedance25Limit(t *testing.T) {
 		protocol  string
 		want      int
 	}{
-		{name: "Ark Seedance 2.5 private billing duration", path: "/videos", body: `{"_seedance_billing_duration":30,"duration":-1}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 30},
-		{name: "Ark Seedance 2.5 capped private billing duration", path: "/videos", body: `{"_seedance_billing_duration":999,"duration":-1}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 30},
-		{name: "Ark Seedance 2.5 falls back from invalid private duration", path: "/videos", body: `{"_seedance_billing_duration":-1,"duration":30}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 30},
+		{name: "Ark Seedance 2.5 generate ignores private duration", path: "/videos", body: `{"_seedance_task_mode":"generate","_seedance_billing_duration":1,"duration":30}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 30},
+		{name: "Ark Seedance 2.5 positive edit duration ignores private duration", path: "/videos", body: `{"_seedance_task_mode":"edit","_seedance_billing_duration":1,"duration":30}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 30},
+		{name: "Ark Seedance 2.5 automatic edit uses private duration", path: "/videos", body: `{"_seedance_task_mode":"edit","_seedance_billing_duration":30,"duration":-1}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 30},
+		{name: "Ark Seedance 2.5 automatic edit caps private duration", path: "/videos", body: `{"_seedance_task_mode":"edit","_seedance_billing_duration":999,"duration":-1}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 30},
+		{name: "Ark Seedance 2.5 extend ignores private duration", path: "/videos", body: `{"_seedance_task_mode":"extend","_seedance_billing_duration":1,"duration":24}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 24},
 		{name: "Ark Seedance 2.0 keeps default limit", path: "/videos", body: `{"duration":30}`, modelName: "doubao-seedance-2-0", protocol: string(model.ModelProtocolVolcengineArk), want: maxAIRequestCount},
 		{name: "Ark Seedance 2.0 ignores private billing duration", path: "/videos", body: `{"_seedance_billing_duration":4,"duration":30}`, modelName: "doubao-seedance-2-0", protocol: string(model.ModelProtocolVolcengineArk), want: maxAIRequestCount},
 		{name: "Jimeng Seedance 2.5 keeps default limit", path: "/videos", body: `{"duration":30}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolJimengCLI), want: maxAIRequestCount},
@@ -791,6 +793,20 @@ func TestReadAIRequestUsageForModelUsesArkSeedance25Limit(t *testing.T) {
 				t.Fatalf("usage = %d, want %d", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestReadAIRequestUsageForModelSupportsMultipartAutomaticEdit(t *testing.T) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	writeMultipartField(t, writer, "_seedance_task_mode", "edit")
+	writeMultipartField(t, writer, "_seedance_billing_duration", "30")
+	writeMultipartField(t, writer, "duration", "-1")
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if got := readAIRequestUsageForModel("/videos", "", body.Bytes(), writer.FormDataContentType(), "doubao-seedance-2-5", string(model.ModelProtocolVolcengineArk)); got != 30 {
+		t.Fatalf("multipart usage = %d, want 30", got)
 	}
 }
 

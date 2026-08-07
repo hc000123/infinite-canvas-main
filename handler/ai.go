@@ -1246,8 +1246,11 @@ func readAIRequestUsageForModel(path string, requestKind string, body []byte, co
 	limit := maxAIRequestCount
 	if path == "/videos" && service.IsVolcengineArkProtocol(protocol) && service.IsArkSeedance25Model(modelName) {
 		limit = maxArkSeedance25Usage
-		if billingDuration := readAIRequestInt(body, contentType, "_seedance_billing_duration"); billingDuration > 0 {
-			return clampAIRequestUsage(billingDuration, limit)
+		if readAIRequestString(body, contentType, "_seedance_task_mode") == "edit" && readAIRequestInt(body, contentType, "duration") == -1 {
+			billingDuration := readAIRequestInt(body, contentType, "_seedance_billing_duration")
+			if billingDuration > 0 {
+				return clampAIRequestUsage(billingDuration, limit)
+			}
 		}
 	}
 	return readAIRequestUsageWithLimit(path, requestKind, body, contentType, limit)
@@ -1307,6 +1310,28 @@ func readAIRequestInt(body []byte, contentType string, keys ...string) int {
 		}
 	}
 	return 0
+}
+
+func readAIRequestString(body []byte, contentType string, key string) string {
+	if strings.HasPrefix(contentType, "multipart/form-data") {
+		_, params, err := mime.ParseMediaType(contentType)
+		if err != nil {
+			return ""
+		}
+		form, err := multipart.NewReader(bytes.NewReader(body), params["boundary"]).ReadForm(32 << 20)
+		if err != nil {
+			return ""
+		}
+		defer form.RemoveAll()
+		if values := form.Value[key]; len(values) > 0 {
+			return strings.TrimSpace(values[0])
+		}
+		return ""
+	}
+	var payload map[string]any
+	_ = json.Unmarshal(body, &payload)
+	value, _ := payload[key].(string)
+	return strings.TrimSpace(value)
 }
 
 func aiRequestIntValue(value any) int {
