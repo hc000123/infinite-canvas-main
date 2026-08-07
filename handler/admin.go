@@ -96,6 +96,17 @@ func AdminAIUsageSummary(w http.ResponseWriter, r *http.Request) {
 	OK(w, result)
 }
 
+func AdminAIUsageRecords(w http.ResponseWriter, r *http.Request) {
+	query := parseAIUsageRecordQuery(r)
+	query.User = r.URL.Query().Get("user")
+	result, err := service.ListAIUsageRecords(query)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
 func AdminAITask(w http.ResponseWriter, r *http.Request, id string) {
 	result, err := service.GetAdminAITaskDetail(id)
 	if err != nil {

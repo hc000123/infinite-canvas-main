@@ -12,6 +12,23 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func TestAIUsageRoutesRequireCorrectRoles(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := New()
+	for _, path := range []string{
+		"/api/me/ai-usage-summary",
+		"/api/me/ai-usage-records",
+		"/api/admin/ai-usage-records",
+	} {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		response := httptest.NewRecorder()
+		engine.ServeHTTP(response, request)
+		if !strings.Contains(response.Body.String(), "未登录或权限不足") {
+			t.Fatalf("%s body = %s", path, response.Body.String())
+		}
+	}
+}
+
 func TestVolcengineVideoReviewRouteExists(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	app := New()

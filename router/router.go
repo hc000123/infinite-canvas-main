@@ -27,6 +27,9 @@ func New() *gin.Engine {
 	api.GET("/auth/me", middleware.OptionalAuth, gin.WrapF(handler.CurrentUser))
 	api.GET("/settings", gin.WrapF(handler.Settings))
 	api.Static("/uploaded-assets", config.Cfg.PublicAssetDir)
+	me := api.Group("/me", middleware.UserAuth)
+	me.GET("/ai-usage-summary", gin.WrapF(handler.UserAIUsageSummary))
+	me.GET("/ai-usage-records", gin.WrapF(handler.UserAIUsageRecords))
 	v1 := api.Group("/v1", middleware.UserAuth)
 	v1.POST("/images/generations", middleware.AuditAIToolUse, gin.WrapF(handler.AIImagesGenerations))
 	v1.POST("/images/edits", middleware.AuditAIToolUse, gin.WrapF(handler.AIImagesEdits))
@@ -284,6 +287,7 @@ func New() *gin.Engine {
 		handler.AdminDeleteCreditLog(c.Writer, c.Request, c.Param("id"))
 	})
 	admin.GET("/ai-usage-summary", gin.WrapF(handler.AdminAIUsageSummary))
+	admin.GET("/ai-usage-records", gin.WrapF(handler.AdminAIUsageRecords))
 	admin.GET("/ai-tasks", gin.WrapF(handler.AdminAITasks))
 	admin.GET("/ai-tasks/:id", func(c *gin.Context) {
 		handler.AdminAITask(c.Writer, c.Request, c.Param("id"))
