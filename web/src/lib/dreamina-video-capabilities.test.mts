@@ -23,6 +23,17 @@ test("describes Ark Seedance 2.5 generation capabilities", () => {
     assert.equal(capability?.fixedModel, false);
 });
 
+test("does not treat longer Seedance version names as 2.5", () => {
+    const ark = resolveDreaminaVideoCapability({ protocol: "volcengine-ark", model: "doubao-seedance-2-50", mode: "multimodal2video" });
+    const jimeng = resolveDreaminaVideoCapability({ protocol: "jimeng-cli", model: "seedance2.50", mode: "multimodal2video" });
+
+    assert.equal(ark?.label, "");
+    assert.deepEqual(ark?.duration, { min: 4, max: 15 });
+    assert.deepEqual(ark?.resolutions, ["720", "1080"]);
+    assert.equal(jimeng?.label, "");
+    assert.deepEqual(jimeng?.duration, { min: 4, max: 15 });
+});
+
 test("keeps Ark Seedance 2.0 duration, resolution, and audio-only limits", () => {
     const base = { protocol: "volcengine-ark" as const, model: "doubao-seedance-2-0", mode: "multimodal2video" as const };
     const capability = resolveDreaminaVideoCapability(base);

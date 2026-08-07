@@ -40,7 +40,7 @@ export function resolveDreaminaVideoCapability(input: DreaminaCapabilityInput): 
             fixedModel: true,
         };
     }
-    const seedance25 = isSeedance25(input.model);
+    const seedance25 = input.protocol === "volcengine-ark" ? isArkSeedance25(input.model) : input.model === "seedance2.5";
     if (input.protocol === "volcengine-ark") {
         return {
             label: seedance25 ? "2.5 · 4–30s · 多模态" : "",
@@ -107,6 +107,7 @@ function normalizeResolutionValue(value: string) {
     return resolution.replace(/p$/, "");
 }
 
-function isSeedance25(model: string) {
-    return model.toLowerCase().replace(/[^a-z0-9]/g, "").includes("seedance25");
+function isArkSeedance25(model: string) {
+    const normalized = model.toLowerCase().replace(/[^a-z0-9]/g, "");
+    return normalized === "doubaoseedance25" || normalized === "seedance25";
 }
