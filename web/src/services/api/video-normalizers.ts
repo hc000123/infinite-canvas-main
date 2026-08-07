@@ -18,7 +18,8 @@ export function normalizeVideoResolution(value: string) {
 }
 
 export function isSeedance25Model(model?: string) {
-    return ["doubao-seedance-2-5", "seedance-2-5", "seedance2.5"].includes((model || "").trim().toLowerCase());
+    const normalized = (model || "").toLowerCase().replace(/[\s._-]/g, "");
+    return normalized === "doubaoseedance25" || normalized === "seedance25";
 }
 
 export function normalizeSeedanceDuration(value: string, model?: string, taskMode?: string) {

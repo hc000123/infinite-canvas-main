@@ -1,4 +1,5 @@
 import type { VideoReferenceMode } from "../services/api/video-reference.ts";
+import { isSeedance25Model } from "../services/api/video-normalizers.ts";
 
 export type DreaminaVideoMode = Exclude<VideoReferenceMode, "auto">;
 export type DreaminaVideoProtocol = "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud";
@@ -40,7 +41,7 @@ export function resolveDreaminaVideoCapability(input: DreaminaCapabilityInput): 
             fixedModel: true,
         };
     }
-    const seedance25 = input.protocol === "volcengine-ark" ? isArkSeedance25(input.model) : input.model === "seedance2.5";
+    const seedance25 = input.protocol === "volcengine-ark" ? isSeedance25Model(input.model) : input.model === "seedance2.5";
     if (input.protocol === "volcengine-ark") {
         return {
             label: seedance25 ? "2.5 · 4–30s · 多模态" : "",
@@ -105,9 +106,4 @@ function normalizeResolutionValue(value: string) {
     const resolution = value.trim().toLowerCase();
     if (resolution === "4k") return "2160";
     return resolution.replace(/p$/, "");
-}
-
-function isArkSeedance25(model: string) {
-    const normalized = model.toLowerCase().replace(/[^a-z0-9]/g, "");
-    return normalized === "doubaoseedance25" || normalized === "seedance25";
 }

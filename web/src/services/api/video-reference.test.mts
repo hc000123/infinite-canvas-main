@@ -11,6 +11,7 @@ import {
     seedanceAssetURIFromVideoReference,
     seedanceReferenceLabel,
     seedanceReferenceLabelRange,
+    type SeedanceOrderedReferenceInput,
 } from "./video-reference.ts";
 
 test("builds Seedance content with typed reference roles", () => {
@@ -55,6 +56,34 @@ test("accepts Seedance 2.5 reference boundaries and rejects overflow", () => {
     assert.throws(() => buildSeedanceContent("prompt", [...images, "image-30"], [], [], "doubao-seedance-2-5"), /Seedance 2\.5 最多支持 30 张图片/);
     assert.throws(() => buildSeedanceContent("prompt", [], [...videos, "video-10"], [], "doubao-seedance-2-5"), /Seedance 2\.5 最多支持 10 个视频/);
     assert.throws(() => buildSeedanceContent("prompt", [], [], [...audios, "audio-10"], "doubao-seedance-2-5"), /Seedance 2\.5 最多支持 10 个音频/);
+});
+
+test("keeps ordered Seedance 2.5 references at the full boundary", () => {
+    const references: SeedanceOrderedReferenceInput[] = [
+        { type: "video", url: "video-0" },
+        { type: "image", url: "image-0", role: "first_frame" },
+        { type: "audio", url: "audio-0" },
+        ...Array.from({ length: 29 }, (_, index) => ({ type: "image" as const, url: `image-${index + 1}` })),
+        ...Array.from({ length: 9 }, (_, index) => ({ type: "video" as const, url: `video-${index + 1}` })),
+        ...Array.from({ length: 9 }, (_, index) => ({ type: "audio" as const, url: `audio-${index + 1}` })),
+    ];
+    const content = buildSeedanceContent("按素材顺序生成", references, [], [], "doubao-seedance-2-5");
+
+    assert.equal(content.length, 51);
+    assert.deepEqual(content.slice(1, 4), [
+        { type: "video_url", video_url: { url: "video-0" }, role: "reference_video" },
+        { type: "image_url", image_url: { url: "image-0" }, role: "first_frame" },
+        { type: "audio_url", audio_url: { url: "audio-0" }, role: "reference_audio" },
+    ]);
+});
+
+test("rejects ordered Seedance 2.5 per-kind overflow", () => {
+    const ordered = (type: "image" | "video" | "audio", count: number): SeedanceOrderedReferenceInput[] =>
+        Array.from({ length: count }, (_, index): SeedanceOrderedReferenceInput => (type === "image" ? { type, url: `${type}-${index}`, role: "reference_image" } : { type, url: `${type}-${index}` }));
+
+    assert.throws(() => buildSeedanceContent("prompt", ordered("image", 31), [], [], "doubao-seedance-2-5"), /最多支持 30 张图片/);
+    assert.throws(() => buildSeedanceContent("prompt", ordered("video", 11), [], [], "doubao-seedance-2-5"), /最多支持 10 个视频/);
+    assert.throws(() => buildSeedanceContent("prompt", ordered("audio", 11), [], [], "doubao-seedance-2-5"), /最多支持 10 个音频/);
 });
 
 test("accepts empty Seedance 2.5 prompt with audio and rejects empty content", () => {
@@ -417,8 +446,8 @@ test("builds compact label ranges for Seedance reference previews", () => {
 });
 
 test("normalizes compact Seedance reference mentions in prompt text", () => {
-    assert.equal(normalizeSeedancePromptReferenceMentions("图片1参考视频2并匹配音频3"), "图片 1参考视频 2并匹配音频 3");
-    assert.equal(normalizeSeedancePromptReferenceMentions("视频2026年度质感，不要改写图片13"), "视频2026年度质感，不要改写图片13");
+    assert.equal(normalizeSeedancePromptReferenceMentions("图片1、图片10、图片12、图片30，视频1、视频10，音频1、音频10"), "图片 1、图片 10、图片 12、图片 30，视频 1、视频 10，音频 1、音频 10");
+    assert.equal(normalizeSeedancePromptReferenceMentions("视频2026年度质感，不要改写图片31、视频11、音频11"), "视频2026年度质感，不要改写图片31、视频11、音频11");
 });
 
 test("detects Asset ID references in prompt text", () => {
