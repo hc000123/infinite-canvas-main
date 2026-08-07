@@ -10,7 +10,9 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"strconv"
 	"strings"
+	"unicode"
 )
 
 const (
@@ -32,14 +34,14 @@ type arkVideoCreateFields struct {
 }
 
 func BuildArkVideoCreateRequest(body []byte, contentType string) ([]byte, string, error) {
-	return buildArkVideoCreateRequest(body, contentType, "")
+	return buildArkVideoCreateRequest(body, contentType, "", "")
 }
 
-func BuildArkVideoCreateRequestForModel(body []byte, contentType string, modelName string) ([]byte, string, error) {
-	return buildArkVideoCreateRequest(body, contentType, modelName)
+func BuildArkVideoCreateRequestForModel(body []byte, contentType string, capabilityModelName string, upstreamModelName string) ([]byte, string, error) {
+	return buildArkVideoCreateRequest(body, contentType, capabilityModelName, upstreamModelName)
 }
 
-func buildArkVideoCreateRequest(body []byte, contentType string, upstreamModelName string) ([]byte, string, error) {
+func buildArkVideoCreateRequest(body []byte, contentType string, capabilityModelName string, upstreamModelName string) ([]byte, string, error) {
 	fields := arkVideoCreateFields{}
 	if strings.HasPrefix(contentType, "multipart/form-data") {
 		form, err := readArkMultipartForm(body, contentType)
@@ -58,12 +60,15 @@ func buildArkVideoCreateRequest(body []byte, contentType string, upstreamModelNa
 		}
 		fields = arkVideoFieldsFromMap(payload)
 	}
-	if strings.TrimSpace(upstreamModelName) != "" {
-		fields.ModelName = strings.TrimSpace(upstreamModelName)
+	if strings.TrimSpace(capabilityModelName) == "" {
+		capabilityModelName = fields.ModelName
 	}
-	payload, err := buildArkVideoPayload(fields, true)
+	payload, err := buildArkVideoPayload(fields, true, capabilityModelName)
 	if err != nil {
 		return nil, "", err
+	}
+	if strings.TrimSpace(upstreamModelName) != "" {
+		payload["model"] = strings.TrimSpace(upstreamModelName)
 	}
 	nextBody, _ := json.Marshal(payload)
 	return nextBody, "application/json", nil
@@ -92,7 +97,7 @@ func ReadArkLocalVideoConfig(body []byte, contentType string) (apiKey string, ba
 	if fieldsErr != nil {
 		return "", "", nil, fieldsErr
 	}
-	payload, err = buildArkVideoPayload(fields, false)
+	payload, err = buildArkVideoPayload(fields, false, fields.ModelName)
 	return apiKey, baseURL, payload, nil
 }
 
@@ -148,7 +153,7 @@ func arkVideoFieldsFromForm(form *multipart.Form, failOnFileError bool) (arkVide
 	return fields, nil
 }
 
-func buildArkVideoPayload(fields arkVideoCreateFields, requirePrompt bool) (map[string]any, error) {
+func buildArkVideoPayload(fields arkVideoCreateFields, requirePrompt bool, capabilityModelName string) (map[string]any, error) {
 	content := fields.Content
 	if content == nil {
 		content = []any{}
@@ -161,18 +166,15 @@ func buildArkVideoPayload(fields arkVideoCreateFields, requirePrompt bool) (map[
 		if strings.TrimSpace(fields.ModelName) == "" {
 			return nil, errors.New("缺少模型名称")
 		}
-		if len(content) == 0 {
-			return nil, errors.New("缺少视频提示词")
-		}
 	}
 	payload := map[string]any{
 		"model":   fields.ModelName,
 		"content": content,
 	}
-	if err := validateArkSeedanceReferenceMix(content); err != nil {
+	if err := validateArkSeedanceContent(content, capabilityModelName, requirePrompt); err != nil {
 		return nil, err
 	}
-	appendArkVideoControls(payload, fields.ModelName, fields.Duration, fields.Ratio, fields.Resolution, fields.GenerateAudio, fields.Watermark, fields.Seed, fields.ReturnLastFrame)
+	appendArkVideoControls(payload, capabilityModelName, fields.Duration, fields.Ratio, fields.Resolution, fields.GenerateAudio, fields.Watermark, fields.Seed, fields.ReturnLastFrame)
 	return payload, nil
 }
 
@@ -636,29 +638,89 @@ func arkReferenceRoleAt(roles []string, index int, fallback string) string {
 	return fallback
 }
 
-func validateArkSeedanceReferenceMix(content []any) error {
-	hasAudio := false
-	hasVisual := false
+func validateArkSeedanceContent(content []any, modelName string, requireInput bool) error {
+	imageCount := 0
+	videoCount := 0
+	audioCount := 0
+	hasText := false
 	for _, item := range content {
 		entry, ok := item.(map[string]any)
 		if !ok {
 			continue
 		}
 		switch strings.TrimSpace(fmt.Sprint(entry["type"])) {
+		case "text":
+			text, _ := entry["text"].(string)
+			hasText = strings.TrimSpace(text) != "" || hasText
+		case "image_url":
+			if arkVideoContentHasURL(entry, "image_url") {
+				imageCount++
+			}
+		case "video_url":
+			if arkVideoContentHasURL(entry, "video_url") {
+				videoCount++
+			}
 		case "audio_url":
-			hasAudio = true
-		case "image_url", "video_url":
-			hasVisual = true
+			if arkVideoContentHasURL(entry, "audio_url") {
+				audioCount++
+			}
 		}
 	}
-	if hasAudio && !hasVisual {
+	if requireInput && !hasText && imageCount+videoCount+audioCount == 0 {
+		return errors.New("缺少视频提示词或参考素材")
+	}
+	seedance25 := isArkSeedance25Model(modelName)
+	version := "2.0"
+	imageLimit, videoLimit, audioLimit := 9, 3, 3
+	if seedance25 {
+		version = "2.5"
+		imageLimit, videoLimit, audioLimit = 30, 10, 10
+	}
+	if imageCount > imageLimit {
+		return fmt.Errorf("Seedance %s 最多支持 %d 张图片", version, imageLimit)
+	}
+	if videoCount > videoLimit {
+		return fmt.Errorf("Seedance %s 最多支持 %d 个视频", version, videoLimit)
+	}
+	if audioCount > audioLimit {
+		return fmt.Errorf("Seedance %s 最多支持 %d 个音频", version, audioLimit)
+	}
+	if !seedance25 && audioCount > 0 && imageCount+videoCount == 0 {
 		return errors.New("Seedance 2.0 不支持纯音频或文本加音频输入，请至少添加图片或视频参考")
 	}
 	return nil
 }
 
+func arkVideoContentHasURL(entry map[string]any, key string) bool {
+	value, ok := entry[key]
+	if !ok {
+		return false
+	}
+	if rawURL, ok := value.(string); ok {
+		return strings.TrimSpace(rawURL) != ""
+	}
+	switch object := value.(type) {
+	case map[string]any:
+		rawURL, _ := object["url"].(string)
+		return strings.TrimSpace(rawURL) != ""
+	case map[string]string:
+		return strings.TrimSpace(object["url"]) != ""
+	}
+	return false
+}
+
+func isArkSeedance25Model(modelName string) bool {
+	normalized := strings.Map(func(char rune) rune {
+		if unicode.IsSpace(char) || char == '.' || char == '_' || char == '-' {
+			return -1
+		}
+		return unicode.ToLower(char)
+	}, modelName)
+	return normalized == "seedance25" || normalized == "doubaoseedance25"
+}
+
 func appendArkVideoControls(payload map[string]any, modelName string, seconds string, size string, resolution string, generateAudio string, watermark string, seed string, returnLastFrame string) {
-	if duration := normalizeArkVideoDuration(seconds); duration > 0 {
+	if duration := normalizeArkVideoDurationForModel(seconds, modelName); duration != 0 {
 		payload["duration"] = duration
 	}
 	if ratio := normalizeArkVideoRatio(size); ratio != "" {
@@ -682,12 +744,23 @@ func appendArkVideoControls(payload map[string]any, modelName string, seconds st
 }
 
 func normalizeArkVideoDuration(value string) int {
+	return normalizeArkVideoDurationForModel(value, "")
+}
+
+func normalizeArkVideoDurationForModel(value string, modelName string) int {
+	if isArkSeedance25Model(modelName) && strings.TrimSpace(value) == "-1" {
+		return -1
+	}
 	var seconds int
 	_, _ = fmt.Sscan(value, &seconds)
 	if seconds <= 0 {
 		return 6
 	}
-	return max(4, min(15, seconds))
+	maximum := 15
+	if isArkSeedance25Model(modelName) {
+		maximum = 30
+	}
+	return max(4, min(maximum, seconds))
 }
 
 func normalizeArkVideoRatio(value string) string {
@@ -734,6 +807,14 @@ func normalizeArkVideoRatio(value string) string {
 }
 
 func normalizeArkVideoResolution(value string, modelName string) string {
+	if isArkSeedance25Model(modelName) {
+		trimmed := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(value)), "p")
+		resolution, err := strconv.Atoi(trimmed)
+		if err == nil && resolution > 0 && resolution <= 480 {
+			return "480p"
+		}
+		return "720p"
+	}
 	if strings.Contains(strings.ToLower(modelName), "seedance-2-0-fast") {
 		return "720p"
 	}

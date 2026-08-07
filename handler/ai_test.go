@@ -212,6 +212,40 @@ func TestCloudVideoProxyIgnoresFrontendVolcengineKey(t *testing.T) {
 	}
 }
 
+func TestArkSeedance25ProxyUsesLocalCapabilitiesBeforeEndpointRouting(t *testing.T) {
+	setupAIHandlerTestDB(t)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/contents/generations/tasks" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		payload := readJSONMap(t, mustReadAll(t, r.Body))
+		if payload["model"] != "ep-25" || payload["duration"] != float64(30) || payload["resolution"] != "480p" {
+			t.Fatalf("upstream payload = %#v", payload)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"task-seedance-25","status":"queued"}`))
+	}))
+	defer upstream.Close()
+	saveArk25HandlerSettings(t, upstream.URL)
+
+	body := []byte(`{
+		"model": "doubao-seedance-2-5",
+		"content": [{"type":"text","text":"生成短视频"}],
+		"duration": 30,
+		"resolution": "480p"
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/videos", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(service.WithUser(req.Context(), model.AuthUser{ID: "user-seedance-25", Username: "seedance-25", Role: model.UserRoleUser}))
+	rec := httptest.NewRecorder()
+
+	proxyAIRequest(rec, req, "/videos")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestNormalizeImageGenerationPayloadArchivesRemoteURLs(t *testing.T) {
 	payload := []byte(`{"created":1,"data":[{"url":"https://cdn.example.com/generated.webp"}]}`)
 	normalized, err := normalizeImageGenerationPayload(payload, func(rawURL string) ([]byte, string, error) {
@@ -755,6 +789,31 @@ func saveAIHandlerSettings(t *testing.T, allowCustomChannel bool, upstreamURL st
 				Enabled:  true,
 			}},
 		},
+	}, now)
+	if err != nil {
+		t.Fatalf("SaveSettings returned error: %v", err)
+	}
+}
+
+func saveArk25HandlerSettings(t *testing.T, upstreamURL string) {
+	t.Helper()
+	now := time.Now().Format(time.RFC3339)
+	_, err := repository.SaveSettings(model.Settings{
+		Public: model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{
+			AvailableModels:   []string{"doubao-seedance-2-5"},
+			DefaultVideoModel: "doubao-seedance-2-5",
+			ModelCosts:        []model.ModelCost{{Model: "doubao-seedance-2-5", Credits: 0}},
+		}},
+		Private: model.PrivateSetting{Channels: []model.ModelChannel{{
+			Protocol:         string(model.ModelProtocolVolcengineArk),
+			Name:             "ark-seedance-25",
+			BaseURL:          upstreamURL,
+			APIKey:           "backend-key",
+			Models:           []string{"doubao-seedance-2-5"},
+			EndpointMappings: []model.ModelEndpointMapping{{Model: "doubao-seedance-2-5", EndpointID: "ep-25"}},
+			Weight:           1,
+			Enabled:          true,
+		}}},
 	}, now)
 	if err != nil {
 		t.Fatalf("SaveSettings returned error: %v", err)

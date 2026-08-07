@@ -206,7 +206,7 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 	isArkVideoTask := service.IsVolcengineArkProtocol(channel.Protocol) && path == "/videos"
 	if isArkVideoTask {
 		upstreamPath = "/contents/generations/tasks"
-		upstreamBody, upstreamContentType, err = service.BuildArkVideoCreateRequestForModel(body, contentType, service.ModelChannelEndpointForModel(channel, modelName))
+		upstreamBody, upstreamContentType, err = service.BuildArkVideoCreateRequestForModel(body, contentType, modelName, service.ModelChannelEndpointForModel(channel, modelName))
 		if err != nil {
 			log.Printf("AI proxy build ark video request failed: model=%s err=%v", modelName, err)
 			Fail(w, err.Error())
