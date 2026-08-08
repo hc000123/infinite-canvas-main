@@ -51,7 +51,7 @@ export function useCanvasNodeAssetActions({
     const saveNodeAsset = useCallback(
         async (node: CanvasNodeData) => {
             if (!(await addCanvasNodeToAssets(node))) return message.error(`没有可保存的${canvasAssetTypeLabel(node.type)}`);
-            message.success("已加入我的素材");
+            message.success("已加入资产");
         },
         [addCanvasNodeToAssets, message],
     );
@@ -60,10 +60,10 @@ export function useCanvasNodeAssetActions({
         (node: CanvasNodeData) => {
             const assetId = node.metadata?.sourceAssetId;
             const asset = assetId ? assetById.get(assetId) : undefined;
-            if (!asset || !node.metadata?.assetVersion) return message.warning("没有可更新的素材引用");
+            if (!asset || !node.metadata?.assetVersion) return message.warning("没有可更新的资产引用");
             const nextVersion = updateAssetReferenceToLatest(node.metadata.assetVersion, asset);
             setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, ...canvasAssetReferenceMetadata({ sourceAssetId: assetId, assetVersion: nextVersion }) } } : item)));
-            message.success("已更新当前节点的素材引用版本");
+            message.success("已更新当前节点的资产引用版本");
         },
         [assetById, message, setNodes],
     );

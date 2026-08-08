@@ -45,6 +45,7 @@ import { useCanvasToolbarActions } from "../hooks/use-canvas-toolbar-actions";
 import { useCanvasUiActions } from "../hooks/use-canvas-ui-actions";
 import { useCanvasVideoTaskRecovery } from "../hooks/use-canvas-video-task-recovery";
 import { useCanvasMediaVersionActions } from "../hooks/use-canvas-media-version-actions";
+import { useCanvasImageUpscaleActions } from "../hooks/use-canvas-image-upscale-actions";
 import { useCanvasViewportGeometry } from "../hooks/use-canvas-viewport-geometry";
 import { useCanvasWorkspaceStores } from "../hooks/use-canvas-workspace-stores";
 import { App } from "antd";
@@ -756,6 +757,20 @@ function InfiniteCanvasPage() {
         toImageMetadata: imageMetadata,
     });
 
+    const imageUpscale = useCanvasImageUpscaleActions({
+        addCanvasNodeToAssets,
+        canvasId,
+        connectionsRef,
+        message,
+        nodes,
+        nodesRef,
+        projectId: workspaceProjectId,
+        setConnections,
+        setNodes,
+        setSelectedConnectionId,
+        setSelectedNodeIds,
+    });
+
     const { cropImageNode, generateAngleNode, handleGenerateNode, handleRefreshVideoTask, nodeToolActions } = useCanvasNodeExecutionActions({
         flow: {
             assets,
@@ -846,8 +861,10 @@ function InfiniteCanvasPage() {
             handleFontSizeChange,
             handleUploadRequest,
             openNodeCapability: canvasCapability.openNodeCapability,
+            openImageUpscale: imageUpscale.open,
             openTextEditor,
             refreshNodeVolcengineReview,
+            retryImageUpscale: imageUpscale.retry,
             saveNodeAsset,
             setAngleNodeId,
             setCropNodeId,
@@ -1071,6 +1088,9 @@ function InfiniteCanvasPage() {
                     expandedTextNode={expandedTextNode}
                     nodes={nodes}
                     previewNode={previewNode}
+                    upscaleNode={imageUpscale.node}
+                    upscaleCapabilities={imageUpscale.capabilities}
+                    upscaleSubmitting={imageUpscale.submitting}
                     projectId={workspaceProjectId}
                     projectTitle={workspaceProjectTitle}
                     episodeId={currentProject?.episodeId}
@@ -1090,12 +1110,14 @@ function InfiniteCanvasPage() {
                     onCloseInfo={renderActions.closeInfo}
                     onCloseTextEditor={() => setExpandedTextNodeId(null)}
                     onClosePreview={renderActions.closePreview}
+                    onCloseUpscale={imageUpscale.close}
                     onCloseScriptManager={renderActions.closeScriptManager}
                     onCloseStoryboardManager={renderActions.closeStoryboardManager}
                     onCreateBriefImageConfig={createBriefImageConfigNode}
                     onCropImageNode={(node, crop, mode) => void cropImageNode(node, crop, mode)}
                     onGenerateAngleNode={(node, params) => void generateAngleNode(node, params)}
                     onImageInputChange={handleImageInputChange}
+                    onUpscaleImageNode={imageUpscale.submit}
                     onOpenStoryboardGroup={renderActions.openStoryboardGroup}
                     onSaveTextNode={handleNodeContentChange}
                 />

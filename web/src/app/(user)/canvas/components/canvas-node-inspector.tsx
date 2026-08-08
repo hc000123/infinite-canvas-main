@@ -29,6 +29,7 @@ export function NodeInspector({
     onContinueVideo,
     onCrop,
     onAngle,
+    onUpscale,
     onViewImage,
 }: {
     node: CanvasNodeData;
@@ -48,6 +49,7 @@ export function NodeInspector({
     onContinueVideo: (node: CanvasNodeData) => void;
     onCrop: (node: CanvasNodeData) => void;
     onAngle: (node: CanvasNodeData) => void;
+    onUpscale: (node: CanvasNodeData) => void;
     onViewImage: (node: CanvasNodeData) => void;
 }) {
     const upstreamCount = connections.filter((connection) => connection.toNodeId === node.id).length;
@@ -96,12 +98,13 @@ export function NodeInspector({
                     <InspectorAction icon={<Download className="size-4" />} label="下载" onClick={() => onDownload(node)} theme={theme} />
                 ) : null}
                 {(node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio) && hasMedia ? (
-                    <InspectorAction icon={<Sparkles className="size-4" />} label="存素材" onClick={() => onSaveAsset(node)} theme={theme} />
+                    <InspectorAction icon={<Sparkles className="size-4" />} label="存资产" onClick={() => onSaveAsset(node)} theme={theme} />
                 ) : null}
                 {node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio ? (
                     <InspectorAction icon={<Upload className="size-4" />} label={hasMedia ? "替换素材" : "上传素材"} onClick={() => onUpload(node)} theme={theme} />
                 ) : null}
                 {node.type === CanvasNodeType.Image && hasMedia ? <InspectorAction icon={<Scissors className="size-4" />} label="裁剪" onClick={() => onCrop(node)} theme={theme} /> : null}
+                {node.type === CanvasNodeType.Image && hasMedia ? <InspectorAction icon={<Sparkles className="size-4" />} label="超分" onClick={() => onUpscale(node)} theme={theme} /> : null}
                 {node.type === CanvasNodeType.Image && hasMedia ? <InspectorAction icon={<Camera className="size-4" />} label="多角度" onClick={() => onAngle(node)} theme={theme} /> : null}
                 {node.type === CanvasNodeType.Image && hasMedia ? <InspectorAction icon={<Maximize2 className="size-4" />} label="查看大图" onClick={() => onViewImage(node)} theme={theme} /> : null}
                 {node.type === CanvasNodeType.Video && node.metadata?.lastFrameUrl ? <InspectorAction icon={<Video className="size-4" />} label="续写下一段" onClick={() => onContinueVideo(node)} theme={theme} /> : null}
@@ -229,6 +232,7 @@ function nodeTypeLabel(node: CanvasNodeData) {
 }
 
 function nodeStatusLabel(node: CanvasNodeData) {
+    if (node.metadata?.imageUpscale && node.metadata.status === "loading") return `超分 ${node.metadata.imageUpscale.progress}%`;
     if (node.metadata?.content && (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio)) return "成功";
     const status = node.metadata?.status || "idle";
     if (status === "loading") return "生成中";

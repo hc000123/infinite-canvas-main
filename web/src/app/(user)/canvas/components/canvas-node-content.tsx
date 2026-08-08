@@ -79,10 +79,12 @@ const nodeContentRenderers = {
 
 function LoadingContent({ node, theme, onRefreshVideoTask, showPanel }: Pick<NodeContentRendererProps, "node" | "theme" | "onRefreshVideoTask" | "showPanel">) {
     if (node.type === CanvasNodeType.Video) return <VideoTaskProgressPanel node={node} theme={theme} onRefreshVideoTask={onRefreshVideoTask} showPanel={showPanel} />;
+    const upscale = node.metadata?.imageUpscale;
     return (
         <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: theme.node.activeStroke }}>
             <div className="size-10 animate-spin rounded-full border-2" style={{ borderColor: theme.node.stroke, borderTopColor: theme.node.activeStroke }} />
-            <span className="text-[10px] tracking-[0.2em]">{node.metadata?.pendingMediaVersion ? "新版本生成中" : "生成中"}</span>
+            <span className="text-[10px] tracking-[0.2em]">{upscale ? `云端超分 ${upscale.progress}%` : node.metadata?.pendingMediaVersion ? "新版本生成中" : "生成中"}</span>
+            {upscale ? <div className="h-1 w-28 overflow-hidden rounded-full" style={{ background: theme.node.stroke }}><div className="h-full rounded-full transition-[width]" style={{ width: `${upscale.progress}%`, background: theme.node.activeStroke }} /></div> : null}
         </div>
     );
 }
