@@ -227,6 +227,12 @@ func New() *gin.Engine {
 	v1.POST("/workflow-stage-runs/:id/apply", func(c *gin.Context) {
 		handler.ApplyWorkflowStage(c.Writer, c.Request, c.Param("id"))
 	})
+	v1.GET("/workflow-stage-runs/:id/asset-slots", func(c *gin.Context) {
+		handler.WorkflowAssetSlots(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.PUT("/workflow-stage-runs/:id/asset-slots", func(c *gin.Context) {
+		handler.SaveWorkflowAssetSlots(c.Writer, c.Request, c.Param("id"))
+	})
 	v1.GET("/workflow-worker/health", gin.WrapF(handler.WorkflowWorkerHealth))
 	v1.POST("/canvas/media-cache", gin.WrapF(handler.CacheCanvasMedia))
 	v1.POST("/project-cache/files", gin.WrapF(handler.UploadProjectCacheFile))

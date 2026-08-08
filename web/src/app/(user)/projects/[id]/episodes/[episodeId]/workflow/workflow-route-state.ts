@@ -1,4 +1,4 @@
-export const workflowStageKeys = ["script", "assets", "video", "delivery"] as const;
+export const workflowStageKeys = ["script", "asset-extraction", "asset-production", "storyboard", "prompt", "video"] as const;
 
 export type WorkflowStageKey = (typeof workflowStageKeys)[number];
 export type WorkflowRouteShotStatus = "blocked" | "review" | "running" | "incomplete" | "complete";
@@ -17,7 +17,8 @@ export function selectDefaultWorkflowShot(shots: WorkflowRouteShot[]) {
 
 export function normalizeWorkflowRouteState(input: { shot?: string | null; stage?: string | null }, shotInput: string[] | WorkflowRouteShot[]): WorkflowRouteState {
     const shots = shotInput.map((item) => (typeof item === "string" ? { id: item, status: "incomplete" as const } : item));
-    const stage = workflowStageKeys.includes(input.stage as WorkflowStageKey) ? (input.stage as WorkflowStageKey) : "script";
+    const requested = ({ assets: "asset-extraction", delivery: "video" } as Record<string, WorkflowStageKey>)[input.stage || ""] || input.stage;
+    const stage = workflowStageKeys.includes(requested as WorkflowStageKey) ? (requested as WorkflowStageKey) : "script";
     const shot = input.shot && shots.some((item) => item.id === input.shot) ? input.shot : selectDefaultWorkflowShot(shots);
     return { shot, stage };
 }

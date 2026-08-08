@@ -29,7 +29,9 @@ import { workflowAssetFileImportPatch, workflowAssetLibraryImportPatch, workflow
 export function WorkflowAssetPanel(props: {
     artifact: RemoteWorkflowArtifact | null;
     automation: ReturnType<typeof useWorkflowAssetAutomation>;
+    canApprove: boolean;
     episodeId: string;
+    onApprove: () => unknown | Promise<unknown>;
     onApplied: () => void | Promise<void>;
     projectId: string;
     projectTitle: string;
@@ -58,6 +60,7 @@ export function WorkflowAssetPanel(props: {
     const variants = cards.flatMap((card) => card.variants);
     const imageActions = useWorkflowAssetImageActions();
     const automation = props.automation;
+    const needsMaterialization = mapping.items.some((item) => !item.targetAssetId);
 
     const materialize = useCallback(async () => {
         if (!props.artifact || !props.stage || !["approved", "applied"].includes(props.stage.status) || applying) return;
@@ -138,15 +141,6 @@ export function WorkflowAssetPanel(props: {
             setApplying(false);
         }
     }, [addAssetOnce, applying, ensureProjectFolder, ensureSubject, mapping.items, message, props, updateAsset]);
-
-    useEffect(() => {
-        const needsSync = mapping.items.some((item) => {
-            const asset = item.targetAssetId ? assets.find((entry) => entry.id === item.targetAssetId) : undefined;
-            const workflow = readRecord(asset?.metadata?.originalWorkflow);
-            return !asset || !readString(workflow.kind) || !readString(workflow.logicalAssetId) || !readString(workflow.sourceEpisodeId) || !readString(workflow.sourceProjectId);
-        });
-        if (["approved", "applied"].includes(props.stage?.status || "") && needsSync) void materialize();
-    }, [assets, mapping.items, materialize, props.stage?.status]);
 
     useEffect(() => {
         if (!props.artifact || !props.stage || props.stage.status !== "approved" || !generationProgress.ready || applying) return;
@@ -281,6 +275,8 @@ export function WorkflowAssetPanel(props: {
                                 重新整理
                             </Button>
                         ) : null}
+                        {props.stage?.status === "needs_review" ? <Button type="primary" icon={<CheckCircle2 className="size-4" />} disabled={!props.canApprove} onClick={() => void props.onApprove()}>批准资产提示词</Button> : null}
+                        {["approved", "applied"].includes(props.stage?.status || "") && needsMaterialization ? <Button icon={<Library className="size-4" />} loading={applying} onClick={() => void materialize()}>建立正式资产卡片</Button> : null}
                         <Button type="primary" icon={<WandSparkles className="size-4" />} disabled={!selectedAssets.length} loading={Boolean(imageActions.generatingIds.length)} onClick={() => confirmGenerate(selectedAssets)}>
                             确认生成 {selectedAssets.length} 张草图
                         </Button>

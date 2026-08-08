@@ -202,11 +202,11 @@ export function useWorkflowWorkbench(projectId: string, episodeId: string) {
 }
 
 function workflowViewStageComplete(stage: WorkflowStageView) {
-    return stage.key === "assets" ? ["applied", "complete"].includes(stage.status) : ["approved", "applied", "complete"].includes(stage.status);
+    return ["approved", "applied", "complete"].includes(stage.status);
 }
 
 function packageRouteStatus(item: ReturnType<typeof useVideoPackageStore.getState>["importedPackages"][number]) {
-    if (item.risks.some((risk) => risk.level === "阻断") || item.assetStatus !== "完整") return "blocked" as const;
+    if (item.risks.some((risk) => risk.level === "阻断")) return "blocked" as const;
     if (item.promptStatus !== "已确认") return "review" as const;
     if (["checking", "creating", "queued", "running"].includes(item.generation?.status || "")) return "running" as const;
     if (item.generation?.status === "succeeded" || item.canvasStatus === "已生成") return "complete" as const;

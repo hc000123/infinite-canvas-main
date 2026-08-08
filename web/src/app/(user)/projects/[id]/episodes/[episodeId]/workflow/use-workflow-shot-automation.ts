@@ -5,7 +5,7 @@ import { App } from "antd";
 
 import { buildImportedVideoPackage } from "@/app/(user)/video/video-package-builders";
 import { useVideoPackageStore } from "@/app/(user)/video/use-video-package-store";
-import { applyWorkflowStage, reviewWorkflowStage, type RemoteWorkflowArtifact, type RemoteWorkflowQualityGate, type RemoteWorkflowStageRun } from "@/services/api/workflow-runs";
+import { applyWorkflowStage, type RemoteWorkflowArtifact, type RemoteWorkflowQualityGate, type RemoteWorkflowStageRun } from "@/services/api/workflow-runs";
 
 import { parseShotBreakdown, requireWorkflowShotReview } from "./workflow-shot-draft";
 import { shouldAutoLoadStoryboard } from "./workflow-shot-automation";
@@ -27,7 +27,6 @@ export function useWorkflowShotAutomation(input: { artifact: RemoteWorkflowArtif
         setError("");
         void (async () => {
             try {
-                await reviewWorkflowStage(stage.id, { artifactHash: artifact.contentHash, decision: "approved" });
                 const packages = shots.map((shot, index) => requireWorkflowShotReview(buildImportedVideoPackage({
                     duration: `${shot.shotDraft.durationSeconds}秒`, episode: input.episodeId, episodeId: input.episodeId, id: shot.shotId, order: index + 1, projectId: input.projectId,
                     prompt: "", sceneKey: shot.sceneKey, segment: shot.shotDraft.action || `分镜 ${index + 1}`, sourcePath: `cloud-workflow/${artifact.id}`, sourceScript: shot.sourceScript, shotDraft: shot.shotDraft,

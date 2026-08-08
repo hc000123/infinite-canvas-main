@@ -32,3 +32,9 @@ test("batch generation excludes completed and blank prompt shots", () => {
     assert.equal(result.included.length, 0);
     assert.deepEqual(result.excluded.map((entry) => entry.reason), ["已有成功版本", "提示词为空"]);
 });
+
+test("allows text placeholders when no explicit blocking risk exists", () => {
+    const placeholder = item("P01", { assetStatus: "缺角色图" });
+    const result = eligibleBatchPackages([placeholder]);
+    assert.deepEqual(result.included.map((entry) => entry.id), ["P01"]);
+});

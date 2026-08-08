@@ -57,7 +57,10 @@ func workflowApprovedStandardArtifact(userID string, detail WorkflowRunDetail, s
 		if err != nil || artifact.Artifact.ArtifactType != artifactType {
 			return ArtifactEnvelope{}, safeMessageError{message: workflowDependencyMessage(stageID) + "，且缺少标准产物"}
 		}
-		return artifact, nil
+		if artifactType == "asset_catalog" {
+			artifact, _, _, err = latestAgentAssetSlotArtifact(userID, artifact)
+		}
+		return artifact, err
 	}
 	invocation, err := GetInvocationDetail(userID, stage.InvocationID)
 	if err != nil {
@@ -65,7 +68,10 @@ func workflowApprovedStandardArtifact(userID string, detail WorkflowRunDetail, s
 	}
 	for _, artifact := range invocation.OutputArtifacts {
 		if artifact.Artifact.ArtifactType == artifactType {
-			return artifact, nil
+			if artifactType == "asset_catalog" {
+				artifact, _, _, err = latestAgentAssetSlotArtifact(userID, artifact)
+			}
+			return artifact, err
 		}
 	}
 	return ArtifactEnvelope{}, safeMessageError{message: workflowDependencyMessage(stageID) + "，且缺少标准产物"}

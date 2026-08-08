@@ -1,6 +1,6 @@
 import type { RemoteWorkflowStageStatus } from "@/services/api/workflow-runs";
 
-export type WorkflowViewStageKey = "script" | "assets" | "video" | "delivery";
+export type WorkflowViewStageKey = "script" | "asset-extraction" | "asset-production" | "storyboard" | "prompt" | "video";
 export type WorkflowViewStatus = RemoteWorkflowStageStatus | "idle" | "complete";
 
 export type WorkflowStageView = {

@@ -50,3 +50,14 @@ test("builds a filtered workflow run list request", () => {
         params: { projectId: "project/1", episodeId: "episode 1", status: "active", page: 2, pageSize: 10 },
     });
 });
+
+test("builds asset-slot read and immutable save requests", () => {
+    const body = { baseArtifactHash: "sha256:catalog", slots: [{ slotId: "slot-1", category: "character" as const, name: "阿宁", description: "黑色短发", status: "placeholder" as const, sourceSceneIds: [], sourceEvidence: [] }] };
+    assert.deepEqual(workflowRunRequest.assetSlots("stage/1"), {
+        path: "/api/v1/workflow-stage-runs/stage%2F1/asset-slots",
+    });
+    assert.deepEqual(workflowRunRequest.saveAssetSlots("stage/1", body), {
+        path: "/api/v1/workflow-stage-runs/stage%2F1/asset-slots",
+        body,
+    });
+});

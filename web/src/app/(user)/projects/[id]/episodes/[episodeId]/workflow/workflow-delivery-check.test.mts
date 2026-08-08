@@ -18,6 +18,6 @@ test("delivery reports active and failed tasks", () => {
     assert.equal(report.blockingCount, 2);
 });
 
-test("canonical workflow href uses project route", () => {
-    assert.equal(videoWorkflowHref(1, "p1", "e1"), "/projects/p1/episodes/e1/workflow");
+test("canonical workflow href uses the Agent workspace", () => {
+    assert.equal(videoWorkflowHref(1, "p1", "e1"), "/agent?projectId=p1&episodeId=e1&stage=script");
 });

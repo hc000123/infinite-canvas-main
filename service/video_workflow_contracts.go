@@ -134,6 +134,49 @@ type WorkflowApplyInput struct {
 	Metadata     json.RawMessage `json:"metadata"`
 }
 
+type AgentAssetCategory string
+
+const (
+	AgentAssetCategoryCharacter AgentAssetCategory = "character"
+	AgentAssetCategoryScene     AgentAssetCategory = "scene"
+	AgentAssetCategoryProp      AgentAssetCategory = "prop"
+	AgentAssetCategoryBlocking  AgentAssetCategory = "blocking"
+)
+
+type AgentAssetSlotStatus string
+
+const (
+	AgentAssetSlotPlaceholder AgentAssetSlotStatus = "placeholder"
+	AgentAssetSlotCandidate   AgentAssetSlotStatus = "candidate"
+	AgentAssetSlotBound       AgentAssetSlotStatus = "bound"
+	AgentAssetSlotIgnored     AgentAssetSlotStatus = "ignored"
+)
+
+type AgentAssetSlot struct {
+	SlotID         string               `json:"slotId"`
+	Category       AgentAssetCategory   `json:"category"`
+	Name           string               `json:"name"`
+	Description    string               `json:"description"`
+	Status         AgentAssetSlotStatus `json:"status"`
+	SourceSceneIDs []string             `json:"sourceSceneIds"`
+	SourceEvidence []string             `json:"sourceEvidence"`
+	SubjectID      string               `json:"subjectId,omitempty"`
+	VariantID      string               `json:"variantId,omitempty"`
+	AssetID        string               `json:"assetId,omitempty"`
+	CandidateID    string               `json:"candidateId,omitempty"`
+}
+
+type SaveWorkflowAssetSlotsInput struct {
+	BaseArtifactHash string           `json:"baseArtifactHash"`
+	Slots            []AgentAssetSlot `json:"slots"`
+}
+
+type WorkflowAssetSlotArtifact struct {
+	Artifact ArtifactEnvelope `json:"artifact"`
+	Version  int              `json:"version"`
+	Slots    []AgentAssetSlot `json:"slots"`
+}
+
 type WorkflowGateIssue struct {
 	Code     string `json:"code"`
 	Message  string `json:"message"`

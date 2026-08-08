@@ -21,7 +21,7 @@ export function AgentProjectOverview({ projects }: { projects: AgentProjectView[
                     </div>
                     <div className="mt-5 flex items-end gap-4">
                         <span className="font-mono text-3xl font-medium tracking-tight text-[var(--studio-text-primary)]">{project.progress}%</span>
-                        <Progress percent={project.progress} showInfo={false} strokeColor="var(--studio-accent)" trailColor="var(--studio-border-subtle)" className="!mb-1 flex-1" />
+                        <Progress percent={project.progress} showInfo={false} strokeColor="var(--studio-accent)" railColor="var(--studio-border-subtle)" className="!mb-1 flex-1" />
                     </div>
                     <div className="mt-5 grid grid-cols-3 border-t border-[var(--studio-border-subtle)] pt-4 text-xs text-[var(--studio-text-secondary)]">
                         <span className="inline-flex items-center gap-1.5"><Layers3 className="size-3.5" />{project.episodeCount} 个分集</span>

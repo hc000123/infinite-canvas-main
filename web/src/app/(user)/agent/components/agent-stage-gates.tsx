@@ -18,7 +18,7 @@ const statusMeta: Record<AgentStageStatus, { label: string; className: string; i
     complete: { label: "已完成", className: "text-[var(--studio-success)]", icon: Check },
 };
 
-const routeStage = { script: "script", "asset-extraction": "assets", "asset-production": "assets", storyboard: "video", prompt: "video", video: "video" } as const;
+const routeStage = { script: "script", "asset-extraction": "asset-extraction", "asset-production": "asset-production", storyboard: "storyboard", prompt: "prompt", video: "video" } as const;
 
 export function AgentStageGates({ episode }: { episode: AgentEpisodeView }) {
     return (

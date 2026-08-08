@@ -71,9 +71,7 @@ export function useWorkflowAssetAutomation(input: {
 
 async function executeAutomationAction(type: Exclude<ReturnType<typeof nextWorkflowAssetAction>["type"], "idle">, input: Parameters<typeof useWorkflowAssetAutomation>[0]) {
     if (type === "start-extraction") await startWorkflowStage(input.runId, "asset-extraction", input.extraction.startKey);
-    if (type === "approve-extraction" && input.extraction.stage && input.extraction.artifact) await reviewWorkflowStage(input.extraction.stage.id, { artifactHash: input.extraction.artifact.contentHash, decision: "approved" });
     if (type === "start-prompts") await startWorkflowStage(input.runId, "asset-image-prompt", input.prompts.startKey);
-    if (type === "approve-prompts" && input.prompts.stage && input.prompts.artifact) await reviewWorkflowStage(input.prompts.stage.id, { artifactHash: input.prompts.artifact.contentHash, decision: "approved" });
     await input.refresh();
 }
 

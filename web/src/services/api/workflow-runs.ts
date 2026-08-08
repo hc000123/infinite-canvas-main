@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost, apiPostForm } from "@/services/api/request";
+import { apiDelete, apiGet, apiPost, apiPostForm, apiPut } from "@/services/api/request";
 import { useUserStore } from "@/stores/use-user-store";
 
 import {
@@ -16,6 +16,8 @@ import {
     type WorkflowSkillOption,
     type WorkflowWorkerHealth,
     type WorkflowMediaBatchDetail,
+    type SaveWorkflowAssetSlotsRequest,
+    type WorkflowAssetSlots,
     workflowStageSkillCapability,
 } from "./workflow-runs-contract";
 
@@ -93,6 +95,15 @@ export function reviewWorkflowStage(id: string, input: WorkflowReviewRequest) {
 export function applyWorkflowStage(id: string, input: WorkflowApplyRequest) {
     const request = workflowRunRequest.applyStage(id, input);
     return apiPost<RemoteWorkflowStageRun>(request.path, request.body, token());
+}
+
+export function getWorkflowAssetSlots(id: string) {
+    return apiGet<WorkflowAssetSlots>(workflowRunRequest.assetSlots(id).path, undefined, token());
+}
+
+export function saveWorkflowAssetSlots(id: string, input: SaveWorkflowAssetSlotsRequest) {
+    const request = workflowRunRequest.saveAssetSlots(id, input);
+    return apiPut<WorkflowAssetSlots>(request.path, request.body, token());
 }
 
 export function listWorkflowEvents(id: string, after = 0, limit = 100) {

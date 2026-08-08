@@ -28,3 +28,19 @@ test("supports all-project, project, and episode drill-down in one Agent route",
     assert.match(source, /AgentEpisodeOverview/);
     assert.match(source, /AgentStageGates/);
 });
+
+test("keeps Zustand selectors referentially stable", () => {
+    const source = read("./agent-workspace.tsx");
+    assert.match(source, /const allProjects = useCreativeProjectStore\(\(state\) => state\.projects\)/);
+    assert.match(source, /useMemo\(\(\) => allProjects\.filter/);
+    assert.doesNotMatch(source, /useCreativeProjectStore\(\(state\) => state\.projects\.filter/);
+});
+
+test("uses current Ant Design progress and alert props", () => {
+    const workspace = read("./agent-workspace.tsx");
+    const projects = read("./components/agent-project-overview.tsx");
+    const episodes = read("./components/agent-episode-overview.tsx");
+    assert.doesNotMatch(workspace, /\bmessage=/);
+    assert.doesNotMatch(`${projects}\n${episodes}`, /\btrailColor=/);
+    assert.match(`${projects}\n${episodes}`, /\brailColor=/);
+});

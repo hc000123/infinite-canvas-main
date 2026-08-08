@@ -3,10 +3,10 @@ import test from "node:test";
 
 import { nextWorkflowAssetAction } from "./workflow-asset-automation.ts";
 
-test("advances successful stages without user review", () => {
-    assert.deepEqual(nextWorkflowAssetAction({ enabled: true, workerReady: true, extraction: { status: "needs_review", gatePassed: true }, prompts: null }), { type: "approve-extraction" });
+test("stops at human review gates while continuing approved work", () => {
+    assert.deepEqual(nextWorkflowAssetAction({ enabled: true, workerReady: true, extraction: { status: "needs_review", gatePassed: true }, prompts: null }), { type: "idle", reason: "请确认资产槽位后批准" });
     assert.deepEqual(nextWorkflowAssetAction({ enabled: true, workerReady: true, extraction: { status: "approved", gatePassed: true }, prompts: { status: "ready" } }), { type: "start-prompts" });
-    assert.deepEqual(nextWorkflowAssetAction({ enabled: true, workerReady: true, extraction: { status: "approved", gatePassed: true }, prompts: { status: "needs_review", gatePassed: true } }), { type: "approve-prompts" });
+    assert.deepEqual(nextWorkflowAssetAction({ enabled: true, workerReady: true, extraction: { status: "approved", gatePassed: true }, prompts: { status: "needs_review", gatePassed: true } }), { type: "idle", reason: "请确认资产提示词后批准" });
 });
 
 test("starts extraction only when the asset route and worker are ready", () => {

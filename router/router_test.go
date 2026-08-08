@@ -112,6 +112,21 @@ func TestWorkflowRoutesRequireAuth(t *testing.T) {
 	}
 }
 
+func TestWorkflowAssetSlotRoutesRequireAuth(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := New()
+	for _, item := range []struct{ method, path string }{
+		{http.MethodGet, "/api/v1/workflow-stage-runs/stage-1/asset-slots"},
+		{http.MethodPut, "/api/v1/workflow-stage-runs/stage-1/asset-slots"},
+	} {
+		recorder := httptest.NewRecorder()
+		app.ServeHTTP(recorder, httptest.NewRequest(item.method, item.path, strings.NewReader(`{}`)))
+		if recorder.Code == http.StatusNotFound || !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+			t.Fatalf("workflow asset-slot route missing auth: %s %s body=%s", item.method, item.path, recorder.Body.String())
+		}
+	}
+}
+
 func TestWorkflowRegistryRoutesRequireAuth(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	app := New()

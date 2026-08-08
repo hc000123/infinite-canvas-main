@@ -200,6 +200,27 @@ export type WorkflowApplyRequest = {
     metadata?: unknown;
 };
 
+export type AgentAssetSlot = {
+    slotId: string;
+    category: "character" | "scene" | "prop" | "blocking";
+    name: string;
+    description: string;
+    status: "placeholder" | "candidate" | "bound" | "ignored";
+    sourceSceneIds: string[];
+    sourceEvidence: string[];
+    subjectId?: string;
+    variantId?: string;
+    assetId?: string;
+    candidateId?: string;
+};
+
+export type SaveWorkflowAssetSlotsRequest = { baseArtifactHash: string; slots: AgentAssetSlot[] };
+export type WorkflowAssetSlots = {
+    artifact: import("./invocations-contract").ArtifactEnvelope;
+    version: number;
+    slots: AgentAssetSlot[];
+};
+
 const encode = encodeURIComponent;
 
 export const workflowRunRequest = {
@@ -215,6 +236,8 @@ export const workflowRunRequest = {
     retryStage: (id: string, idempotencyKey: string) => ({ path: `/api/v1/workflow-stage-runs/${encode(id)}/retry`, body: { idempotencyKey } }),
     reviewStage: (id: string, body: WorkflowReviewRequest) => ({ path: `/api/v1/workflow-stage-runs/${encode(id)}/review`, body }),
     applyStage: (id: string, body: WorkflowApplyRequest) => ({ path: `/api/v1/workflow-stage-runs/${encode(id)}/apply`, body }),
+    assetSlots: (id: string) => ({ path: `/api/v1/workflow-stage-runs/${encode(id)}/asset-slots` }),
+    saveAssetSlots: (id: string, body: SaveWorkflowAssetSlotsRequest) => ({ path: `/api/v1/workflow-stage-runs/${encode(id)}/asset-slots`, body }),
     events: (id: string) => ({ path: `/api/v1/workflow-runs/${encode(id)}/events` }),
     health: () => ({ path: "/api/v1/workflow-worker/health" }),
 };

@@ -31,7 +31,7 @@ export function AgentWorkspace() {
     const episodeId = searchParams.get("episodeId") || "";
     const token = useUserStore((state) => state.token);
     const projectsHydrated = useCreativeProjectStore((state) => state.hydrated);
-    const projects = useCreativeProjectStore((state) => state.projects.filter((project) => project.status === "active"));
+    const allProjects = useCreativeProjectStore((state) => state.projects);
     const scriptsHydrated = useScriptStore((state) => state.hydrated);
     const episodes = useScriptStore((state) => state.episodes);
     const [runs, setRuns] = useState<WorkflowRunListItem[]>([]);
@@ -39,6 +39,7 @@ export function AgentWorkspace() {
     const [remoteError, setRemoteError] = useState("");
     const [keyword, setKeyword] = useState("");
     const [status, setStatus] = useState<AgentAttentionStatus>("all");
+    const projects = useMemo(() => allProjects.filter((project) => project.status === "active"), [allProjects]);
 
     useEffect(() => {
         if (!token) {
@@ -93,7 +94,7 @@ export function AgentWorkspace() {
                     {remoteLoading ? <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-[var(--studio-text-muted)]"><LoaderCircle className="size-3.5 animate-spin" />同步运行状态</span> : null}
                 </div>
 
-                {remoteError ? <Alert className="mt-4" type="warning" showIcon message="远程进度暂不可用" description={`${remoteError}。本地项目与分集仍可查看。`} /> : null}
+                {remoteError ? <Alert className="mt-4" type="warning" showIcon title="远程进度暂不可用" description={`${remoteError}。本地项目与分集仍可查看。`} /> : null}
 
                 <div className="mt-5 space-y-5">
                     {!projectId ? <AgentProjectOverview projects={visibleProjects} /> : selectedProject ? (
@@ -106,7 +107,7 @@ export function AgentWorkspace() {
                             {selectedEpisode ? <AgentStageGates episode={selectedEpisode} /> : null}
                             {selectedEpisode ? <div className="h-[calc(100dvh-5rem)] min-h-[720px] overflow-hidden border border-[var(--studio-border-subtle)]"><EpisodeWorkflowWorkbench episodeId={episodeId} projectId={projectId} /></div> : null}
                         </>
-                    ) : <Alert type="info" showIcon message="项目不存在或已归档" action={<Button size="small" onClick={() => router.push("/agent")}>返回所有项目</Button>} />}
+                    ) : <Alert type="info" showIcon title="项目不存在或已归档" action={<Button size="small" onClick={() => router.push("/agent")}>返回所有项目</Button>} />}
                 </div>
             </div>
         </main>

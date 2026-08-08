@@ -170,6 +170,38 @@ func ApplyWorkflowStage(w http.ResponseWriter, r *http.Request, stageRunID strin
 	OK(w, result)
 }
 
+func WorkflowAssetSlots(w http.ResponseWriter, r *http.Request, stageRunID string) {
+	user, ok := service.UserFromContext(r.Context())
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	result, err := service.GetWorkflowAssetSlots(user.ID, stageRunID)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
+func SaveWorkflowAssetSlots(w http.ResponseWriter, r *http.Request, stageRunID string) {
+	user, ok := service.UserFromContext(r.Context())
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	var input service.SaveWorkflowAssetSlotsInput
+	if !decodeWorkflowBody(w, r, &input, 512<<10) {
+		return
+	}
+	result, err := service.SaveWorkflowAssetSlots(user.ID, stageRunID, input)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
 func WorkflowEvents(w http.ResponseWriter, r *http.Request, workflowRunID string) {
 	user, ok := service.UserFromContext(r.Context())
 	if !ok {

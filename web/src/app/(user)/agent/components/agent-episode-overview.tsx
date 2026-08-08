@@ -18,7 +18,7 @@ export function AgentEpisodeOverview({ episodes, projectId, selectedEpisodeId }:
                             <h3 className="mt-1 truncate font-semibold text-[var(--studio-text-primary)]">{episode.title}</h3>
                             <p className="mt-1 text-xs text-[var(--studio-text-muted)]">下一步：{episode.currentStageLabel}</p>
                         </div>
-                        <div className="flex items-center gap-3"><Progress percent={episode.progress} showInfo={false} strokeColor="var(--studio-accent)" trailColor="var(--studio-border-subtle)" className="!mb-0 flex-1" /><span className="w-9 text-right font-mono text-xs text-[var(--studio-text-secondary)]">{episode.progress}%</span></div>
+                        <div className="flex items-center gap-3"><Progress percent={episode.progress} showInfo={false} strokeColor="var(--studio-accent)" railColor="var(--studio-border-subtle)" className="!mb-0 flex-1" /><span className="w-9 text-right font-mono text-xs text-[var(--studio-text-secondary)]">{episode.progress}%</span></div>
                         <div className="text-xs text-[var(--studio-text-secondary)]">{episode.reviewCount || episode.warningCount ? <span className="inline-flex items-center gap-1.5"><CircleAlert className="size-3.5" />{episode.reviewCount} 审核 · {episode.warningCount} 警告</span> : "状态正常"}</div>
                         <ArrowRight className="hidden size-4 text-[var(--studio-text-muted)] sm:block" />
                     </Link>

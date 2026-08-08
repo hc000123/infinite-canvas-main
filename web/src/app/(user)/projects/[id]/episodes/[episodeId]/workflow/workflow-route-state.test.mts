@@ -11,6 +11,12 @@ test("keeps a valid workflow URL selection", () => {
     assert.deepEqual(normalizeWorkflowRouteState({ stage: "video", shot: "P02" }, ["P01", "P02"]), { stage: "video", shot: "P02" });
 });
 
+test("uses six agent stages and maps legacy routes", () => {
+    assert.deepEqual(normalizeWorkflowRouteState({ stage: "assets" }, []), { stage: "asset-extraction", shot: "" });
+    assert.deepEqual(normalizeWorkflowRouteState({ stage: "delivery" }, []), { stage: "video", shot: "" });
+    assert.deepEqual(normalizeWorkflowRouteState({ stage: "storyboard" }, []), { stage: "storyboard", shot: "" });
+});
+
 test("selects blocker before review, running, and incomplete shots", () => {
     assert.equal(
         selectDefaultWorkflowShot([
