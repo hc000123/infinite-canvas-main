@@ -22,6 +22,7 @@ export type ProjectCacheSummary = { projectId: string; projectName: string; stat
 export type ProjectCacheManifest = { formatVersion: number; projectId: string; projectName: string; status: "active" | "deleted"; createdAt: string; updatedAt: string; files: ProjectCacheFile[] };
 export type UserProjectCacheList = { rootPath: string; totalBytes: number; totalFiles: number; pendingCount: number; projects: ProjectCacheSummary[] };
 export type ProjectCachePackageSnapshot = { project: unknown; canvases: unknown[]; scripts: unknown; storyboards: unknown; assets: unknown[] };
+export type ProjectCacheFileBlob = { blob: Blob; mimeType: string; filename: string };
 
 export function uploadProjectCacheFile(file: Blob, filename: string, context: ProjectCacheContext, token: string) {
     const form = new FormData();
@@ -36,6 +37,40 @@ export function listProjectCaches(token: string) {
 
 export function getProjectCache(projectId: string, token: string) {
     return apiGet<{ manifest: ProjectCacheManifest; summary: ProjectCacheSummary }>(`/api/v1/project-cache/projects/${encodeURIComponent(projectId)}`, undefined, token);
+}
+
+export async function fetchProjectCacheFileBlob(fileId: string, token: string, signal?: AbortSignal): Promise<ProjectCacheFileBlob> {
+    try {
+        const response = await axios.get<Blob>(`/api/v1/project-cache/files/${encodeURIComponent(fileId)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+            responseType: "blob",
+            signal,
+        });
+        const mimeType = response.headers["content-type"] || response.data.type || "application/octet-stream";
+        if (mimeType.includes("application/json")) {
+            let message = "缓存文件不存在或已被移除";
+            try {
+                const payload = JSON.parse(await response.data.text()) as { msg?: string };
+                message = payload.msg || message;
+            } catch {
+                // Keep the safe fallback when the error body is not valid JSON.
+            }
+            throw new Error(message);
+        }
+        return {
+            blob: response.data,
+            mimeType,
+            filename: cacheFileName(response.headers["content-disposition"], fileId),
+        };
+    } catch (error) {
+        if (axios.isCancel(error)) throw error;
+        if (axios.isAxiosError(error)) {
+            if (error.response?.status === 401) throw new Error("登录状态已失效，请重新登录");
+            if (error.response?.status === 404) throw new Error("缓存文件不存在或已被移除");
+        }
+        if (error instanceof Error) throw error;
+        throw new Error("缓存文件读取失败，请确认服务已启动");
+    }
 }
 
 export function updateProjectCacheStatus(projectId: string, status: "active" | "deleted", token: string) {
@@ -65,4 +100,16 @@ export async function downloadProjectCachePackage(projectId: string, snapshot: P
         throw new Error("项目包生成失败，下载内容不完整");
     }
     saveAs(response.data, filename);
+}
+
+function cacheFileName(disposition: string | undefined, fallback: string) {
+    const encoded = disposition?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+    if (encoded) {
+        try {
+            return decodeURIComponent(encoded);
+        } catch {
+            return encoded;
+        }
+    }
+    return disposition?.match(/filename="([^"]+)"/i)?.[1] || disposition?.match(/filename=([^;]+)/i)?.[1]?.trim() || fallback;
 }

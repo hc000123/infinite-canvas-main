@@ -27,7 +27,8 @@ import { useCanvasStore } from "../canvas/stores/use-canvas-store";
 import { useScriptStore } from "../canvas/stores/use-script-store";
 import { useStoryboardStore } from "../canvas/stores/use-storyboard-store";
 import { useCreativeProjectStore } from "../projects/use-creative-project-store";
-import { CacheFileTable } from "./components/cache-file-table";
+import { CacheFileGrid } from "./components/cache-file-grid";
+import { CacheFilePreviewModal } from "./components/cache-file-preview-modal";
 import { CacheProjectList } from "./components/cache-project-list";
 import { filterProjectCacheFiles, mergeProjectCacheState } from "./cache-view-model";
 
@@ -55,6 +56,7 @@ export default function CacheManagementPage() {
     const [category, setCategory] = useState("");
     const [kind, setKind] = useState("");
     const [episodeId, setEpisodeId] = useState("");
+    const [previewFile, setPreviewFile] = useState<ProjectCacheFile>();
     const [movingFile, setMovingFile] = useState<ProjectCacheFile>();
     const [moveProjectId, setMoveProjectId] = useState("");
     const [moveEpisodeId, setMoveEpisodeId] = useState("");
@@ -295,7 +297,7 @@ export default function CacheManagementPage() {
                                         />
                                     </div>
                                     <div className="mt-4">
-                                        <CacheFileTable files={filteredFiles} onDelete={removeFile} onMove={!manifest.projectId ? openMoveFile : undefined} />
+                                        <CacheFileGrid files={filteredFiles} onDelete={removeFile} onMove={!manifest.projectId ? openMoveFile : undefined} onPreview={setPreviewFile} />
                                     </div>
                                 </>
                             ) : (
@@ -307,6 +309,7 @@ export default function CacheManagementPage() {
                     <Empty className="my-auto" description="还没有项目缓存；生成成功的媒体会自动出现在这里" />
                 )}
             </div>
+            <CacheFilePreviewModal file={previewFile} onClose={() => setPreviewFile(undefined)} />
             <Modal open={Boolean(movingFile)} title="归属未分类缓存" okText="确认移动" cancelText="取消" confirmLoading={moving} okButtonProps={{ disabled: !moveProjectId }} onCancel={() => setMovingFile(undefined)} onOk={() => void moveFile()}>
                 <div className="grid gap-4 py-2">
                     <div>

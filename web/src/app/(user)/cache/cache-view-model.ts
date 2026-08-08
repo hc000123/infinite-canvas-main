@@ -21,5 +21,5 @@ export function filterProjectCacheFiles<T extends { category: string; context: {
 }
 
 export function projectCacheStatusLabel(status: ProjectCacheDisplayStatus) {
-    return status === "deleted" ? "项目已删除" : status === "orphaned" ? "本地项目不存在" : status === "unassigned" ? "未归属" : "正常";
+    return status === "deleted" ? "项目已删除" : status === "orphaned" ? "未关联当前项目" : status === "unassigned" ? "未归属" : "正常";
 }
