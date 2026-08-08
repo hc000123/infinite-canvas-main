@@ -90,7 +90,25 @@ export function buildAssetSubjectSummary(subject: AssetSubject, assets: Asset[],
         formalImageCount: formalImages.length,
     };
 }
+
+export function visibleGallerySubjectGroups(input: {
+    groups: Array<{ subject: AssetSubject; assets: Asset[] }>;
+    kindFilter: AssetKind | "all";
+    keyword: string;
+    hasScopedAssetFilter: boolean;
+}) {
+    if (input.kindFilter !== "all" && input.kindFilter !== "image") return [];
+    const query = input.keyword.trim().toLowerCase();
+    return input.groups.filter(({ subject, assets }) => {
+        if (assets.length) return true;
+        if (input.hasScopedAssetFilter) return false;
+        if (!query) return true;
+        return [subject.name, subject.code, ...subject.tags].join(" ").toLowerCase().includes(query);
+    });
+}
 ```
+
+`hasScopedAssetFilter` 在集数、文件夹、收藏、来源、画布、分镜组、生成记录、项目库或过期引用筛选生效时为 `true`。这样空主体只在普通项目浏览或主体名称搜索时出现；媒体/范围筛选时必须至少有一张命中的正式图片。
 
 把 `asset-result-layout.ts` 的媒体类型扩展为图片、视频和音频，并复用 `GalleryMediaAsset`，不再把音频降级为长列表行。
 
@@ -205,6 +223,7 @@ git commit -m "feat: keep asset gallery media only"
 - Modify: `web/src/app/(user)/assets/components/asset-results-section.tsx`
 - Delete: `web/src/app/(user)/assets/components/asset-subject-section.tsx`
 - Modify: `web/src/app/(user)/assets/page.tsx`
+- Modify: `web/src/app/(user)/assets/use-asset-page-query.ts`
 - Modify: `web/src/app/(user)/assets/asset-result-layout.test.mts`
 - Modify: `web/src/app/(user)/assets/asset-subject-entry-wiring.test.mts`
 
@@ -219,6 +238,7 @@ assert.doesNotMatch(resultsSource, /buildAssetEpisodeGroups/);
 assert.doesNotMatch(resultsSource, /buildAssetTypeGroups/);
 assert.match(resultsSource, /grid-cols-2/);
 assert.match(mediaCardSource, /aspect-square/);
+assert.match(resultsSource, /visibleGallerySubjectGroups/);
 ```
 
 - [ ] **Step 2: 运行测试并确认失败**
@@ -250,11 +270,11 @@ Expected: FAIL，结果页仍使用主体整行和类型/集数折叠面板。
 
 - [ ] **Step 5: 扁平装配项目图库**
 
-`AssetResultsSection` 每个项目保留项目标题和 Production Bible 摘要，在同一个响应式网格中先渲染主体摘要，再渲染未绑定到主体的媒体：
+`useAssetPageQuery` 暴露 `kindFilter`、`keyword` 和 `hasScopedAssetFilter`。`AssetResultsSection` 每个项目保留项目标题和 Production Bible 摘要，先用 `visibleGallerySubjectGroups` 应用类型、关键词和范围筛选，再在同一个响应式网格中渲染主体摘要与未绑定媒体：
 
 ```tsx
 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-    {subjectGroups.map(({ subject, assets }) => (
+    {visibleGallerySubjectGroups({ groups: subjectGroups, kindFilter, keyword, hasScopedAssetFilter }).map(({ subject, assets }) => (
         <AssetSubjectCard key={subject.id} summary={buildAssetSubjectSummary(subject, assets, variants)} />
     ))}
     {ordinaryAssets.filter(isGalleryMediaAsset).map((asset) => (
@@ -289,7 +309,7 @@ Expected: PASS。
 - [ ] **Step 7: 提交**
 
 ```bash
-git add 'web/src/app/(user)/assets/components/asset-subject-card.tsx' 'web/src/app/(user)/assets/components/compact-media-asset-card.tsx' 'web/src/app/(user)/assets/components/asset-results-section.tsx' 'web/src/app/(user)/assets/components/asset-subject-section.tsx' 'web/src/app/(user)/assets/page.tsx' 'web/src/app/(user)/assets/asset-result-layout.test.mts' 'web/src/app/(user)/assets/asset-subject-entry-wiring.test.mts'
+git add 'web/src/app/(user)/assets/components/asset-subject-card.tsx' 'web/src/app/(user)/assets/components/compact-media-asset-card.tsx' 'web/src/app/(user)/assets/components/asset-results-section.tsx' 'web/src/app/(user)/assets/components/asset-subject-section.tsx' 'web/src/app/(user)/assets/page.tsx' 'web/src/app/(user)/assets/use-asset-page-query.ts' 'web/src/app/(user)/assets/asset-result-layout.test.mts' 'web/src/app/(user)/assets/asset-subject-entry-wiring.test.mts'
 git commit -m "feat: render assets as flat square gallery"
 ```
 
