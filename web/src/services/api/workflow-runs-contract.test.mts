@@ -43,3 +43,10 @@ test("builds a compact workflow poll request", () => {
         params: { after: 17 },
     });
 });
+
+test("builds a filtered workflow run list request", () => {
+    assert.deepEqual(workflowRunRequest.list({ projectId: "project/1", episodeId: "episode 1", status: "active", page: 2, pageSize: 10 }), {
+        path: "/api/v1/workflow-runs",
+        params: { projectId: "project/1", episodeId: "episode 1", status: "active", page: 2, pageSize: 10 },
+    });
+});

@@ -128,6 +128,36 @@ export type WorkflowRunPoll = {
     worker: WorkflowWorkerHealth;
 };
 
+export type WorkflowRunListQuery = {
+    projectId?: string;
+    episodeId?: string;
+    status?: RemoteWorkflowRunStatus;
+    page?: number;
+    pageSize?: number;
+};
+
+export type WorkflowRunListItem = {
+    id: string;
+    projectId: string;
+    episodeId: string;
+    workflowId: string;
+    workflowVersion: string;
+    currentStageId: string;
+    status: RemoteWorkflowRunStatus;
+    stages: WorkflowStagePollSummary[];
+    reviewCount: number;
+    warningCount: number;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type WorkflowRunList = {
+    items: WorkflowRunListItem[];
+    total: number;
+    page: number;
+    pageSize: number;
+};
+
 export type WorkflowMediaItem = { id: string; batchId: string; assetId: string; label: string; kind: "character" | "scene" | "prop"; version: string; order: number; sha256: string; mime: string; size: number; createdAt: string };
 export type WorkflowMediaBatchDetail = {
     batch: { id: string; userId: string; workflowRunId: string; stageId: string; idempotencyKey: string; status: "open" | "claimed"; agentRunId: string; expiresAt: string; createdAt: string; updatedAt: string };
@@ -174,6 +204,7 @@ const encode = encodeURIComponent;
 
 export const workflowRunRequest = {
     ensure: (body: EnsureWorkflowRunRequest) => ({ path: "/api/v1/workflow-runs", body }),
+    list: (params: WorkflowRunListQuery = {}) => ({ path: "/api/v1/workflow-runs", params }),
     detail: (id: string) => ({ path: `/api/v1/workflow-runs/${encode(id)}` }),
     poll: (id: string, after = 0) => ({ path: `/api/v1/workflow-runs/${encode(id)}/poll`, params: { after } }),
     startStage: (id: string, stageId: string, idempotencyKey: string, options: WorkflowStageStartOptions = {}) => ({ path: `/api/v1/workflow-runs/${encode(id)}/stages/${encode(stageId)}/start`, body: { idempotencyKey, ...(options.mediaBatchId ? { mediaBatchId: options.mediaBatchId } : {}), ...(options.skillVersionId ? { skillVersionId: options.skillVersionId } : {}), ...(options.context !== undefined ? { context: options.context } : {}) } }),

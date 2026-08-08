@@ -6,7 +6,9 @@ import {
     type EnsureWorkflowRunRequest,
     type RemoteWorkflowEvent,
     type RemoteWorkflowRunDetail,
-	type WorkflowRunPoll,
+    type WorkflowRunList,
+    type WorkflowRunListQuery,
+    type WorkflowRunPoll,
     type RemoteWorkflowStageRun,
     type WorkflowApplyRequest,
     type WorkflowReviewRequest,
@@ -24,6 +26,11 @@ const token = () => useUserStore.getState().token;
 export function ensureWorkflowRun(input: EnsureWorkflowRunRequest) {
     const request = workflowRunRequest.ensure(input);
     return apiPost<RemoteWorkflowRunDetail>(request.path, request.body, token());
+}
+
+export function listWorkflowRuns(input: WorkflowRunListQuery = {}) {
+    const request = workflowRunRequest.list(input);
+    return apiGet<WorkflowRunList>(request.path, request.params, token());
 }
 
 export function getWorkflowRun(id: string) {
