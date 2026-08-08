@@ -15,6 +15,7 @@ import { episodeMainCanvas } from "../../canvas/utils/episode-canvas-hierarchy";
 import { canvasProjectPresetSummary, type CanvasProjectPreset } from "../../canvas/utils/canvas-project-preset";
 import { episodeProductionName } from "../../canvas/utils/script-management";
 import { videoWorkflowHref } from "../../original-workflow/video-workflow-routing";
+import { agentWorkspaceHref } from "../agent-workspace-route";
 import { canvasIdsForCreativeProject, unfiledCanvasProjects } from "../creative-projects";
 import { editableCanvasPreset } from "../project-canvas-preset";
 import { applyScriptInvocationResult, executeScriptInvocationToReview, preflightScriptInvocation, resumeScriptInvocationToReview } from "../script-invocation-runtime";
@@ -394,7 +395,8 @@ export default function CreativeProjectDetailPage() {
                 onCreateCanvas={() => setCanvasCreateOpen(true)}
                 onEditCanvasPreset={setEditingCanvasPresetId}
                 onEditEpisodeTitle={openEpisodeTitleEdit}
-                onOpenWorkflowCenter={() => router.push(`/projects/${project.id}/workflows`)}
+                onOpenAgentWorkspace={() => router.push(agentWorkspaceHref({ projectId: project.id }))}
+                onOpenSkillManagement={() => router.push(`/projects/${project.id}/skills`)}
                 onOpenProjectCache={() => router.push(`/cache?projectId=${encodeURIComponent(project.id)}`)}
                 onEditProject={() => setProjectEditOpen(true)}
                 onFilterChange={setEpisodeFilter}

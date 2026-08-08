@@ -50,21 +50,22 @@ test("project Agent center has an explicit return-to-project action", () => {
     assert.match(page, /`\/projects\/\$\{project\.id\}`/);
 });
 
-test("project production navigation exposes Workflow but not the compatibility Agent center", () => {
+test("project production navigation exposes Agent, Skill management and project cache", () => {
     const board = readProjectFile("./[id]/components/project-episode-board.tsx");
     const page = readProjectFile("./[id]/page.tsx");
-    assert.match(board, /Workflow 中心/);
+    assert.match(board, /项目 Agent/);
+    assert.match(board, /Skill 管理/);
+    assert.match(board, /查看项目缓存/);
+    assert.doesNotMatch(board, /Workflow 中心/);
     assert.doesNotMatch(board, /Agent 中心/);
-    assert.doesNotMatch(page, /onOpenAgentSettings|\/agents`/);
+    assert.match(page, /onOpenAgentWorkspace=\{\(\) => router\.push\(agentWorkspaceHref\(\{ projectId: project\.id \}\)\)\}/);
+    assert.match(page, /onOpenSkillManagement=\{\(\) => router\.push\(`\/projects\/\$\{project\.id\}\/skills`\)\}/);
+    assert.doesNotMatch(page, /onOpenAgentSettings|\/agents`|onOpenWorkflowCenter/);
 });
 
-test("project Workflow center is restricted to administrators", () => {
-    const board = readProjectFile("./[id]/components/project-episode-board.tsx");
+test("legacy project Workflow URL redirects to the project Agent", () => {
     const workflowPage = readProjectFile("./[id]/workflows/page.tsx");
 
-    assert.match(board, /const isAdmin = role === "admin" \|\| role === "superadmin"/);
-    assert.match(board, /\{isAdmin && \(\s*<button[\s\S]*?Workflow 中心[\s\S]*?<\/button>\s*\)\}/);
-    assert.match(workflowPage, /const isAdmin = user\?\.role === "admin" \|\| user\?\.role === "superadmin"/);
-    assert.match(workflowPage, /if \(isReady && !isAdmin\) router\.replace\(`\/projects\/\$\{projectId\}`\)/);
-    assert.match(workflowPage, /enabled: isAdmin && hydrated && Boolean\(project\)/);
+    assert.match(workflowPage, /redirect\(agentWorkspaceHref\(\{ projectId \}\)\)/);
+    assert.doesNotMatch(workflowPage, /WorkflowRegistryList|WorkflowVersionEditor|WorkflowExecutionConsole/);
 });

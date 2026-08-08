@@ -74,3 +74,39 @@ func TestWorkflowRunListPaginatesNewestFirst(t *testing.T) {
 		t.Fatalf("result=%#v", result)
 	}
 }
+
+func TestWorkflowRunListProjectsLatestInvocationStatus(t *testing.T) {
+	setupVideoWorkflowTest(t)
+	database, err := repository.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stamp := "2026-08-08T10:00:00Z"
+	run := model.WorkflowRun{ID: "workflow-projected", UserID: "owner", ProjectID: "project-1", EpisodeID: "episode-1", WorkflowID: VideoWorkflowID, WorkflowVersion: VideoWorkflowVersion, ScriptHash: "projected", Status: model.WorkflowRunStatusActive, CreatedAt: stamp, UpdatedAt: stamp}
+	invocation := model.InvocationRun{ID: "invocation-projected", UserID: run.UserID, Source: "workflow", Status: model.InvocationStatusNeedsReview, LatestRevision: 1, LatestAttempt: 2, CreatedAt: stamp, UpdatedAt: stamp}
+	stage := model.WorkflowStageRun{ID: "stage-projected", UserID: run.UserID, WorkflowRunID: run.ID, StageID: WorkflowStageShotPrompt, InvocationID: invocation.ID, Attempt: 1, Status: model.WorkflowStageRunStatusQueued, CreatedAt: stamp, UpdatedAt: stamp}
+	if err := database.Create(&run).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Create(&invocation).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Create(&stage).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := ListWorkflowRuns(run.UserID, WorkflowRunListQuery{ProjectID: run.ProjectID, Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatalf("ListWorkflowRuns returned error: %v", err)
+	}
+	if len(result.Items) != 1 || len(result.Items[0].Stages) != 1 {
+		t.Fatalf("result=%#v", result)
+	}
+	got := result.Items[0].Stages[0]
+	if got.Status != model.WorkflowStageRunStatusNeedsReview || got.Attempt != invocation.LatestAttempt || got.UpdatedAt != invocation.UpdatedAt {
+		t.Fatalf("stage=%#v", got)
+	}
+	if result.Items[0].ReviewCount != 1 {
+		t.Fatalf("reviewCount=%d", result.Items[0].ReviewCount)
+	}
+}

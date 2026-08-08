@@ -32,11 +32,19 @@ export type AgentEpisodeView = {
     runId: string;
     status: Exclude<AgentAttentionStatus, "all"> | "not_started";
     progress: number;
+    currentStageKey: AgentStageKey;
     currentStageLabel: string;
     reviewCount: number;
     warningCount: number;
     stages: AgentStageView[];
     updatedAt: string;
+};
+
+export type AgentPackageProgress = {
+    projectId: string;
+    episodeId: string;
+    canvasStatus?: string;
+    generation?: { status?: string };
 };
 
 export type AgentProjectView = {
@@ -98,6 +106,7 @@ export function buildAgentEpisodeView(input: { project: CreativeProject; episode
         runId: run?.id || "",
         status,
         progress,
+        currentStageKey: current?.key || "script",
         currentStageLabel: current?.label || "尚未开始",
         reviewCount: run?.reviewCount || 0,
         warningCount: run?.warningCount || 0,
@@ -106,19 +115,30 @@ export function buildAgentEpisodeView(input: { project: CreativeProject; episode
     };
 }
 
-export function buildAgentProjectViews(input: { projects: CreativeProject[]; episodes: ScriptEpisode[]; runs: WorkflowRunListItem[] }): AgentProjectView[] {
+export function buildAgentProjectViews(input: { projects: CreativeProject[]; episodes: ScriptEpisode[]; runs: WorkflowRunListItem[]; packages?: AgentPackageProgress[] }): AgentProjectView[] {
     const latestRuns = new Map<string, WorkflowRunListItem>();
     for (const run of input.runs) {
         const key = `${run.projectId}\u0000${run.episodeId}`;
         const current = latestRuns.get(key);
         if (!current || Date.parse(run.updatedAt) > Date.parse(current.updatedAt)) latestRuns.set(key, run);
     }
+    const packageProgress = new Map<string, { generated: number; total: number }>();
+    for (const item of input.packages || []) {
+        const key = `${item.projectId}\u0000${item.episodeId}`;
+        const current = packageProgress.get(key) || { generated: 0, total: 0 };
+        current.total += 1;
+        if (item.generation?.status === "succeeded" || item.canvasStatus === "已生成") current.generated += 1;
+        packageProgress.set(key, current);
+    }
     return [...input.projects]
         .map((project): AgentProjectView => {
             const episodes = input.episodes
                 .filter((episode) => episode.projectId === project.id)
                 .sort((a, b) => a.order - b.order)
-                .map((episode) => buildAgentEpisodeView({ project, episode, run: latestRuns.get(`${project.id}\u0000${episode.id}`) }));
+                .map((episode) => {
+                    const progress = packageProgress.get(`${project.id}\u0000${episode.id}`);
+                    return buildAgentEpisodeView({ project, episode, run: latestRuns.get(`${project.id}\u0000${episode.id}`), packageCount: progress?.total, generatedCount: progress?.generated });
+                });
             const failureCount = episodes.filter((episode) => episode.status === "failed").length;
             const reviewCount = episodes.reduce((total, episode) => total + episode.reviewCount, 0);
             const runningCount = episodes.filter((episode) => episode.status === "running").length;
@@ -142,6 +162,11 @@ export function buildAgentProjectViews(input: { projects: CreativeProject[]; epi
             };
         })
         .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+}
+
+export function agentEpisodeHref(episode: AgentEpisodeView) {
+    const params = new URLSearchParams({ projectId: episode.projectId, episodeId: episode.id, stage: episode.currentStageKey });
+    return `/agent?${params.toString()}`;
 }
 
 export function filterAgentProjectViews(projects: AgentProjectView[], input: { keyword?: string; status?: AgentAttentionStatus }) {
@@ -177,6 +202,7 @@ function episodeStatus(stages: AgentStageView[], progress: number, hasRun: boole
     if (stages.some((stage) => stage.status === "needs_review")) return "review";
     if (stages.some((stage) => stage.status === "running")) return "running";
     if (progress === 100) return "completed";
+    if (hasRun && stages.some((stage) => stage.status === "ready" || stage.status === "warning")) return "running";
     if (stages[0].status === "blocked") return "blocked";
     return hasRun ? "blocked" : "not_started";
 }

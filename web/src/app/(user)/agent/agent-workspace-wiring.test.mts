@@ -14,7 +14,7 @@ test("places Agent between projects and canvas in the shared navigation", () => 
 
 test("keeps local projects visible while remote progress reports an error", () => {
     const source = read("./agent-workspace.tsx");
-    assert.match(source, /buildAgentProjectViews\(\{ projects, episodes, runs \}\)/);
+    assert.match(source, /buildAgentProjectViews\(\{ projects, episodes, runs, packages \}\)/);
     assert.match(source, /remoteError/);
     assert.match(source, /远程进度暂不可用/);
     assert.doesNotMatch(source, /ensureWorkflowRun/);
@@ -34,6 +34,18 @@ test("keeps Zustand selectors referentially stable", () => {
     assert.match(source, /const allProjects = useCreativeProjectStore\(\(state\) => state\.projects\)/);
     assert.match(source, /useMemo\(\(\) => allProjects\.filter/);
     assert.doesNotMatch(source, /useCreativeProjectStore\(\(state\) => state\.projects\.filter/);
+});
+
+test("merges local production packages into Agent progress", () => {
+    const source = read("./agent-workspace.tsx");
+    assert.match(source, /useVideoPackageStore\(\(state\) => state\.importedPackages\)/);
+    assert.match(source, /buildAgentProjectViews\(\{ projects, episodes, runs, packages \}\)/);
+});
+
+test("episode rows link to the exact six-stage gate", () => {
+    const source = read("./components/agent-episode-overview.tsx");
+    assert.match(source, /agentEpisodeHref\(episode\)/);
+    assert.doesNotMatch(source, /currentStageLabel\.includes|\? "assets" : "video"/);
 });
 
 test("uses current Ant Design progress and alert props", () => {

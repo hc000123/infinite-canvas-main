@@ -2,15 +2,15 @@ import { Empty, Progress } from "antd";
 import Link from "next/link";
 import { ArrowRight, CircleAlert } from "lucide-react";
 
-import type { AgentEpisodeView } from "../agent-workspace-model";
+import { agentEpisodeHref, type AgentEpisodeView } from "../agent-workspace-model";
 import { agentStatusLabel } from "./agent-stage-gates";
 
-export function AgentEpisodeOverview({ episodes, projectId, selectedEpisodeId }: { episodes: AgentEpisodeView[]; projectId: string; selectedEpisodeId?: string }) {
+export function AgentEpisodeOverview({ episodes, selectedEpisodeId }: { episodes: AgentEpisodeView[]; selectedEpisodeId?: string }) {
     if (!episodes.length) return <div className="border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] py-14"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前项目还没有分集，请先创建或导入剧本" /></div>;
     return (
         <div className="overflow-hidden border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)]">
             {episodes.map((episode) => {
-                const href = `/agent?projectId=${encodeURIComponent(projectId)}&episodeId=${encodeURIComponent(episode.id)}&stage=${episode.stages.find((stage) => stage.status === "ready" || stage.status === "needs_review")?.key === "script" ? "script" : episode.currentStageLabel.includes("资产") ? "assets" : "video"}`;
+                const href = agentEpisodeHref(episode);
                 return (
                     <Link key={episode.id} href={href} className={`grid gap-3 border-b border-[var(--studio-border-subtle)] px-4 py-4 transition last:border-b-0 hover:bg-[var(--studio-hover-bg)] sm:grid-cols-[minmax(0,1fr)_180px_140px_auto] sm:items-center ${selectedEpisodeId === episode.id ? "bg-[var(--studio-hover-bg)]" : ""}`}>
                         <div className="min-w-0">

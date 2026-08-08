@@ -9,6 +9,7 @@ import { listWorkflowRuns, type WorkflowRunListItem } from "@/services/api/workf
 import { useUserStore } from "@/stores/use-user-store";
 import { useScriptStore } from "../canvas/stores/use-script-store";
 import { useCreativeProjectStore } from "../projects/use-creative-project-store";
+import { useVideoPackageStore } from "../video/use-video-package-store";
 import { EpisodeWorkflowWorkbench } from "../projects/[id]/episodes/[episodeId]/workflow/episode-workflow-workbench";
 import { buildAgentProjectViews, filterAgentProjectViews, type AgentAttentionStatus } from "./agent-workspace-model";
 import { AgentEpisodeOverview } from "./components/agent-episode-overview";
@@ -34,6 +35,7 @@ export function AgentWorkspace() {
     const allProjects = useCreativeProjectStore((state) => state.projects);
     const scriptsHydrated = useScriptStore((state) => state.hydrated);
     const episodes = useScriptStore((state) => state.episodes);
+    const packages = useVideoPackageStore((state) => state.importedPackages);
     const [runs, setRuns] = useState<WorkflowRunListItem[]>([]);
     const [remoteLoading, setRemoteLoading] = useState(false);
     const [remoteError, setRemoteError] = useState("");
@@ -57,7 +59,7 @@ export function AgentWorkspace() {
         return () => { active = false; };
     }, [projectId, token]);
 
-    const views = useMemo(() => buildAgentProjectViews({ projects, episodes, runs }), [episodes, projects, runs]);
+    const views = useMemo(() => buildAgentProjectViews({ projects, episodes, runs, packages }), [episodes, packages, projects, runs]);
     const visibleProjects = useMemo(() => filterAgentProjectViews(views, { keyword, status }), [keyword, status, views]);
     const selectedProject = views.find((project) => project.id === projectId);
     const selectedEpisode = selectedProject?.episodes.find((episode) => episode.id === episodeId);
@@ -103,7 +105,7 @@ export function AgentWorkspace() {
                                 <div><p className="text-xs text-[var(--studio-text-muted)]">当前项目</p><h2 className="mt-1 text-xl font-semibold">{selectedProject.title}</h2></div>
                                 <p className="text-sm text-[var(--studio-text-secondary)]">{selectedProject.episodeCount} 个分集 · 总体 {selectedProject.progress}%</p>
                             </div>
-                            <AgentEpisodeOverview episodes={selectedProject.episodes} projectId={selectedProject.id} selectedEpisodeId={episodeId} />
+                            <AgentEpisodeOverview episodes={selectedProject.episodes} selectedEpisodeId={episodeId} />
                             {selectedEpisode ? <AgentStageGates episode={selectedEpisode} /> : null}
                             {selectedEpisode ? <div className="h-[calc(100dvh-5rem)] min-h-[720px] overflow-hidden border border-[var(--studio-border-subtle)]"><EpisodeWorkflowWorkbench episodeId={episodeId} projectId={projectId} /></div> : null}
                         </>

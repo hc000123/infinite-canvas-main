@@ -52,6 +52,43 @@ test("uses approved gates for progress instead of background task count", () => 
     assert.equal(view.status, "completed");
 });
 
+test("routes an episode to its exact current six-stage gate", () => {
+    const view = buildAgentEpisodeView({
+        episode,
+        project,
+        run: {
+            id: "run-1", projectId: project.id, episodeId: episode.id, workflowId: "video", workflowVersion: "2", currentStageId: "shot-breakdown", status: "active", reviewCount: 0, warningCount: 0, createdAt: "", updatedAt: "2026-08-08T10:00:00Z",
+            stages: [
+                ["script-adaptation", "approved"], ["asset-extraction", "approved"], ["asset-image-prompt", "approved"], ["shot-breakdown", "approved"], ["shot-prompt", "needs_review"],
+            ].map(([stageId, status], index) => ({ id: String(index), stageId, invocationId: "", status, attempt: 1, errorMessage: "", updatedAt: "" })),
+        },
+    });
+
+    assert.equal(view.currentStageKey, "prompt");
+});
+
+test("merges local video packages into episode and project progress", () => {
+    const run = {
+        id: "run-1", projectId: project.id, episodeId: episode.id, workflowId: "video", workflowVersion: "2", currentStageId: "shot-prompt", status: "active" as const, reviewCount: 0, warningCount: 0, createdAt: "", updatedAt: "2026-08-08T10:00:00Z",
+        stages: [
+            ["script-adaptation", "approved"], ["asset-extraction", "approved"], ["asset-image-prompt", "approved"], ["shot-breakdown", "approved"], ["shot-prompt", "approved"],
+        ].map(([stageId, status], index) => ({ id: String(index), stageId, invocationId: "", status: status as "approved", attempt: 1, errorMessage: "", updatedAt: "" })),
+    };
+    const packages = [
+        { projectId: project.id, episodeId: episode.id, canvasStatus: "已生成", generation: { status: "succeeded" } },
+        { projectId: project.id, episodeId: episode.id, canvasStatus: "未导入", generation: { status: "running" } },
+    ];
+    const [view] = buildAgentProjectViews({ projects: [project], episodes: [episode], runs: [run], packages });
+
+    assert.equal(view.episodes[0].stages.at(-1)?.status, "ready");
+    assert.equal(view.episodes[0].status, "running");
+    assert.equal(view.progress, 83);
+
+    const completed = buildAgentProjectViews({ projects: [project], episodes: [episode], runs: [run], packages: packages.map((item) => ({ ...item, canvasStatus: "已生成", generation: { status: "succeeded" } })) })[0];
+    assert.equal(completed.episodes[0].stages.at(-1)?.status, "complete");
+    assert.equal(completed.status, "completed");
+});
+
 test("merges local projects with remote progress and filters attention states", () => {
     const projects = [project, { ...project, id: "project-local", title: "本地新项目" }];
     const runs = [{ id: "run-1", projectId: project.id, episodeId: episode.id, workflowId: "video", workflowVersion: "2", currentStageId: "shot-breakdown", status: "active" as const, reviewCount: 1, warningCount: 0, createdAt: "", updatedAt: "2026-08-08T10:00:00Z", stages: [{ id: "storyboard", stageId: "shot-breakdown", invocationId: "", status: "needs_review" as const, attempt: 1, errorMessage: "", updatedAt: "" }] }];

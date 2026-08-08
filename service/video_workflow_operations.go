@@ -26,31 +26,33 @@ func ListWorkflowRuns(userID string, query WorkflowRunListQuery) (WorkflowRunLis
 	if err != nil {
 		return WorkflowRunList{}, err
 	}
-	invocationRun := make(map[string]string, len(allStages))
-	invocationIDs := make([]string, 0, len(allStages))
-	for _, stage := range allStages {
-		if stage.InvocationID == "" {
-			continue
-		}
-		invocationRun[stage.InvocationID] = stage.WorkflowRunID
-		invocationIDs = append(invocationIDs, stage.InvocationID)
-	}
-	gates, err := repository.ListInvocationGatesByIDs(userID, invocationIDs)
-	if err != nil {
-		return WorkflowRunList{}, err
-	}
-	stagesByRun := make(map[string][]WorkflowStagePollSummary, len(runs))
 	seenStages := make(map[string]bool, len(allStages))
+	latestStages := make([]model.WorkflowStageRun, 0, len(allStages))
 	for _, stage := range allStages {
 		key := stage.WorkflowRunID + "\x00" + stage.StageID
 		if seenStages[key] {
 			continue
 		}
 		seenStages[key] = true
-		stagesByRun[stage.WorkflowRunID] = append(stagesByRun[stage.WorkflowRunID], WorkflowStagePollSummary{
-			ID: stage.ID, StageID: stage.StageID, InvocationID: stage.InvocationID, Status: stage.Status,
-			Attempt: stage.Attempt, ErrorMessage: stage.ErrorMessage, UpdatedAt: stage.UpdatedAt,
-		})
+		latestStages = append(latestStages, stage)
+	}
+	projectedStages, err := workflowStagePollSummaries(userID, latestStages)
+	if err != nil {
+		return WorkflowRunList{}, err
+	}
+	invocationRun := make(map[string]string, len(latestStages))
+	invocationIDs := make([]string, 0, len(latestStages))
+	stagesByRun := make(map[string][]WorkflowStagePollSummary, len(runs))
+	for index, stage := range latestStages {
+		stagesByRun[stage.WorkflowRunID] = append(stagesByRun[stage.WorkflowRunID], projectedStages[index])
+		if stage.InvocationID != "" {
+			invocationRun[stage.InvocationID] = stage.WorkflowRunID
+			invocationIDs = append(invocationIDs, stage.InvocationID)
+		}
+	}
+	gates, err := repository.ListInvocationGatesByIDs(userID, invocationIDs)
+	if err != nil {
+		return WorkflowRunList{}, err
 	}
 	warningsByRun := make(map[string]int, len(runs))
 	for _, gate := range gates {
@@ -248,38 +250,16 @@ func GetWorkflowRunPoll(userID, workflowRunID string, after uint64) (WorkflowRun
 	}
 	latest := make([]model.WorkflowStageRun, 0, len(allStages))
 	seen := make(map[string]bool, len(allStages))
-	invocationIDs := make([]string, 0, len(allStages))
 	for _, stage := range allStages {
 		if seen[stage.StageID] {
 			continue
 		}
 		seen[stage.StageID] = true
 		latest = append(latest, stage)
-		if stage.InvocationID != "" {
-			invocationIDs = append(invocationIDs, stage.InvocationID)
-		}
 	}
-	invocations, err := repository.ListUserInvocationsByIDs(userID, invocationIDs)
+	stages, err := workflowStagePollSummaries(userID, latest)
 	if err != nil {
 		return WorkflowRunPoll{}, err
-	}
-	invocationByID := make(map[string]model.InvocationRun, len(invocations))
-	for _, invocation := range invocations {
-		invocationByID[invocation.ID] = invocation
-	}
-	stages := make([]WorkflowStagePollSummary, 0, len(latest))
-	for _, stage := range latest {
-		summary := WorkflowStagePollSummary{ID: stage.ID, StageID: stage.StageID, InvocationID: stage.InvocationID, Status: stage.Status, Attempt: stage.Attempt, ErrorMessage: stage.ErrorMessage, UpdatedAt: stage.UpdatedAt}
-		if invocation, exists := invocationByID[stage.InvocationID]; exists {
-			summary.Status = workflowStageStatusFromInvocation(invocation.Status)
-			summary.Attempt = invocation.LatestAttempt
-			summary.UpdatedAt = invocation.UpdatedAt
-			summary.ErrorMessage = ""
-			if invocation.Status == model.InvocationStatusFailed || invocation.Status == model.InvocationStatusBlocked || invocation.Status == model.InvocationStatusPartial {
-				summary.ErrorMessage = invocation.AggregateErrorSummary
-			}
-		}
-		stages = append(stages, summary)
 	}
 	events, err := repository.ListWorkflowEvents(userID, workflowRunID, after, 100)
 	if err != nil {
@@ -294,6 +274,38 @@ func GetWorkflowRunPoll(userID, workflowRunID string, after uint64) (WorkflowRun
 		return WorkflowRunPoll{}, err
 	}
 	return WorkflowRunPoll{RunID: run.ID, Status: run.Status, UpdatedAt: run.UpdatedAt, Stages: stages, Events: events, NextAfter: nextAfter, Worker: worker}, nil
+}
+
+func workflowStagePollSummaries(userID string, stages []model.WorkflowStageRun) ([]WorkflowStagePollSummary, error) {
+	invocationIDs := make([]string, 0, len(stages))
+	for _, stage := range stages {
+		if stage.InvocationID != "" {
+			invocationIDs = append(invocationIDs, stage.InvocationID)
+		}
+	}
+	invocations, err := repository.ListUserInvocationsByIDs(userID, invocationIDs)
+	if err != nil {
+		return nil, err
+	}
+	invocationByID := make(map[string]model.InvocationRun, len(invocations))
+	for _, invocation := range invocations {
+		invocationByID[invocation.ID] = invocation
+	}
+	summaries := make([]WorkflowStagePollSummary, 0, len(stages))
+	for _, stage := range stages {
+		summary := WorkflowStagePollSummary{ID: stage.ID, StageID: stage.StageID, InvocationID: stage.InvocationID, Status: stage.Status, Attempt: stage.Attempt, ErrorMessage: stage.ErrorMessage, UpdatedAt: stage.UpdatedAt}
+		if invocation, exists := invocationByID[stage.InvocationID]; exists {
+			summary.Status = workflowStageStatusFromInvocation(invocation.Status)
+			summary.Attempt = invocation.LatestAttempt
+			summary.UpdatedAt = invocation.UpdatedAt
+			summary.ErrorMessage = ""
+			if invocation.Status == model.InvocationStatusFailed || invocation.Status == model.InvocationStatusBlocked || invocation.Status == model.InvocationStatusPartial {
+				summary.ErrorMessage = invocation.AggregateErrorSummary
+			}
+		}
+		summaries = append(summaries, summary)
+	}
+	return summaries, nil
 }
 
 func workflowTextChannelAvailable() bool {
