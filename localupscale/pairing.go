@@ -5,13 +5,16 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -37,8 +40,22 @@ type pairingCode struct {
 }
 
 func NewPairingStore(path string, now func() time.Time) (*PairingStore, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if strings.TrimSpace(path) == "" {
+		return nil, errors.New("pairing store path is required")
+	}
+	if now == nil {
+		return nil, errors.New("pairing store clock is required")
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
+	}
+	// A filename-only path uses the caller's current directory; never chmod it
+	// (or the filesystem root) as though it were the helper's private directory.
+	if dir != "." && dir != string(filepath.Separator) {
+		if err := os.Chmod(dir, 0o700); err != nil {
+			return nil, err
+		}
 	}
 	store := &PairingStore{
 		path:   path,
@@ -61,6 +78,12 @@ func NewPairingStore(path string, now func() time.Time) (*PairingStore, error) {
 		return nil, err
 	}
 	for _, grant := range grants {
+		if err := validateGrant(grant); err != nil {
+			return nil, err
+		}
+		if _, exists := store.grants[grant.ID]; exists {
+			return nil, fmt.Errorf("duplicate grant ID: %s", grant.ID)
+		}
 		store.grants[grant.ID] = grant
 	}
 	return store, nil
@@ -75,6 +98,7 @@ func (s *PairingStore) IssueCode() (string, error) {
 		return "", err
 	}
 	code := fmt.Sprintf("%06d", value.Int64())
+	clear(s.codes)
 	s.codes[code] = pairingCode{expiresAt: s.now().Add(5 * time.Minute)}
 	return code, nil
 }
@@ -104,14 +128,15 @@ func (s *PairingStore) Pair(code, origin string) (string, error) {
 	grant := Grant{
 		ID:        id,
 		Origin:    origin,
-		TokenHash: base64.RawURLEncoding.EncodeToString(hash[:]),
+		TokenHash: hex.EncodeToString(hash[:]),
 		CreatedAt: s.now().UTC().Format(time.RFC3339),
 	}
-	s.grants[id] = grant
-	if err := s.persist(); err != nil {
-		delete(s.grants, id)
+	grants := cloneGrants(s.grants)
+	grants[id] = grant
+	if err := s.persist(grants); err != nil {
 		return "", err
 	}
+	s.grants = grants
 	delete(s.codes, code)
 	return token, nil
 }
@@ -137,7 +162,7 @@ func (s *PairingStore) Authorize(token, origin string) bool {
 	defer s.mu.Unlock()
 
 	hash := sha256.Sum256([]byte(token))
-	encodedHash := base64.RawURLEncoding.EncodeToString(hash[:])
+	encodedHash := hex.EncodeToString(hash[:])
 	for _, grant := range s.grants {
 		if grant.Origin == origin && subtle.ConstantTimeCompare([]byte(grant.TokenHash), []byte(encodedHash)) == 1 {
 			return true
@@ -151,16 +176,17 @@ func (s *PairingStore) Revoke(token, origin string) error {
 	defer s.mu.Unlock()
 
 	hash := sha256.Sum256([]byte(token))
-	encodedHash := base64.RawURLEncoding.EncodeToString(hash[:])
+	encodedHash := hex.EncodeToString(hash[:])
 	for id, grant := range s.grants {
 		if grant.Origin != origin || subtle.ConstantTimeCompare([]byte(grant.TokenHash), []byte(encodedHash)) != 1 {
 			continue
 		}
-		delete(s.grants, id)
-		if err := s.persist(); err != nil {
-			s.grants[id] = grant
+		grants := cloneGrants(s.grants)
+		delete(grants, id)
+		if err := s.persist(grants); err != nil {
 			return err
 		}
+		s.grants = grants
 		return nil
 	}
 	return errors.New("grant not found")
@@ -178,9 +204,9 @@ func (s *PairingStore) Grants() []Grant {
 	return grants
 }
 
-func (s *PairingStore) persist() error {
-	grants := make([]Grant, 0, len(s.grants))
-	for _, grant := range s.grants {
+func (s *PairingStore) persist(grantMap map[string]Grant) error {
+	grants := make([]Grant, 0, len(grantMap))
+	for _, grant := range grantMap {
 		grants = append(grants, grant)
 	}
 	sort.Slice(grants, func(i, j int) bool { return grants[i].ID < grants[j].ID })
@@ -188,13 +214,7 @@ func (s *PairingStore) persist() error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
-		return err
-	}
-	if err := os.WriteFile(s.path, data, 0o600); err != nil {
-		return err
-	}
-	return os.Chmod(s.path, 0o600)
+	return writeGrantsAtomically(s.path, data)
 }
 
 func randomText(size int) (string, error) {
@@ -203,4 +223,75 @@ func randomText(size int) (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(value), nil
+}
+
+func validateGrant(grant Grant) error {
+	if grant.ID == "" {
+		return errors.New("grant ID is required")
+	}
+	if grant.Origin == "" {
+		return errors.New("grant origin is required")
+	}
+	if _, err := time.Parse(time.RFC3339, grant.CreatedAt); err != nil {
+		return fmt.Errorf("invalid grant creation time: %w", err)
+	}
+	hash, err := hex.DecodeString(grant.TokenHash)
+	if err != nil || len(hash) != sha256.Size {
+		return errors.New("invalid grant token hash")
+	}
+	return nil
+}
+
+func cloneGrants(grants map[string]Grant) map[string]Grant {
+	clone := make(map[string]Grant, len(grants))
+	for id, grant := range grants {
+		clone[id] = grant
+	}
+	return clone
+}
+
+func writeGrantsAtomically(path string, data []byte) (err error) {
+	dir := filepath.Dir(path)
+	directory, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer directory.Close()
+	file, err := os.CreateTemp(dir, ".grants-*.tmp")
+	if err != nil {
+		return err
+	}
+	tempPath := file.Name()
+	defer func() {
+		if file != nil {
+			_ = file.Close()
+		}
+		if err != nil {
+			_ = os.Remove(tempPath)
+		}
+	}()
+	if err = file.Chmod(0o600); err != nil {
+		return err
+	}
+	written, err := file.Write(data)
+	if err != nil {
+		return err
+	}
+	if written != len(data) {
+		return io.ErrShortWrite
+	}
+	if err = file.Sync(); err != nil {
+		return err
+	}
+	if err = file.Close(); err != nil {
+		return err
+	}
+	file = nil
+	if err = os.Rename(tempPath, path); err != nil {
+		return err
+	}
+	// Rename is the commit point. A directory sync failure cannot be rolled back
+	// safely, so keep the visible file and in-memory candidate in agreement.
+	_ = directory.Sync()
+	return nil
 }
