@@ -1,10 +1,11 @@
 "use client";
 
 import { Button, Tag, Tooltip } from "antd";
-import { CheckSquare, Edit3, Square } from "lucide-react";
+import { ArrowRight, CheckSquare, Edit3, ImageOff, Square } from "lucide-react";
+import Link from "next/link";
 
 import { cn } from "@/lib/utils";
-import type { Asset, AssetSubject } from "@/stores/use-asset-store";
+import type { Asset, AssetSubject, AssetVariant } from "@/stores/use-asset-store";
 import { assetVersionRecords } from "../asset-version-history";
 import { assetCategoryLabel } from "../asset-subjects";
 
@@ -14,6 +15,7 @@ export function AssetSubjectSection({
     groups,
     episodeTitleMap,
     selectedAssetIds,
+    variants,
     onEditAsset,
     onOpenAsset,
     onToggleAsset,
@@ -21,6 +23,7 @@ export function AssetSubjectSection({
     groups: AssetSubjectGroup[];
     episodeTitleMap: Record<string, string>;
     selectedAssetIds: Set<string>;
+    variants: AssetVariant[];
     onEditAsset: (asset: Asset) => void;
     onOpenAsset: (asset: Asset) => void;
     onToggleAsset: (assetId: string) => void;
@@ -28,7 +31,9 @@ export function AssetSubjectSection({
     if (!groups.length) return null;
     return (
         <div className="grid gap-4">
-            {groups.map(({ subject, assets }) => (
+            {groups.map(({ subject, assets }) => {
+                const subjectVariants = variants.filter((variant) => variant.subjectId === subject.id);
+                return (
                 <article key={subject.id} className="overflow-hidden rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]">
                     <header className="flex flex-wrap items-start justify-between gap-3 px-4 py-3">
                         <div className="min-w-0">
@@ -39,9 +44,21 @@ export function AssetSubjectSection({
                             </div>
                             {subject.tags.length ? <div className="mt-2 text-xs text-[var(--studio-text-muted)]">{subject.tags.join(" · ")}</div> : null}
                         </div>
-                        <span className="text-xs text-[var(--studio-text-muted)]">{assets.length} 个形态</span>
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs text-[var(--studio-text-muted)]">{subjectVariants.length} 个形态 · {assets.length} 个版本</span>
+                            <Link href={`/assets/${subject.id}`} className="inline-flex items-center gap-1 text-sm font-medium text-[var(--studio-accent)] hover:opacity-80">
+                                进入工作台 <ArrowRight className="size-3.5" />
+                            </Link>
+                        </div>
                     </header>
                     <div className="grid grid-cols-2 gap-3 border-t border-[var(--studio-border-subtle)] p-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+                        {!assets.length ? (
+                            <Link href={`/assets/${subject.id}`} className="col-span-full flex min-h-32 flex-col items-center justify-center rounded-md border border-dashed border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-muted)] transition hover:border-[var(--studio-accent)] hover:text-[var(--studio-accent)]">
+                                <ImageOff className="mb-2 size-5" />
+                                <span className="text-sm font-medium">待生产</span>
+                                <span className="mt-1 text-xs">进入工作台添加参考图并生成候选</span>
+                            </Link>
+                        ) : null}
                         {assets.map((asset) => {
                             const binding = asset.assetBinding!;
                             const selected = selectedAssetIds.has(asset.id);
@@ -75,7 +92,8 @@ export function AssetSubjectSection({
                         })}
                     </div>
                 </article>
-            ))}
+                );
+            })}
         </div>
     );
 }

@@ -17,6 +17,7 @@ export function useAssetPageStores() {
         ensureSubject: useAssetStore((state) => state.ensureSubject),
         folders: useAssetStore((state) => state.folders),
         subjects: useAssetStore((state) => state.subjects),
+        variants: useAssetStore((state) => state.variants),
         productionBibleItems: useProductionBibleStore((state) => state.items),
         projects: useCanvasStore((state) => state.projects),
         removeAsset: useAssetStore((state) => state.removeAsset),

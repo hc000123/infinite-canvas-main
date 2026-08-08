@@ -1,4 +1,4 @@
-import type { Asset, AssetBinding, AssetCategory, AssetSubject, ImageAsset } from "../../../stores/use-asset-store.ts";
+import type { Asset, AssetBinding, AssetCategory, AssetSubject, AssetWorkbenchImage, ImageAsset } from "../../../stores/use-asset-store.ts";
 import type { ReferenceImage } from "../../../types/image.ts";
 
 export type AssetReferenceScope = "project" | "all";
@@ -41,7 +41,12 @@ export function validateVariantName(name: string, variants: Array<Pick<AssetVari
 }
 
 export function filterReferenceAssets(assets: Asset[], projectId: string, scope: AssetReferenceScope) {
-    return assets.filter((asset) => asset.kind === "image" && (scope === "all" || assetProjectId(asset) === projectId));
+    return assets.filter((asset) => asset.kind === "image" && (scope === "all" || referenceAssetProjectId(asset) === projectId));
+}
+
+export function referenceAssetProjectId(asset: Asset) {
+    if (asset.assetBinding?.projectId) return asset.assetBinding.projectId;
+    return typeof asset.metadata?.projectId === "string" ? asset.metadata.projectId : "";
 }
 
 export function candidateAssetInput(subject: AssetSubject, variant: AssetVariantLike, candidate: AssetWorkbenchImageLike): CandidateAssetInput {
@@ -89,7 +94,12 @@ export function workbenchImageReference(image: AssetWorkbenchImageLike): Referen
     };
 }
 
-function assetProjectId(asset: Asset) {
-    if (asset.assetBinding?.projectId) return asset.assetBinding.projectId;
-    return typeof asset.metadata?.projectId === "string" ? asset.metadata.projectId : "";
+export function copyWorkbenchImageInput(image: AssetWorkbenchImage, variantId: string): Omit<AssetWorkbenchImage, "createdAt" | "id"> {
+    const { createdAt: _createdAt, id: _id, selectedAssetId: _selectedAssetId, ...snapshot } = image;
+    return { ...snapshot, variantId, role: "candidate", source: "candidate" };
+}
+
+export function referenceFromWorkbenchImageInput(image: AssetWorkbenchImage, variantId: string): Omit<AssetWorkbenchImage, "createdAt" | "id"> {
+    const { createdAt: _createdAt, id: _id, selectedAssetId: _selectedAssetId, ...snapshot } = image;
+    return { ...snapshot, variantId, role: "reference", source: "candidate" };
 }

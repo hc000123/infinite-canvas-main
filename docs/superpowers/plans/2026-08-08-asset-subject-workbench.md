@@ -8,6 +8,8 @@
 
 **Tech Stack:** Next.js App Router、React 19、TypeScript、Ant Design 6、Tailwind CSS、Zustand、localforage、Node test runner。
 
+**Implementation status:** Tasks 1–8 implemented. The checkboxes below preserve the original executable handoff sequence; fresh verification evidence is recorded in the completion report and `docs/pending-test.md`.
+
 ---
 
 ### Task 1: 形态与工作台图片纯函数
