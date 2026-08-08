@@ -165,6 +165,37 @@ func TestPairingIssueCodeRandomFailurePreservesChallenge(t *testing.T) {
 	}
 }
 
+func TestPairingIssueCodeCollisionLimitPreservesChallenge(t *testing.T) {
+	store, err := NewPairingStore(filepath.Join(t.TempDir(), "grants.json"), time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.generateCode = func() (string, error) { return "123456", nil }
+	code, err := store.IssueCode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	injected := errors.New("generator called beyond collision limit")
+	calls := 0
+	store.generateCode = func() (string, error) {
+		calls++
+		if calls <= 32 {
+			return code, nil
+		}
+		return "", injected
+	}
+	_, err = store.IssueCode()
+	if err == nil || errors.Is(err, injected) {
+		t.Errorf("IssueCode error = %v, want collision exhaustion", err)
+	}
+	if calls != 32 {
+		t.Errorf("generator called %d times, want 32", calls)
+	}
+	if _, err := store.Pair(code, "https://canvas.example.com"); err != nil {
+		t.Fatal("collision exhaustion destroyed current challenge or retained lock")
+	}
+}
+
 func TestPairingCodeExpiresAfterFiveMinutes(t *testing.T) {
 	now := time.Date(2026, 8, 8, 12, 0, 0, 0, time.UTC)
 	store, err := NewPairingStore(filepath.Join(t.TempDir(), "grants.json"), func() time.Time { return now })
@@ -621,6 +652,45 @@ func TestPairingStoreCreatesStorageDirectory(t *testing.T) {
 	if !info.IsDir() {
 		t.Fatal("pairing storage parent is not a directory")
 	}
+	if info.Mode().Perm()&0o022 != 0 {
+		t.Fatalf("created pairing directory permissions = %o", info.Mode().Perm())
+	}
+}
+
+func TestPairingStoreRejectsWritableAncestorWithoutCreatingDirectory(t *testing.T) {
+	ancestor := filepath.Join(t.TempDir(), "writable")
+	if err := os.Mkdir(ancestor, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(ancestor, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(ancestor, "nested", "deeper")
+	if _, err := NewPairingStore(filepath.Join(dir, "grants.json"), time.Now); err == nil {
+		t.Fatal("storage directory created below writable ancestor")
+	}
+	if _, err := os.Stat(filepath.Join(ancestor, "nested")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("nested directory was created: %v", err)
+	}
+}
+
+func TestPairingStoreRejectsSymlinkInMissingDirectoryPath(t *testing.T) {
+	root := t.TempDir()
+	realDirectory := filepath.Join(root, "real")
+	if err := os.Mkdir(realDirectory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "linked")
+	if err := os.Symlink(realDirectory, link); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(link, "nested")
+	if _, err := NewPairingStore(filepath.Join(dir, "grants.json"), time.Now); err == nil {
+		t.Fatal("symlinked storage path accepted")
+	}
+	if _, err := os.Stat(filepath.Join(realDirectory, "nested")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("directory was created through symlink: %v", err)
+	}
 }
 
 func TestPairingStoreLeavesExistingStorageDirectoryPermissionsUnchanged(t *testing.T) {
@@ -693,6 +763,34 @@ func TestPairingStoreDoesNotChangeCurrentDirectoryPermissions(t *testing.T) {
 	}
 }
 
+func TestPairingStoreRejectsWritableCurrentDirectory(t *testing.T) {
+	originalDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(originalDirectory)
+		_ = os.Chmod(dir, 0o755)
+	})
+	if _, err := NewPairingStore("grants.json", time.Now); err == nil {
+		t.Fatal("group/other-writable current directory accepted")
+	}
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o777 {
+		t.Fatalf("current directory permissions changed to %o", info.Mode().Perm())
+	}
+}
+
 func TestPairingStoreRejectsInvalidConstructorArguments(t *testing.T) {
 	if _, err := NewPairingStore(" \t ", time.Now); err == nil {
 		t.Fatal("blank path accepted")
@@ -712,6 +810,7 @@ func TestPairingStoreRejectsInvalidPersistedGrants(t *testing.T) {
 	tests := map[string][]Grant{
 		"missing id":         {{Origin: valid.Origin, TokenHash: valid.TokenHash, CreatedAt: valid.CreatedAt}},
 		"missing origin":     {{ID: valid.ID, TokenHash: valid.TokenHash, CreatedAt: valid.CreatedAt}},
+		"blank origin":       {{ID: valid.ID, Origin: " \t ", TokenHash: valid.TokenHash, CreatedAt: valid.CreatedAt}},
 		"invalid created at": {{ID: valid.ID, Origin: valid.Origin, TokenHash: valid.TokenHash, CreatedAt: "not-a-time"}},
 		"invalid token hash": {{ID: valid.ID, Origin: valid.Origin, TokenHash: "not-hex", CreatedAt: valid.CreatedAt}},
 		"short token hash":   {{ID: valid.ID, Origin: valid.Origin, TokenHash: strings.Repeat("ab", sha256.Size-1), CreatedAt: valid.CreatedAt}},

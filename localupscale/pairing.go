@@ -19,6 +19,8 @@ import (
 	"time"
 )
 
+const maxPairingCodeAttempts = 32
+
 type PairingStore struct {
 	mu           sync.Mutex
 	path         string
@@ -99,30 +101,8 @@ func NewPairingStore(path string, now func() time.Time) (*PairingStore, error) {
 		return nil, err
 	}
 	dir := filepath.Dir(path)
-	cwd, err := os.Getwd()
-	if err != nil {
+	if err := preparePairingDirectory(dir); err != nil {
 		return nil, err
-	}
-	cwdInfo, err := os.Stat(cwd)
-	if err != nil {
-		return nil, err
-	}
-	root := filepath.Clean(filepath.VolumeName(dir) + string(filepath.Separator))
-	sharedDirectory := dir == root
-	info, err := os.Stat(dir)
-	if errors.Is(err, os.ErrNotExist) {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			return nil, err
-		}
-		if err := os.Chmod(dir, 0o700); err != nil {
-			return nil, err
-		}
-	} else if err != nil {
-		return nil, err
-	} else if !info.IsDir() {
-		return nil, errors.New("pairing store parent is not a directory")
-	} else if !sharedDirectory && !os.SameFile(info, cwdInfo) && info.Mode().Perm()&0o022 != 0 {
-		return nil, fmt.Errorf("pairing store directory is group/other writable: %o", info.Mode().Perm())
 	}
 	store := &PairingStore{
 		path:         path,
@@ -166,7 +146,7 @@ func (s *PairingStore) IssueCode() (string, error) {
 	for code := range s.codes {
 		current = code
 	}
-	for {
+	for range maxPairingCodeAttempts {
 		code, err := s.generateCode()
 		if err != nil {
 			return "", err
@@ -178,14 +158,15 @@ func (s *PairingStore) IssueCode() (string, error) {
 		s.codes[code] = pairingCode{expiresAt: s.now().Add(5 * time.Minute)}
 		return code, nil
 	}
+	return "", errors.New("pairing code collision limit reached")
 }
 
 func (s *PairingStore) Pair(code, origin string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if strings.TrimSpace(origin) == "" {
-		return "", errors.New("pairing origin is required")
+	if err := validateOrigin(origin); err != nil {
+		return "", err
 	}
 	pairing, ok := s.codes[code]
 	if !ok {
@@ -215,6 +196,8 @@ func (s *PairingStore) Pair(code, origin string) (string, error) {
 	grants[id] = grant
 	if err := s.persist(grants); err != nil {
 		if persistenceCommitted(err) {
+			// Rename already made this grant visible. Return its token with the
+			// durability error while keeping memory aligned with the file.
 			s.grants = grants
 			delete(s.codes, code)
 			return token, err
@@ -270,6 +253,8 @@ func (s *PairingStore) Revoke(token, origin string) error {
 		delete(grants, id)
 		if err := s.persist(grants); err != nil {
 			if persistenceCommitted(err) {
+				// The visible file no longer contains the grant even though the
+				// directory sync failed, so commit the same revocation in memory.
 				s.grants = grants
 			}
 			return err
@@ -325,8 +310,8 @@ func validateGrant(grant Grant) error {
 	if grant.ID == "" {
 		return errors.New("grant ID is required")
 	}
-	if grant.Origin == "" {
-		return errors.New("grant origin is required")
+	if err := validateOrigin(grant.Origin); err != nil {
+		return err
 	}
 	if _, err := time.Parse(time.RFC3339, grant.CreatedAt); err != nil {
 		return fmt.Errorf("invalid grant creation time: %w", err)
@@ -334,6 +319,57 @@ func validateGrant(grant Grant) error {
 	hash, err := hex.DecodeString(grant.TokenHash)
 	if err != nil || len(hash) != sha256.Size {
 		return errors.New("invalid grant token hash")
+	}
+	return nil
+}
+
+func validateOrigin(origin string) error {
+	if strings.TrimSpace(origin) == "" {
+		return errors.New("pairing origin is required")
+	}
+	return nil
+}
+
+func preparePairingDirectory(dir string) error {
+	current := dir
+	for {
+		info, err := os.Lstat(current)
+		if err == nil {
+			if info.Mode()&os.ModeSymlink != 0 {
+				return fmt.Errorf("pairing store path contains symlink: %s", current)
+			}
+			if !info.IsDir() {
+				return fmt.Errorf("pairing store path is not a directory: %s", current)
+			}
+			if info.Mode().Perm()&0o022 != 0 {
+				return fmt.Errorf("pairing store directory is group/other writable: %o", info.Mode().Perm())
+			}
+			if current == dir {
+				return nil
+			}
+			break
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return errors.New("pairing store directory has no existing ancestor")
+		}
+		current = parent
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return errors.New("created pairing store path is not a real directory")
+	}
+	if info.Mode().Perm()&0o022 != 0 {
+		return fmt.Errorf("created pairing store directory is group/other writable: %o", info.Mode().Perm())
 	}
 	return nil
 }
