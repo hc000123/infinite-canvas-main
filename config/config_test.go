@@ -53,3 +53,19 @@ func TestLoadWorkflowWorkerConfig(t *testing.T) {
 		t.Fatalf("worker config=%#v", Cfg)
 	}
 }
+
+func TestLoadImageUpscaleConfig(t *testing.T) {
+	t.Setenv("ADMIN_PASSWORD", "safe-admin-password")
+	t.Setenv("JWT_SECRET", "safe-jwt-secret")
+	t.Setenv("IMAGE_UPSCALE_PROVIDER", " aliyun ")
+	t.Setenv("IMAGE_UPSCALE_WORK_DIR", " data/custom-upscale ")
+	t.Setenv("ALIBABA_CLOUD_ACCESS_KEY_ID", " test-key ")
+	t.Setenv("ALIBABA_CLOUD_ACCESS_KEY_SECRET", " test-secret ")
+
+	if err := Load(); err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if Cfg.ImageUpscaleProvider != "aliyun" || Cfg.ImageUpscaleWorkDir != "data/custom-upscale" || Cfg.AlibabaCloudAccessKeyID != "test-key" || Cfg.AlibabaCloudAccessKeySecret != "test-secret" {
+		t.Fatalf("image upscale config=%#v", Cfg)
+	}
+}

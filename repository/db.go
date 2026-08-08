@@ -99,6 +99,7 @@ func DB() (*gorm.DB, error) {
 			&model.AssetProject{},
 			&model.AssetFolder{},
 			&model.Asset{},
+			&model.ImageUpscaleJob{},
 			&model.Setting{},
 		)
 		if dbErr != nil {

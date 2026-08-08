@@ -60,9 +60,23 @@
 - `asset_projects`
 - `asset_folders`
 - `assets`
+- `image_upscale_jobs`
 - `settings`
 
 后续新增表时再同步补充本文档，未实际使用的规划表不提前写入。
+
+### 画布图片超分任务
+
+`image_upscale_jobs` 保存登录用户发起的云端图片超分任务，用于进度查询、失败重试和服务重启后的中断恢复。任务只保存服务端私有输入路径和公开结果相对地址，不保存或回传阿里云 AccessKey。
+
+| 字段组 | 说明 |
+| ---- | ---- |
+| `id / user_id / project_id / canvas_id / source_node_id / source_asset_id` | 任务身份、用户所有权和画布来源坐标；查询接口按 `user_id` 隔离。 |
+| `provider / provider_request_id / model / strategy / scale` | 服务商、请求追踪、模型策略和 2× / 4× 倍率。 |
+| `status / progress / attempt / error_code / error_message` | `queued / processing / downloading / succeeded / failed` 生命周期、进度、重试次数和安全错误信息。 |
+| `input_width / input_height / input_mime_type / input_bytes / input_path` | 输入图片信息与服务端私有文件路径；`input_path` 不出现在 JSON 响应中。 |
+| `result_url / result_mime_type / result_bytes / output_width / output_height` | 已下载并持久化的结果地址、格式、大小和输出尺寸。 |
+| `cloud_processing / created_at / started_at / completed_at / updated_at` | 云端处理标记与任务时间线。 |
 
 ### Artifact 与 Invocation Runtime
 

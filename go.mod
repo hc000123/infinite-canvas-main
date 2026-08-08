@@ -4,6 +4,9 @@ go 1.25.0
 
 require (
 	github.com/Masterminds/semver/v3 v3.4.0
+	github.com/alibabacloud-go/darabonba-openapi/v2 v2.1.13
+	github.com/alibabacloud-go/imageenhan-20190930/v3 v3.0.0
+	github.com/alibabacloud-go/tea v1.3.13
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/cyberphone/json-canonicalization v0.0.0-20241213102144-19d51d7fe467
 	github.com/gin-gonic/gin v1.11.0
@@ -22,7 +25,16 @@ require (
 	gorm.io/gorm v1.31.1
 )
 
-require github.com/rogpeppe/go-internal v1.15.0 // indirect
+require (
+	github.com/alibabacloud-go/alibabacloud-gateway-spi v0.0.5 // indirect
+	github.com/alibabacloud-go/debug v1.0.1 // indirect
+	github.com/alibabacloud-go/tea-utils/v2 v2.0.7 // indirect
+	github.com/aliyun/credentials-go v1.4.5 // indirect
+	github.com/clbanning/mxj/v2 v2.7.0 // indirect
+	github.com/rogpeppe/go-internal v1.15.0 // indirect
+	github.com/tjfoc/gmsm v1.4.1 // indirect
+	gopkg.in/ini.v1 v1.67.0 // indirect
+)
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
@@ -51,7 +63,7 @@ require (
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421 // indirect
+	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/quic-go/qpack v0.5.1 // indirect
