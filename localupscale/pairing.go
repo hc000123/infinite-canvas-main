@@ -37,6 +37,9 @@ type pairingCode struct {
 }
 
 func NewPairingStore(path string, now func() time.Time) (*PairingStore, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, err
+	}
 	store := &PairingStore{
 		path:   path,
 		now:    now,

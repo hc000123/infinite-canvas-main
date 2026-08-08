@@ -170,6 +170,20 @@ func TestPairingStoreRestrictsExistingGrantFilePermissions(t *testing.T) {
 	}
 }
 
+func TestPairingStoreCreatesStorageDirectory(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "nested", "deeper", "grants.json")
+	if _, err := NewPairingStore(path, time.Now); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(filepath.Dir(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.IsDir() {
+		t.Fatal("pairing storage parent is not a directory")
+	}
+}
+
 func TestPairingRevokeRemovesOnlyExactOriginTokenPair(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "grants.json")
 	store, err := NewPairingStore(path, time.Now)
