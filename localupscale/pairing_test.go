@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -38,6 +39,32 @@ func TestPairingCodeIsSingleUseAndGrantIsOriginBound(t *testing.T) {
 	}
 	if store.Authorize(token, "https://evil.example.com") {
 		t.Fatal("cross-origin token accepted")
+	}
+}
+
+func TestPairingRejectsBlankOriginWithoutConsumingChallenge(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "grants.json")
+	store, err := NewPairingStore(path, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, err := store.IssueCode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Pair(code, " \t "); err == nil {
+		t.Fatal("blank origin accepted")
+	}
+	token, err := store.Pair(code, "https://canvas.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := NewPairingStore(path, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reloaded.Authorize(token, "https://canvas.example.com") {
+		t.Fatal("grant created after blank origin did not reload")
 	}
 }
 
@@ -79,6 +106,62 @@ func TestPairingIssueCodeReplacesCurrentChallenge(t *testing.T) {
 	}
 	if _, err := store.Pair(newCode, "https://canvas.example.com"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPairingIssueCodeResamplesCurrentCodeCollision(t *testing.T) {
+	store, err := NewPairingStore(filepath.Join(t.TempDir(), "grants.json"), time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	codes := []string{"123456", "123456", "654321"}
+	store.generateCode = func() (string, error) {
+		code := codes[0]
+		codes = codes[1:]
+		return code, nil
+	}
+	oldCode, err := store.IssueCode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	newCode, err := store.IssueCode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if newCode != "654321" {
+		t.Fatalf("new pairing code = %q, want collision resampled", newCode)
+	}
+	if _, err := store.Pair(oldCode, "https://canvas.example.com"); err == nil {
+		t.Fatal("collided old pairing code accepted")
+	}
+	if _, err := store.Pair(newCode, "https://canvas.example.com"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPairingIssueCodeRandomFailurePreservesChallenge(t *testing.T) {
+	store, err := NewPairingStore(filepath.Join(t.TempDir(), "grants.json"), time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	injected := errors.New("random source failed")
+	calls := 0
+	store.generateCode = func() (string, error) {
+		calls++
+		if calls == 1 {
+			return "123456", nil
+		}
+		return "", injected
+	}
+	code, err := store.IssueCode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.IssueCode(); !errors.Is(err, injected) {
+		t.Fatalf("IssueCode error = %v, want injected error", err)
+	}
+	if _, err := store.Pair(code, "https://canvas.example.com"); err != nil {
+		t.Fatal("random failure destroyed current challenge")
 	}
 }
 
@@ -340,12 +423,115 @@ func TestPairingFailureDoesNotConsumeChallenge(t *testing.T) {
 	}
 	if _, err := store.Pair(code, "https://canvas.example.com"); err == nil {
 		t.Fatal("pairing replaced storage directory")
+	} else {
+		var persistenceErr *pairingPersistenceError
+		if !errors.As(err, &persistenceErr) || persistenceErr.committed {
+			t.Fatalf("Pair error = %v, want not-committed persistence error", err)
+		}
 	}
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.Pair(code, "https://canvas.example.com"); err != nil {
 		t.Fatal("failed persistence consumed pairing challenge")
+	}
+}
+
+func TestPairingPersistenceFailuresBeforeRenameDoNotCommit(t *testing.T) {
+	for _, fault := range []string{"short write", "file sync", "file close", "rename"} {
+		t.Run(fault, func(t *testing.T) {
+			store, path, token := newPairedStore(t)
+			original, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			store.fileOps = faultPairingFileOps{pairingFileOps: store.fileOps, fault: fault}
+			err = store.Revoke(token, "https://canvas.example.com")
+			var persistenceErr *pairingPersistenceError
+			if !errors.As(err, &persistenceErr) || persistenceErr.committed {
+				t.Fatalf("Revoke error = %v, want not-committed persistence error", err)
+			}
+			if !store.Authorize(token, "https://canvas.example.com") {
+				t.Fatal("failed revocation changed in-memory authorization")
+			}
+			after, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(after, original) {
+				t.Fatal("failed revocation changed persisted authorization")
+			}
+			reloaded, err := NewPairingStore(path, time.Now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reloaded.Authorize(token, "https://canvas.example.com") {
+				t.Fatal("failed revocation changed reloaded authorization")
+			}
+			temps, err := filepath.Glob(filepath.Join(filepath.Dir(path), ".grants-*.tmp"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(temps) != 0 {
+				t.Fatalf("temporary grant files remain: %v", temps)
+			}
+		})
+	}
+}
+
+func TestPairingDirectorySyncFailureCommitsGrant(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "grants.json")
+	store, err := NewPairingStore(path, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, err := store.IssueCode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseOps := store.fileOps
+	store.fileOps = faultPairingFileOps{pairingFileOps: baseOps, fault: "directory sync"}
+	token, err := store.Pair(code, "https://canvas.example.com")
+	if token == "" {
+		t.Fatal("committed pairing did not return token")
+	}
+	var persistenceErr *pairingPersistenceError
+	if !errors.As(err, &persistenceErr) || !persistenceErr.committed {
+		t.Fatalf("Pair error = %v, want committed persistence error", err)
+	}
+	if !store.Authorize(token, "https://canvas.example.com") {
+		t.Fatal("committed pairing missing from memory")
+	}
+	if _, err := store.Pair(code, "https://canvas.example.com"); err == nil {
+		t.Fatal("committed pairing did not consume challenge")
+	}
+	store.fileOps = baseOps
+	reloaded, err := NewPairingStore(path, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reloaded.Authorize(token, "https://canvas.example.com") {
+		t.Fatal("committed pairing missing from disk")
+	}
+}
+
+func TestPairingDirectorySyncFailureCommitsRevocation(t *testing.T) {
+	store, path, token := newPairedStore(t)
+	store.fileOps = faultPairingFileOps{pairingFileOps: store.fileOps, fault: "directory sync"}
+	err := store.Revoke(token, "https://canvas.example.com")
+	var persistenceErr *pairingPersistenceError
+	if !errors.As(err, &persistenceErr) || !persistenceErr.committed {
+		t.Fatalf("Revoke error = %v, want committed persistence error", err)
+	}
+	if store.Authorize(token, "https://canvas.example.com") {
+		t.Fatal("committed revocation remains in memory")
+	}
+	reloaded, err := NewPairingStore(path, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.Authorize(token, "https://canvas.example.com") {
+		t.Fatal("committed revocation remains on disk")
 	}
 }
 
@@ -437,7 +623,7 @@ func TestPairingStoreCreatesStorageDirectory(t *testing.T) {
 	}
 }
 
-func TestPairingStoreRestrictsStorageDirectoryPermissions(t *testing.T) {
+func TestPairingStoreLeavesExistingStorageDirectoryPermissionsUnchanged(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "helper-config")
 	if err := os.Mkdir(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -452,8 +638,58 @@ func TestPairingStoreRestrictsStorageDirectoryPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0o700 {
-		t.Fatalf("pairing storage directory permissions = %o, want 700", info.Mode().Perm())
+	if info.Mode().Perm() != 0o755 {
+		t.Fatalf("pairing storage directory permissions changed to %o", info.Mode().Perm())
+	}
+}
+
+func TestPairingStoreRejectsWritableSharedStorageDirectory(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "helper-config")
+	if err := os.Mkdir(dir, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewPairingStore(filepath.Join(dir, "grants.json"), time.Now); err == nil {
+		t.Fatal("group/other-writable storage directory accepted")
+	}
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o777 {
+		t.Fatalf("pairing storage directory permissions changed to %o", info.Mode().Perm())
+	}
+}
+
+func TestPairingStoreDoesNotChangeCurrentDirectoryPermissions(t *testing.T) {
+	originalDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(originalDirectory)
+		_ = os.Chmod(dir, 0o755)
+	})
+	for _, path := range []string{"relative-grants.json", filepath.Join(dir, "absolute-grants.json")} {
+		if _, err := NewPairingStore(path, time.Now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o755 {
+		t.Fatalf("current directory permissions changed to %o", info.Mode().Perm())
 	}
 }
 
@@ -609,4 +845,94 @@ func TestPairingGrantsReturnsStableSnapshot(t *testing.T) {
 	if fresh := store.Grants(); fresh[0].Origin != originalOrigin {
 		t.Fatal("returned grants mutate store state")
 	}
+}
+
+type faultPairingFileOps struct {
+	pairingFileOps
+	fault string
+}
+
+func (ops faultPairingFileOps) CreateTemp(dir, pattern string) (pairingTempFile, error) {
+	file, err := ops.pairingFileOps.CreateTemp(dir, pattern)
+	if err != nil {
+		return nil, err
+	}
+	return &faultPairingTempFile{pairingTempFile: file, fault: ops.fault}, nil
+}
+
+func (ops faultPairingFileOps) Rename(oldPath, newPath string) error {
+	if ops.fault == "rename" {
+		return errors.New("injected rename failure")
+	}
+	return ops.pairingFileOps.Rename(oldPath, newPath)
+}
+
+func (ops faultPairingFileOps) OpenDirectory(path string) (pairingDirectory, error) {
+	directory, err := ops.pairingFileOps.OpenDirectory(path)
+	if err != nil {
+		return nil, err
+	}
+	return faultPairingDirectory{pairingDirectory: directory, fault: ops.fault}, nil
+}
+
+type faultPairingTempFile struct {
+	pairingTempFile
+	fault  string
+	closed bool
+}
+
+func (file *faultPairingTempFile) Write(data []byte) (int, error) {
+	if file.fault == "short write" {
+		return file.pairingTempFile.Write(data[:len(data)/2])
+	}
+	return file.pairingTempFile.Write(data)
+}
+
+func (file *faultPairingTempFile) Sync() error {
+	if file.fault == "file sync" {
+		return errors.New("injected file sync failure")
+	}
+	return file.pairingTempFile.Sync()
+}
+
+func (file *faultPairingTempFile) Close() error {
+	if file.closed {
+		return nil
+	}
+	file.closed = true
+	err := file.pairingTempFile.Close()
+	if file.fault == "file close" {
+		return errors.Join(err, errors.New("injected file close failure"))
+	}
+	return err
+}
+
+type faultPairingDirectory struct {
+	pairingDirectory
+	fault string
+}
+
+func (directory faultPairingDirectory) Sync() error {
+	if directory.fault == "directory sync" {
+		return errors.New("injected directory sync failure")
+	}
+	return directory.pairingDirectory.Sync()
+}
+
+func newPairedStore(t *testing.T) (*PairingStore, string, string) {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "grants.json")
+	store, err := NewPairingStore(path, time.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, err := store.IssueCode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, err := store.Pair(code, "https://canvas.example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return store, path, token
 }

@@ -20,11 +20,13 @@ import (
 )
 
 type PairingStore struct {
-	mu     sync.Mutex
-	path   string
-	now    func() time.Time
-	codes  map[string]pairingCode
-	grants map[string]Grant
+	mu           sync.Mutex
+	path         string
+	now          func() time.Time
+	generateCode func() (string, error)
+	fileOps      pairingFileOps
+	codes        map[string]pairingCode
+	grants       map[string]Grant
 }
 
 type Grant struct {
@@ -39,6 +41,52 @@ type pairingCode struct {
 	attempts  int
 }
 
+type pairingFileOps interface {
+	CreateTemp(dir, pattern string) (pairingTempFile, error)
+	OpenDirectory(path string) (pairingDirectory, error)
+	Rename(oldPath, newPath string) error
+	Remove(path string) error
+}
+
+type pairingTempFile interface {
+	Name() string
+	Chmod(os.FileMode) error
+	Write([]byte) (int, error)
+	Sync() error
+	Close() error
+}
+
+type pairingDirectory interface {
+	Sync() error
+	Close() error
+}
+
+type osPairingFileOps struct{}
+
+func (osPairingFileOps) CreateTemp(dir, pattern string) (pairingTempFile, error) {
+	return os.CreateTemp(dir, pattern)
+}
+
+func (osPairingFileOps) OpenDirectory(path string) (pairingDirectory, error) {
+	return os.Open(path)
+}
+
+func (osPairingFileOps) Rename(oldPath, newPath string) error {
+	return os.Rename(oldPath, newPath)
+}
+
+func (osPairingFileOps) Remove(path string) error {
+	return os.Remove(path)
+}
+
+type pairingPersistenceError struct {
+	err       error
+	committed bool
+}
+
+func (e *pairingPersistenceError) Error() string { return e.err.Error() }
+func (e *pairingPersistenceError) Unwrap() error { return e.err }
+
 func NewPairingStore(path string, now func() time.Time) (*PairingStore, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, errors.New("pairing store path is required")
@@ -46,22 +94,43 @@ func NewPairingStore(path string, now func() time.Time) (*PairingStore, error) {
 	if now == nil {
 		return nil, errors.New("pairing store clock is required")
 	}
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	path, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
 		return nil, err
 	}
-	// A filename-only path uses the caller's current directory; never chmod it
-	// (or the filesystem root) as though it were the helper's private directory.
-	if dir != "." && dir != string(filepath.Separator) {
+	dir := filepath.Dir(path)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+	cwdInfo, err := os.Stat(cwd)
+	if err != nil {
+		return nil, err
+	}
+	root := filepath.Clean(filepath.VolumeName(dir) + string(filepath.Separator))
+	sharedDirectory := dir == root
+	info, err := os.Stat(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return nil, err
+		}
 		if err := os.Chmod(dir, 0o700); err != nil {
 			return nil, err
 		}
+	} else if err != nil {
+		return nil, err
+	} else if !info.IsDir() {
+		return nil, errors.New("pairing store parent is not a directory")
+	} else if !sharedDirectory && !os.SameFile(info, cwdInfo) && info.Mode().Perm()&0o022 != 0 {
+		return nil, fmt.Errorf("pairing store directory is group/other writable: %o", info.Mode().Perm())
 	}
 	store := &PairingStore{
-		path:   path,
-		now:    now,
-		codes:  make(map[string]pairingCode),
-		grants: make(map[string]Grant),
+		path:         path,
+		now:          now,
+		generateCode: randomPairingCode,
+		fileOps:      osPairingFileOps{},
+		codes:        make(map[string]pairingCode),
+		grants:       make(map[string]Grant),
 	}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -93,20 +162,31 @@ func (s *PairingStore) IssueCode() (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	value, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
-	if err != nil {
-		return "", err
+	current := ""
+	for code := range s.codes {
+		current = code
 	}
-	code := fmt.Sprintf("%06d", value.Int64())
-	clear(s.codes)
-	s.codes[code] = pairingCode{expiresAt: s.now().Add(5 * time.Minute)}
-	return code, nil
+	for {
+		code, err := s.generateCode()
+		if err != nil {
+			return "", err
+		}
+		if code == current {
+			continue
+		}
+		clear(s.codes)
+		s.codes[code] = pairingCode{expiresAt: s.now().Add(5 * time.Minute)}
+		return code, nil
+	}
 }
 
 func (s *PairingStore) Pair(code, origin string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if strings.TrimSpace(origin) == "" {
+		return "", errors.New("pairing origin is required")
+	}
 	pairing, ok := s.codes[code]
 	if !ok {
 		s.recordFailedAttempt()
@@ -134,6 +214,11 @@ func (s *PairingStore) Pair(code, origin string) (string, error) {
 	grants := cloneGrants(s.grants)
 	grants[id] = grant
 	if err := s.persist(grants); err != nil {
+		if persistenceCommitted(err) {
+			s.grants = grants
+			delete(s.codes, code)
+			return token, err
+		}
 		return "", err
 	}
 	s.grants = grants
@@ -184,6 +269,9 @@ func (s *PairingStore) Revoke(token, origin string) error {
 		grants := cloneGrants(s.grants)
 		delete(grants, id)
 		if err := s.persist(grants); err != nil {
+			if persistenceCommitted(err) {
+				s.grants = grants
+			}
 			return err
 		}
 		s.grants = grants
@@ -214,7 +302,7 @@ func (s *PairingStore) persist(grantMap map[string]Grant) error {
 	if err != nil {
 		return err
 	}
-	return writeGrantsAtomically(s.path, data)
+	return writeGrantsWithOps(s.fileOps, s.path, data)
 }
 
 func randomText(size int) (string, error) {
@@ -223,6 +311,14 @@ func randomText(size int) (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(value), nil
+}
+
+func randomPairingCode() (string, error) {
+	value, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%06d", value.Int64()), nil
 }
 
 func validateGrant(grant Grant) error {
@@ -250,48 +346,91 @@ func cloneGrants(grants map[string]Grant) map[string]Grant {
 	return clone
 }
 
-func writeGrantsAtomically(path string, data []byte) (err error) {
+func writeGrantsAtomically(path string, data []byte) error {
+	return writeGrantsWithOps(osPairingFileOps{}, path, data)
+}
+
+func writeGrantsWithOps(ops pairingFileOps, path string, data []byte) (result error) {
 	dir := filepath.Dir(path)
-	directory, err := os.Open(dir)
+	directory, err := ops.OpenDirectory(dir)
 	if err != nil {
-		return err
+		return newPairingPersistenceError(err, false)
 	}
-	defer directory.Close()
-	file, err := os.CreateTemp(dir, ".grants-*.tmp")
-	if err != nil {
-		return err
-	}
-	tempPath := file.Name()
+	committed := false
 	defer func() {
-		if file != nil {
-			_ = file.Close()
-		}
-		if err != nil {
-			_ = os.Remove(tempPath)
+		if directory != nil {
+			result = joinPairingPersistenceError(result, directory.Close(), committed)
 		}
 	}()
-	if err = file.Chmod(0o600); err != nil {
-		return err
+	file, err := ops.CreateTemp(dir, ".grants-*.tmp")
+	if err != nil {
+		return newPairingPersistenceError(err, false)
+	}
+	tempPath := file.Name()
+	removeTemp := true
+	defer func() {
+		if file != nil {
+			result = joinPairingPersistenceError(result, file.Close(), committed)
+		}
+		if removeTemp {
+			removeErr := ops.Remove(tempPath)
+			if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+				result = joinPairingPersistenceError(result, removeErr, committed)
+			}
+		}
+	}()
+	if err := file.Chmod(0o600); err != nil {
+		return newPairingPersistenceError(err, false)
 	}
 	written, err := file.Write(data)
 	if err != nil {
-		return err
+		return newPairingPersistenceError(err, false)
 	}
 	if written != len(data) {
-		return io.ErrShortWrite
+		return newPairingPersistenceError(io.ErrShortWrite, false)
 	}
-	if err = file.Sync(); err != nil {
-		return err
+	if err := file.Sync(); err != nil {
+		return newPairingPersistenceError(err, false)
 	}
-	if err = file.Close(); err != nil {
-		return err
+	if err := file.Close(); err != nil {
+		return newPairingPersistenceError(err, false)
 	}
 	file = nil
-	if err = os.Rename(tempPath, path); err != nil {
-		return err
+	if err := ops.Rename(tempPath, path); err != nil {
+		return newPairingPersistenceError(err, false)
 	}
-	// Rename is the commit point. A directory sync failure cannot be rolled back
-	// safely, so keep the visible file and in-memory candidate in agreement.
-	_ = directory.Sync()
+	removeTemp = false
+	committed = true
+	if err := directory.Sync(); err != nil {
+		return newPairingPersistenceError(err, true)
+	}
+	if err := directory.Close(); err != nil {
+		directory = nil
+		return newPairingPersistenceError(err, true)
+	}
+	directory = nil
 	return nil
+}
+
+func newPairingPersistenceError(err error, committed bool) error {
+	if err == nil {
+		return nil
+	}
+	return &pairingPersistenceError{err: err, committed: committed}
+}
+
+func joinPairingPersistenceError(current, next error, committed bool) error {
+	if next == nil {
+		return current
+	}
+	wrapped := newPairingPersistenceError(next, committed)
+	if current == nil {
+		return wrapped
+	}
+	return errors.Join(current, wrapped)
+}
+
+func persistenceCommitted(err error) bool {
+	var persistenceErr *pairingPersistenceError
+	return errors.As(err, &persistenceErr) && persistenceErr.committed
 }
