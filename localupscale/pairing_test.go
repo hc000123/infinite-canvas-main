@@ -694,13 +694,17 @@ func TestPairingStoreRejectsWritableAncestorAboveExistingPrivateDirectory(t *tes
 	assertFileUnchanged(t, path, original, 0o644)
 }
 
-func TestPairingStoreCreatesPrivateDirectoryBelowStickyTempBoundary(t *testing.T) {
-	boundary := filepath.Join(t.TempDir(), "public-temp")
+func TestPairingStoreCreatesPrivateDirectoryBelowTrustedStickyTempBoundary(t *testing.T) {
+	boundary := filepath.Join(t.TempDir(), "system-temp")
 	if err := os.Mkdir(boundary, 0o777|os.ModeSticky); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Chmod(boundary, 0o777|os.ModeSticky); err != nil {
 		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", boundary)
+	if filepath.Clean(os.TempDir()) != boundary {
+		t.Skip("os.TempDir does not use TMPDIR on this platform")
 	}
 	dir := filepath.Join(boundary, "private", "nested")
 	if _, err := NewPairingStore(filepath.Join(dir, "grants.json"), time.Now); err != nil {
@@ -715,7 +719,7 @@ func TestPairingStoreCreatesPrivateDirectoryBelowStickyTempBoundary(t *testing.T
 	}
 }
 
-func TestPairingStoreAcceptsExistingPrivateDirectoryBelowStickyTempBoundary(t *testing.T) {
+func TestPairingStoreRejectsStickyDirectoryBelowTrustedTempBoundary(t *testing.T) {
 	boundary := filepath.Join(t.TempDir(), "public-temp")
 	dir := filepath.Join(boundary, "private")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -724,8 +728,47 @@ func TestPairingStoreAcceptsExistingPrivateDirectoryBelowStickyTempBoundary(t *t
 	if err := os.Chmod(boundary, 0o777|os.ModeSticky); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := NewPairingStore(filepath.Join(dir, "grants.json"), time.Now); err != nil {
+	if _, err := NewPairingStore(filepath.Join(dir, "grants.json"), time.Now); err == nil {
+		t.Fatal("attacker-controlled sticky directory accepted below trusted temp root")
+	} else if !strings.Contains(err.Error(), boundary) {
+		t.Fatalf("sticky directory rejection = %v", err)
+	}
+}
+
+func TestPairingStoreRejectsStickyAncestorOutsideTempDirectory(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
+	root, err := os.MkdirTemp(".", ".pairing-nontemp-")
+	if err != nil {
 		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(root) })
+	boundary := filepath.Join(root, "public")
+	dir := filepath.Join(boundary, "private")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(boundary, 0o777|os.ModeSticky); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewPairingStore(filepath.Join(dir, "grants.json"), time.Now); err == nil {
+		t.Fatal("sticky ancestor outside the trusted temp root accepted")
+	}
+}
+
+func TestPairingDirectoryComponentsRejectStickyBoundaryWithoutExplicitTrust(t *testing.T) {
+	root := t.TempDir()
+	boundary := filepath.Join(root, "public")
+	dir := filepath.Join(boundary, "private")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(boundary, 0o777|os.ModeSticky); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := checkPairingDirectoryComponents(root, dir, false, ""); err == nil {
+		t.Fatal("sticky directory accepted without an explicit trusted boundary")
+	} else if !strings.Contains(err.Error(), boundary) {
+		t.Fatalf("sticky directory rejection = %v", err)
 	}
 }
 
