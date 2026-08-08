@@ -15,6 +15,28 @@ type workflowCommandInput struct {
 	Context        json.RawMessage `json:"context"`
 }
 
+func WorkflowRuns(w http.ResponseWriter, r *http.Request) {
+	user, ok := service.UserFromContext(r.Context())
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
+	result, err := service.ListWorkflowRuns(user.ID, service.WorkflowRunListQuery{
+		ProjectID: r.URL.Query().Get("projectId"),
+		EpisodeID: r.URL.Query().Get("episodeId"),
+		Status:    service.WorkflowRunListStatus(r.URL.Query().Get("status")),
+		Page:      page,
+		PageSize:  pageSize,
+	})
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
 func EnsureWorkflowRun(w http.ResponseWriter, r *http.Request) {
 	user, ok := service.UserFromContext(r.Context())
 	if !ok {

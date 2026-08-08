@@ -9,6 +9,28 @@ const (
 	WorkflowRunStatusCancelled WorkflowRunStatus = "cancelled"
 )
 
+type WorkflowRunQuery struct {
+	ProjectID string
+	EpisodeID string
+	Status    WorkflowRunStatus
+	Page      int
+	PageSize  int
+}
+
+func (q *WorkflowRunQuery) Normalize() {
+	if q.Page < 1 {
+		q.Page = 1
+	}
+	if q.PageSize < 1 {
+		q.PageSize = 20
+	}
+	if q.PageSize > 100 {
+		q.PageSize = 100
+	}
+}
+
+func (q WorkflowRunQuery) Offset() int { return (q.Page - 1) * q.PageSize }
+
 type WorkflowStageRunStatus string
 
 const (

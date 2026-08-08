@@ -8,6 +8,58 @@ import (
 	"gorm.io/gorm"
 )
 
+func ListUserWorkflowRuns(userID string, query model.WorkflowRunQuery) ([]model.WorkflowRun, int64, error) {
+	db, err := DB()
+	if err != nil {
+		return nil, 0, err
+	}
+	query.Normalize()
+	base := db.Model(&model.WorkflowRun{}).Where("user_id = ?", strings.TrimSpace(userID))
+	if query.ProjectID != "" {
+		base = base.Where("project_id = ?", strings.TrimSpace(query.ProjectID))
+	}
+	if query.EpisodeID != "" {
+		base = base.Where("episode_id = ?", strings.TrimSpace(query.EpisodeID))
+	}
+	if query.Status != "" {
+		base = base.Where("status = ?", query.Status)
+	}
+	var total int64
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var items []model.WorkflowRun
+	err = base.Omit("user_id", "script_snapshot", "script_hash").Order("updated_at desc, id desc").Offset(query.Offset()).Limit(query.PageSize).Find(&items).Error
+	return items, total, err
+}
+
+func ListWorkflowStageRunsByRunIDs(userID string, workflowRunIDs []string) ([]model.WorkflowStageRun, error) {
+	if len(workflowRunIDs) == 0 {
+		return []model.WorkflowStageRun{}, nil
+	}
+	db, err := DB()
+	if err != nil {
+		return nil, err
+	}
+	var stages []model.WorkflowStageRun
+	err = db.Where("user_id = ? AND workflow_run_id IN ?", strings.TrimSpace(userID), workflowRunIDs).
+		Order("workflow_run_id asc, stage_id asc, attempt desc, created_at desc").Find(&stages).Error
+	return stages, err
+}
+
+func ListInvocationGatesByIDs(userID string, invocationIDs []string) ([]model.InvocationGateResult, error) {
+	if len(invocationIDs) == 0 {
+		return []model.InvocationGateResult{}, nil
+	}
+	db, err := DB()
+	if err != nil {
+		return nil, err
+	}
+	var gates []model.InvocationGateResult
+	err = db.Select("invocation_id", "issues_json").Where("user_id = ? AND invocation_id IN ?", strings.TrimSpace(userID), invocationIDs).Find(&gates).Error
+	return gates, err
+}
+
 func CreateWorkflowRunAggregate(run model.WorkflowRun, stages []model.WorkflowStageRun, rootArtifacts []model.Artifact, events []model.WorkflowEvent) error {
 	db, err := DB()
 	if err != nil {

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"strings"
 	"sync"
 	"time"
@@ -8,6 +9,81 @@ import (
 	"github.com/basketikun/infinite-canvas/model"
 	"github.com/basketikun/infinite-canvas/repository"
 )
+
+func ListWorkflowRuns(userID string, query WorkflowRunListQuery) (WorkflowRunList, error) {
+	query.ProjectID = strings.TrimSpace(query.ProjectID)
+	query.EpisodeID = strings.TrimSpace(query.EpisodeID)
+	query.Normalize()
+	runs, total, err := repository.ListUserWorkflowRuns(userID, query)
+	if err != nil {
+		return WorkflowRunList{}, err
+	}
+	runIDs := make([]string, 0, len(runs))
+	for _, run := range runs {
+		runIDs = append(runIDs, run.ID)
+	}
+	allStages, err := repository.ListWorkflowStageRunsByRunIDs(userID, runIDs)
+	if err != nil {
+		return WorkflowRunList{}, err
+	}
+	invocationRun := make(map[string]string, len(allStages))
+	invocationIDs := make([]string, 0, len(allStages))
+	for _, stage := range allStages {
+		if stage.InvocationID == "" {
+			continue
+		}
+		invocationRun[stage.InvocationID] = stage.WorkflowRunID
+		invocationIDs = append(invocationIDs, stage.InvocationID)
+	}
+	gates, err := repository.ListInvocationGatesByIDs(userID, invocationIDs)
+	if err != nil {
+		return WorkflowRunList{}, err
+	}
+	stagesByRun := make(map[string][]WorkflowStagePollSummary, len(runs))
+	seenStages := make(map[string]bool, len(allStages))
+	for _, stage := range allStages {
+		key := stage.WorkflowRunID + "\x00" + stage.StageID
+		if seenStages[key] {
+			continue
+		}
+		seenStages[key] = true
+		stagesByRun[stage.WorkflowRunID] = append(stagesByRun[stage.WorkflowRunID], WorkflowStagePollSummary{
+			ID: stage.ID, StageID: stage.StageID, InvocationID: stage.InvocationID, Status: stage.Status,
+			Attempt: stage.Attempt, ErrorMessage: stage.ErrorMessage, UpdatedAt: stage.UpdatedAt,
+		})
+	}
+	warningsByRun := make(map[string]int, len(runs))
+	for _, gate := range gates {
+		var issues []WorkflowGateIssue
+		if json.Unmarshal([]byte(gate.IssuesJSON), &issues) != nil {
+			continue
+		}
+		for _, issue := range issues {
+			if !issue.Blocking {
+				warningsByRun[invocationRun[gate.InvocationID]]++
+			}
+		}
+	}
+	items := make([]WorkflowRunListItem, 0, len(runs))
+	for _, run := range runs {
+		stages := stagesByRun[run.ID]
+		if stages == nil {
+			stages = []WorkflowStagePollSummary{}
+		}
+		reviewCount := 0
+		for _, stage := range stages {
+			if stage.Status == model.WorkflowStageRunStatusNeedsReview {
+				reviewCount++
+			}
+		}
+		items = append(items, WorkflowRunListItem{
+			ID: run.ID, ProjectID: run.ProjectID, EpisodeID: run.EpisodeID, WorkflowID: run.WorkflowID,
+			WorkflowVersion: run.WorkflowVersion, CurrentStageID: run.CurrentStageID, Status: run.Status,
+			Stages: stages, ReviewCount: reviewCount, WarningCount: warningsByRun[run.ID], CreatedAt: run.CreatedAt, UpdatedAt: run.UpdatedAt,
+		})
+	}
+	return WorkflowRunList{Items: items, Total: total, Page: query.Page, PageSize: query.PageSize}, nil
+}
 
 type WorkflowWorkerHealth struct {
 	Enabled              bool   `json:"enabled"`

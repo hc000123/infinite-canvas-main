@@ -188,6 +188,7 @@ func New() *gin.Engine {
 	v1.POST("/agent-runs/:id/review", func(c *gin.Context) {
 		handler.ReviewAgentRun(c.Writer, c.Request, c.Param("id"))
 	})
+	v1.GET("/workflow-runs", gin.WrapF(handler.WorkflowRuns))
 	v1.POST("/workflow-runs", gin.WrapF(handler.EnsureWorkflowRun))
 	v1.GET("/skill-options", gin.WrapF(handler.SkillOptions))
 	v1.GET("/workflow-runs/:id/poll", func(c *gin.Context) {

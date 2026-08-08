@@ -72,6 +72,31 @@ type WorkflowRunDetail struct {
 	AgentRuns []model.AgentRun                  `json:"agentRuns"`
 }
 
+type WorkflowRunListQuery = model.WorkflowRunQuery
+type WorkflowRunListStatus = model.WorkflowRunStatus
+
+type WorkflowRunListItem struct {
+	ID              string                     `json:"id"`
+	ProjectID       string                     `json:"projectId"`
+	EpisodeID       string                     `json:"episodeId"`
+	WorkflowID      string                     `json:"workflowId"`
+	WorkflowVersion string                     `json:"workflowVersion"`
+	CurrentStageID  string                     `json:"currentStageId"`
+	Status          model.WorkflowRunStatus    `json:"status"`
+	Stages          []WorkflowStagePollSummary `json:"stages"`
+	ReviewCount     int                        `json:"reviewCount"`
+	WarningCount    int                        `json:"warningCount"`
+	CreatedAt       string                     `json:"createdAt"`
+	UpdatedAt       string                     `json:"updatedAt"`
+}
+
+type WorkflowRunList struct {
+	Items    []WorkflowRunListItem `json:"items"`
+	Total    int64                 `json:"total"`
+	Page     int                   `json:"page"`
+	PageSize int                   `json:"pageSize"`
+}
+
 type WorkflowStagePollSummary struct {
 	ID           string                       `json:"id"`
 	StageID      string                       `json:"stageId"`

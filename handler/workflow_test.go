@@ -53,6 +53,28 @@ func TestEnsureWorkflowRunReturnsStandardResponse(t *testing.T) {
 	}
 }
 
+func TestWorkflowRunListReturnsStandardLightweightResponse(t *testing.T) {
+	setupWorkflowHandlerTestDB(t)
+	if _, err := service.EnsureWorkflowRun("user-owner", service.EnsureWorkflowRunInput{ProjectID: "project-1", EpisodeID: "episode-1", ScriptSnapshot: "第一场：不应出现在列表", ScriptConfirmed: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.EnsureWorkflowRun("user-other", service.EnsureWorkflowRunInput{ProjectID: "project-1", EpisodeID: "episode-other", ScriptSnapshot: "其他用户剧本", ScriptConfirmed: true}); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/workflow-runs?projectId=project-1&page=1&pageSize=10", nil)
+	request = request.WithContext(service.WithUser(context.Background(), model.AuthUser{ID: "user-owner", Role: model.UserRoleUser}))
+	recorder := httptest.NewRecorder()
+
+	WorkflowRuns(recorder, request)
+
+	if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"code":0`) || !strings.Contains(recorder.Body.String(), `"total":1`) {
+		t.Fatalf("body=%s", recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), "scriptSnapshot") || strings.Contains(recorder.Body.String(), "其他用户剧本") {
+		t.Fatalf("list leaked heavy or foreign data: %s", recorder.Body.String())
+	}
+}
+
 func TestWorkflowRunDoesNotExposeAnotherUserRecord(t *testing.T) {
 	setupWorkflowHandlerTestDB(t)
 	detail, err := service.EnsureWorkflowRun("user-owner", service.EnsureWorkflowRunInput{ProjectID: "project-1", EpisodeID: "episode-1", ScriptSnapshot: "第一场", ScriptConfirmed: true})

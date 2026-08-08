@@ -95,6 +95,7 @@ func TestWorkflowRoutesRequireAuth(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	app := New()
 	paths := []string{
+		"/api/v1/workflow-runs",
 		"/api/v1/workflow-runs/run-1",
 		"/api/v1/workflow-runs/run-1/events",
 		"/api/v1/workflow-worker/health",
