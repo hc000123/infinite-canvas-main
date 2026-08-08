@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assetsForEpisode, nextAssetSubjectCode, normalizeAssetBinding } from "./asset-subjects.ts";
+import { assetCategoryLabel, assetsForEpisode, nextAssetSubjectCode, normalizeAssetBinding, subjectAssetGroups } from "./asset-subjects.ts";
 import type { Asset, AssetSubject } from "../../../stores/use-asset-store.ts";
 
 const subject: AssetSubject = { id: "subject-1", projectId: "project-1", category: "character", code: "CHAR-001", name: "林默", tags: [], createdAt: "", updatedAt: "" };
@@ -28,4 +28,11 @@ test("returns global and episode-specific images", () => {
         assetsForEpisode([image("global", true, []), image("episode", false, ["ep-1"]), image("other", false, ["ep-2"])], "project-1", "ep-1").map((asset) => asset.id),
         ["global", "episode"],
     );
+});
+
+test("supports blocking subjects and keeps subjects without formal images visible", () => {
+    const blockingSubject: AssetSubject = { ...subject, id: "blocking-1", category: "blocking", code: "BLOCK-001", name: "对话站位" };
+    assert.equal(assetCategoryLabel("blocking"), "站位");
+    assert.equal(nextAssetSubjectCode([blockingSubject], "project-1", "blocking"), "BLOCK-002");
+    assert.deepEqual(subjectAssetGroups([blockingSubject], [], "project-1"), [{ subject: blockingSubject, assets: [] }]);
 });

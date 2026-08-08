@@ -11,6 +11,7 @@ import type { VolcengineReviewMetadata } from "@/services/volcengine-asset-metad
 import { assetFingerprintCandidates, buildBlobFingerprint, fallbackAssetFingerprint, findWorkflowAssetDuplicate, mergeAssetMetadata, mergeDuplicateAsset } from "./asset-dedupe";
 import { createAssetStoreHydrationGate, mergeHydratedAssetCollections } from "./asset-store-hydration";
 import { nextAssetSubjectCode } from "@/app/(user)/assets/asset-subjects";
+import { clearRemovedAssetFromVariants, createDefaultAssetVariant, duplicateAssetVariant, removeAssetSubjectCollections, removeAssetVariantCollections, renameAssetVariantCollections } from "./asset-workbench-state";
 
 export type AssetKind = "text" | "image" | "video" | "audio";
 export type VolcengineAssetMetadata = VolcengineReviewMetadata;
@@ -20,11 +21,12 @@ export type VideoAsset = AssetBase<"video"> & { data: { url: string; storageKey?
 export type AudioAsset = AssetBase<"audio"> & { data: { url: string; storageKey?: string; bytes: number; mimeType: string } };
 export type Asset = TextAsset | ImageAsset | VideoAsset | AudioAsset;
 export type AssetWriteInput = Asset extends infer T ? (T extends Asset ? Omit<T, "id" | "createdAt" | "updatedAt"> : never) : never;
-export type AssetCategory = "character" | "scene" | "prop" | "other";
+export type AssetCategory = "character" | "scene" | "prop" | "blocking" | "other";
 export type AssetBinding = {
     projectId: string;
     subjectId: string;
     category: AssetCategory;
+    variantId?: string;
     variantName: string;
     allEpisodes: boolean;
     episodeIds: string[];
@@ -40,6 +42,35 @@ export type AssetSubject = {
     note?: string;
     createdAt: string;
     updatedAt: string;
+};
+export type AssetVariant = {
+    id: string;
+    subjectId: string;
+    name: string;
+    prompt: string;
+    referenceImageIds: string[];
+    currentAssetId?: string;
+    config?: { imageModel?: string; quality?: string; size?: string; count?: string };
+    createdAt: string;
+    updatedAt: string;
+};
+export type AssetWorkbenchImage = {
+    id: string;
+    subjectId: string;
+    variantId: string;
+    role: "reference" | "candidate";
+    source: "upload" | "generated" | "asset" | "candidate";
+    title: string;
+    dataUrl: string;
+    storageKey?: string;
+    width: number;
+    height: number;
+    bytes: number;
+    mimeType: string;
+    sourceAssetId?: string;
+    selectedAssetId?: string;
+    generation?: { prompt: string; model: string; quality: string; size: string; createdAt: string };
+    createdAt: string;
 };
 export type AssetFolder = {
     id: string;
@@ -69,6 +100,8 @@ type AssetStore = {
     assets: Asset[];
     folders: AssetFolder[];
     subjects: AssetSubject[];
+    variants: AssetVariant[];
+    workbenchImages: AssetWorkbenchImage[];
     addAsset: (asset: AssetWriteInput) => string;
     addAssetOnce: (asset: AssetWriteInput, options?: { blob?: Blob }) => Promise<string>;
     updateAsset: (id: string, patch: Partial<Omit<Asset, "id" | "createdAt">>) => void;
@@ -80,6 +113,14 @@ type AssetStore = {
     ensureSubject: (input: Omit<AssetSubject, "code" | "createdAt" | "id" | "updatedAt"> & { code?: string }) => string;
     updateSubject: (id: string, patch: Partial<Pick<AssetSubject, "name" | "tags" | "note">>) => void;
     removeSubject: (id: string) => void;
+    ensureVariant: (input: Omit<AssetVariant, "createdAt" | "id" | "updatedAt">) => string;
+    updateVariant: (id: string, patch: Partial<Pick<AssetVariant, "config" | "currentAssetId" | "name" | "prompt" | "referenceImageIds">>) => void;
+    duplicateVariant: (id: string, name: string) => string;
+    removeVariant: (id: string) => boolean;
+    addWorkbenchImage: (image: Omit<AssetWorkbenchImage, "createdAt" | "id">) => string;
+    updateWorkbenchImage: (id: string, patch: Partial<Omit<AssetWorkbenchImage, "createdAt" | "id" | "subjectId" | "variantId">>) => void;
+    removeWorkbenchImage: (id: string) => void;
+    setVariantCurrentAsset: (variantId: string, assetId?: string) => void;
     bindAsset: (id: string, binding?: AssetBinding) => void;
     cleanupImages: (extra?: unknown) => void;
 };
@@ -94,6 +135,10 @@ const assetStorage: PersistStorage<AssetStore> = {
         const parsed = JSON.parse(value) as StorageValue<AssetStore>;
         parsed.state.folders = parsed.state.folders || [];
         parsed.state.subjects = parsed.state.subjects || [];
+        parsed.state.variants = parsed.state.variants || [];
+        parsed.state.workbenchImages = await Promise.all(
+            (parsed.state.workbenchImages || []).map(async (image) => ({ ...image, dataUrl: image.storageKey ? await resolveImageUrl(image.storageKey, image.dataUrl) : image.dataUrl })),
+        );
         parsed.state.assets = await Promise.all(
             parsed.state.assets.map(async (asset) => {
                 if (asset.kind === "video" && asset.data.storageKey) return { ...asset, data: { ...asset.data, url: await resolveMediaUrl(asset.data.storageKey, asset.data.url) } };
@@ -122,6 +167,8 @@ export const useAssetStore = create<AssetStore>()(
             assets: [],
             folders: [],
             subjects: [],
+            variants: [],
+            workbenchImages: [],
             addAsset: (asset) => {
                 const now = new Date().toISOString();
                 const id = nanoid();
@@ -161,8 +208,9 @@ export const useAssetStore = create<AssetStore>()(
             removeAsset: (id) =>
                 set((state) => {
                     const assets = state.assets.filter((asset) => asset.id !== id);
-                    get().cleanupImages({ assets });
-                    return { assets };
+                    const variants = clearRemovedAssetFromVariants(state.variants, id, new Date().toISOString());
+                    get().cleanupImages({ assets, workbenchImages: state.workbenchImages });
+                    return { assets, variants };
                 }),
             addFolder: (name) => {
                 const now = new Date().toISOString();
@@ -200,11 +248,18 @@ export const useAssetStore = create<AssetStore>()(
                 const existing = get().subjects.find(
                     (subject) => subject.projectId === input.projectId && subject.category === input.category && ((input.sourceKey && subject.sourceKey === input.sourceKey) || (input.code && subject.code === input.code) || subject.name === name),
                 );
-                if (existing) return existing.id;
+                if (existing) {
+                    if (!get().variants.some((variant) => variant.subjectId === existing.id)) {
+                        const variant = createDefaultAssetVariant(existing.id, existing.category, nanoid(), new Date().toISOString());
+                        set((state) => ({ variants: [...state.variants, variant] }));
+                    }
+                    return existing.id;
+                }
                 const now = new Date().toISOString();
                 const id = nanoid();
                 const code = input.code?.trim().toUpperCase() || nextAssetSubjectCode(get().subjects, input.projectId, input.category);
                 set((state) => ({ subjects: [...state.subjects, { ...input, id, code, name, tags: Array.from(new Set(input.tags.map((tag) => tag.trim()).filter(Boolean))), createdAt: now, updatedAt: now }] }));
+                set((state) => ({ variants: [...state.variants, createDefaultAssetVariant(id, input.category, nanoid(), now)] }));
                 return id;
             },
             updateSubject: (id, patch) =>
@@ -216,12 +271,75 @@ export const useAssetStore = create<AssetStore>()(
                     ),
                 })),
             removeSubject: (id) =>
-                set((state) => ({
-                    subjects: state.subjects.filter((subject) => subject.id !== id),
-                    assets: state.assets.map((asset) => (asset.assetBinding?.subjectId === id ? ({ ...asset, assetBinding: undefined, updatedAt: new Date().toISOString() } as Asset) : asset)),
-                })),
+                set((state) => {
+                    const next = removeAssetSubjectCollections(state.variants, state.workbenchImages, state.assets, id, new Date().toISOString());
+                    get().cleanupImages({ assets: next.assets, workbenchImages: next.workbenchImages });
+                    return { subjects: state.subjects.filter((subject) => subject.id !== id), ...next };
+                }),
+            ensureVariant: (input) => {
+                const name = input.name.trim();
+                const existing = get().variants.find((variant) => variant.subjectId === input.subjectId && variant.name === name);
+                if (existing) return existing.id;
+                const now = new Date().toISOString();
+                const id = nanoid();
+                set((state) => ({ variants: [...state.variants, { ...input, id, name, prompt: input.prompt.trim(), referenceImageIds: [...input.referenceImageIds], config: input.config ? { ...input.config } : undefined, createdAt: now, updatedAt: now }] }));
+                return id;
+            },
+            updateVariant: (id, patch) =>
+                set((state) => {
+                    const now = new Date().toISOString();
+                    if (patch.name !== undefined) {
+                        const renamed = renameAssetVariantCollections(state.variants, state.assets, id, patch.name, now);
+                        return {
+                            ...renamed,
+                            variants: renamed.variants.map((variant) =>
+                                variant.id === id
+                                    ? { ...variant, ...patch, name: patch.name?.trim() || variant.name, prompt: patch.prompt?.trim() ?? variant.prompt, referenceImageIds: patch.referenceImageIds ? [...patch.referenceImageIds] : variant.referenceImageIds, config: patch.config ? { ...patch.config } : variant.config, updatedAt: now }
+                                    : variant,
+                            ),
+                        };
+                    }
+                    return {
+                        variants: state.variants.map((variant) =>
+                            variant.id === id
+                                ? { ...variant, ...patch, prompt: patch.prompt?.trim() ?? variant.prompt, referenceImageIds: patch.referenceImageIds ? [...patch.referenceImageIds] : variant.referenceImageIds, config: patch.config ? { ...patch.config } : variant.config, updatedAt: now }
+                                : variant,
+                        ),
+                    };
+                }),
+            duplicateVariant: (id, name) => {
+                const source = get().variants.find((variant) => variant.id === id);
+                if (!source) return "";
+                const existing = get().variants.find((variant) => variant.subjectId === source.subjectId && variant.name === name.trim());
+                if (existing) return existing.id;
+                const next = duplicateAssetVariant(source, name, nanoid(), new Date().toISOString());
+                set((state) => ({ variants: [...state.variants, next] }));
+                return next.id;
+            },
+            removeVariant: (id) => {
+                const next = removeAssetVariantCollections(get().variants, get().workbenchImages, id);
+                if (!next.removed) return false;
+                set({ variants: next.variants, workbenchImages: next.workbenchImages });
+                get().cleanupImages({ assets: get().assets, workbenchImages: next.workbenchImages });
+                return true;
+            },
+            addWorkbenchImage: (image) => {
+                const id = nanoid();
+                set((state) => ({ workbenchImages: [{ ...image, id, createdAt: new Date().toISOString() }, ...state.workbenchImages] }));
+                return id;
+            },
+            updateWorkbenchImage: (id, patch) => set((state) => ({ workbenchImages: state.workbenchImages.map((image) => (image.id === id ? { ...image, ...patch } : image)) })),
+            removeWorkbenchImage: (id) =>
+                set((state) => {
+                    const workbenchImages = state.workbenchImages.filter((image) => image.id !== id);
+                    const variants = state.variants.map((variant) => (variant.referenceImageIds.includes(id) ? { ...variant, referenceImageIds: variant.referenceImageIds.filter((imageId) => imageId !== id), updatedAt: new Date().toISOString() } : variant));
+                    get().cleanupImages({ assets: state.assets, workbenchImages });
+                    return { variants, workbenchImages };
+                }),
+            setVariantCurrentAsset: (variantId, currentAssetId) => set((state) => ({ variants: state.variants.map((variant) => (variant.id === variantId ? { ...variant, currentAssetId, updatedAt: new Date().toISOString() } : variant)) })),
             bindAsset: (id, assetBinding) => set((state) => ({ assets: state.assets.map((asset) => (asset.id === id ? ({ ...asset, assetBinding, updatedAt: new Date().toISOString() } as Asset) : asset)) })),
             cleanupImages: (extra) => {
+                if (typeof window === "undefined") return;
                 window.setTimeout(async () => {
                     const { useCanvasStore } = await import("@/app/(user)/canvas/stores/use-canvas-store");
                     await cleanupUnusedImages({ assets: get().assets, projects: useCanvasStore.getState().projects, extra });
@@ -232,7 +350,7 @@ export const useAssetStore = create<AssetStore>()(
         {
             name: ASSET_STORE_KEY,
             storage: assetStorage,
-            partialize: (state) => ({ assets: state.assets, folders: state.folders, subjects: state.subjects }) as StorageValue<AssetStore>["state"],
+            partialize: (state) => ({ assets: state.assets, folders: state.folders, subjects: state.subjects, variants: state.variants, workbenchImages: state.workbenchImages }) as StorageValue<AssetStore>["state"],
             merge: (persisted, current) => {
                 const saved = (persisted || {}) as Partial<AssetStore>;
                 return { ...current, ...saved, ...mergeHydratedAssetCollections(saved, current) };

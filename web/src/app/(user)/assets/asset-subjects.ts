@@ -1,11 +1,12 @@
 import type { Asset, AssetBinding, AssetCategory, AssetSubject } from "@/stores/use-asset-store";
 
-const CATEGORY_PREFIX: Record<AssetCategory, string> = { character: "CHAR", scene: "SCENE", prop: "PROP", other: "OTHER" };
+const CATEGORY_PREFIX: Record<AssetCategory, string> = { character: "CHAR", scene: "SCENE", prop: "PROP", blocking: "BLOCK", other: "OTHER" };
 
 export function assetCategoryLabel(category: AssetCategory) {
     if (category === "character") return "角色";
     if (category === "scene") return "场景";
     if (category === "prop") return "道具";
+    if (category === "blocking") return "站位";
     return "其他";
 }
 
@@ -52,8 +53,7 @@ export function assetsForEpisode(assets: Asset[], projectId: string, episodeId: 
 export function subjectAssetGroups(subjects: AssetSubject[], assets: Asset[], projectId: string) {
     return subjects
         .filter((subject) => subject.projectId === projectId)
-        .map((subject) => ({ subject, assets: assets.filter((asset) => asset.kind === "image" && asset.assetBinding?.subjectId === subject.id) }))
-        .filter((group) => group.assets.length);
+        .map((subject) => ({ subject, assets: assets.filter((asset) => asset.kind === "image" && asset.assetBinding?.subjectId === subject.id) }));
 }
 
 export function defaultAssetVariantName(category: AssetCategory) {
