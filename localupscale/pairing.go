@@ -112,10 +112,17 @@ func NewPairingStore(path string, now func() time.Time) (*PairingStore, error) {
 		codes:        make(map[string]pairingCode),
 		grants:       make(map[string]Grant),
 	}
-	data, err := os.ReadFile(path)
+	fileInfo, err := os.Lstat(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return store, nil
 	}
+	if err != nil {
+		return nil, err
+	}
+	if fileInfo.Mode()&os.ModeSymlink != 0 || !fileInfo.Mode().IsRegular() {
+		return nil, errors.New("pairing grant path is not a regular file")
+	}
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -331,47 +338,75 @@ func validateOrigin(origin string) error {
 }
 
 func preparePairingDirectory(dir string) error {
-	current := dir
-	for {
-		info, err := os.Lstat(current)
-		if err == nil {
-			if info.Mode()&os.ModeSymlink != 0 {
-				return fmt.Errorf("pairing store path contains symlink: %s", current)
-			}
-			if !info.IsDir() {
-				return fmt.Errorf("pairing store path is not a directory: %s", current)
-			}
-			if info.Mode().Perm()&0o022 != 0 {
-				return fmt.Errorf("pairing store directory is group/other writable: %o", info.Mode().Perm())
-			}
-			if current == dir {
-				return nil
-			}
-			break
-		}
-		if !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-		parent := filepath.Dir(current)
-		if parent == current {
-			return errors.New("pairing store directory has no existing ancestor")
-		}
-		current = parent
-	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
-	}
-	info, err := os.Lstat(dir)
+	start, err := pairingDirectoryCheckStart(dir)
 	if err != nil {
 		return err
 	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-		return errors.New("created pairing store path is not a real directory")
+	missing, err := checkPairingDirectoryComponents(start, dir, true)
+	if err != nil {
+		return err
 	}
-	if info.Mode().Perm()&0o022 != 0 {
-		return fmt.Errorf("created pairing store directory is group/other writable: %o", info.Mode().Perm())
+	if missing {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return err
+		}
 	}
-	return nil
+	_, err = checkPairingDirectoryComponents(start, dir, false)
+	return err
+}
+
+func pairingDirectoryCheckStart(dir string) (string, error) {
+	root := filepath.Clean(filepath.VolumeName(dir) + string(filepath.Separator))
+	start := root
+	for _, candidate := range []string{os.TempDir(), "."} {
+		candidate, err := filepath.Abs(candidate)
+		if err != nil {
+			return "", err
+		}
+		if pathWithin(candidate, dir) && len(candidate) > len(start) {
+			start = candidate
+		}
+	}
+	return start, nil
+}
+
+func pathWithin(base, target string) bool {
+	relative, err := filepath.Rel(base, target)
+	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
+}
+
+func checkPairingDirectoryComponents(start, dir string, allowMissing bool) (bool, error) {
+	relative, err := filepath.Rel(start, dir)
+	if err != nil {
+		return false, err
+	}
+	components := []string{"."}
+	if relative != "." {
+		components = append(components, strings.Split(relative, string(filepath.Separator))...)
+	}
+	current := start
+	for _, component := range components {
+		if component != "." {
+			current = filepath.Join(current, component)
+		}
+		info, err := os.Lstat(current)
+		if errors.Is(err, os.ErrNotExist) && allowMissing {
+			return true, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return false, fmt.Errorf("pairing store path contains symlink: %s", current)
+		}
+		if !info.IsDir() {
+			return false, fmt.Errorf("pairing store path is not a directory: %s", current)
+		}
+		if info.Mode().Perm()&0o022 != 0 {
+			return false, fmt.Errorf("pairing store directory is group/other writable: %o", info.Mode().Perm())
+		}
+	}
+	return false, nil
 }
 
 func cloneGrants(grants map[string]Grant) map[string]Grant {

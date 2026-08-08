@@ -693,6 +693,54 @@ func TestPairingStoreRejectsSymlinkInMissingDirectoryPath(t *testing.T) {
 	}
 }
 
+func TestPairingStoreRejectsSymlinkBeforeExistingDirectory(t *testing.T) {
+	root := t.TempDir()
+	realDirectory := filepath.Join(root, "real")
+	existingDirectory := filepath.Join(realDirectory, "existing")
+	if err := os.MkdirAll(existingDirectory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(existingDirectory, "grants.json")
+	original := []byte("[]")
+	if err := os.WriteFile(target, original, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(target, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "linked")
+	if err := os.Symlink(realDirectory, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewPairingStore(filepath.Join(link, "existing", "grants.json"), time.Now); err == nil {
+		t.Fatal("symlink before existing storage directory accepted")
+	}
+	assertFileUnchanged(t, target, original, 0o644)
+}
+
+func TestPairingStoreRejectsSymlinkGrantFile(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "safe")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(root, "target.json")
+	original := []byte("[]")
+	if err := os.WriteFile(target, original, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(target, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(dir, "grants.json")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewPairingStore(filepath.Join(dir, "grants.json"), time.Now); err == nil {
+		t.Fatal("symlinked grant file accepted")
+	}
+	assertFileUnchanged(t, target, original, 0o644)
+}
+
 func TestPairingStoreLeavesExistingStorageDirectoryPermissionsUnchanged(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "helper-config")
 	if err := os.Mkdir(dir, 0o755); err != nil {
@@ -1034,4 +1082,22 @@ func newPairedStore(t *testing.T) (*PairingStore, string, string) {
 		t.Fatal(err)
 	}
 	return store, path, token
+}
+
+func assertFileUnchanged(t *testing.T, path string, content []byte, mode os.FileMode) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(data, content) {
+		t.Fatalf("file content changed to %q", data)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != mode {
+		t.Fatalf("file permissions changed to %o", info.Mode().Perm())
+	}
 }
