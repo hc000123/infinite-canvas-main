@@ -22,11 +22,12 @@ import { requestEdit, requestGeneration } from "@/services/api/image";
 import { archiveLocalMediaToProjectCache } from "@/services/project-cache-archive";
 import { projectCacheContextFromGeneration } from "@/services/project-cache-context";
 import { deleteStoredImages, resolveImageUrl, uploadImage } from "@/services/image-storage";
-import { useAssetStore, type Asset } from "@/stores/use-asset-store";
+import { useAssetStore, type Asset, type ImageAsset } from "@/stores/use-asset-store";
 import { useLocalAiTaskLogStore } from "@/stores/use-local-ai-task-log-store";
 import { useUserStore } from "@/stores/use-user-store";
 import type { ReferenceImage } from "@/types/image";
 import { buildAssetVersionReference } from "../assets/asset-version-references";
+import { assetImageGenerationSnapshot, assetImageReference, boundVariantId, revisedImageAssetInput } from "../assets/asset-image-revision";
 import { buildWorkflowGeneratedImagePatch, workflowAssetInfo } from "../assets/workflow-asset-image";
 import { useImageBriefStore } from "../canvas/stores/use-image-brief-store";
 import { useProductionBibleStore } from "../canvas/stores/use-production-bible-store";
@@ -147,6 +148,7 @@ export function AssetImageWorkbench() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const promptInputRef = useRef<TextAreaRef>(null);
     const importedContextRef = useRef("");
+    const importedRevisionAssetRef = useRef("");
     const config = useConfigStore((state) => state.config);
     const effectiveConfig = useEffectiveConfig();
     const updateConfig = useConfigStore((state) => state.updateConfig);
@@ -154,6 +156,8 @@ export function AssetImageWorkbench() {
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const allowCustomModel = useConfigStore((state) => state.publicSettings?.modelChannel.allowCustomChannel !== false);
     const addAssetOnce = useAssetStore((state) => state.addAssetOnce);
+    const assets = useAssetStore((state) => state.assets);
+    const setVariantCurrentAsset = useAssetStore((state) => state.setVariantCurrentAsset);
     const token = useUserStore((state) => state.token);
     const updateAsset = useAssetStore((state) => state.updateAsset);
     const addBriefResultAsset = useImageBriefStore((state) => state.addResultAsset);
@@ -230,6 +234,20 @@ export function AssetImageWorkbench() {
         }).catch(() => undefined);
         return () => { active = false; };
     }, [message]);
+
+    useEffect(() => {
+        if (sourceContext.source !== "asset-revision" || !sourceContext.libraryAssetId) return;
+        const sourceAsset = assets.find((asset): asset is ImageAsset => asset.id === sourceContext.libraryAssetId && asset.kind === "image");
+        if (!sourceAsset || importedRevisionAssetRef.current === sourceAsset.id) return;
+        importedRevisionAssetRef.current = sourceAsset.id;
+        const snapshot = assetImageGenerationSnapshot(sourceAsset);
+        setReferences((current) => [assetImageReference(sourceAsset), ...current.filter((item) => item.id !== `asset-revision:${sourceAsset.id}`)]);
+        if (!sourceContext.prompt && snapshot.prompt) setPrompt(snapshot.prompt);
+        if (snapshot.model) updateConfig("imageModel", snapshot.model);
+        if (snapshot.quality) updateConfig("quality", snapshot.quality);
+        if (snapshot.size) updateConfig("size", snapshot.size);
+        message.success("已带入来源图片和生成配置");
+    }, [assets, message, sourceContext, updateConfig]);
 
     const addReferences = async (files?: FileList | null) => {
         const imageFiles = Array.from(files || []).filter((file) => file.type.startsWith("image/"));
@@ -409,6 +427,19 @@ export function AssetImageWorkbench() {
             updateAsset(sourceAsset.id, tracedPatch);
             assetId = sourceAsset.id;
             savedAsset = { id: sourceAsset.id, metadata: { ...sourceAsset.metadata, ...tracedPatch.metadata }, updatedAt: now };
+        } else if (sourceAsset?.kind === "image" && sourceContext.source === "asset-revision") {
+            assetId = await addAssetOnce(
+                revisedImageAssetInput(sourceAsset, stored, {
+                    prompt,
+                    model,
+                    quality: String(effectiveConfig.quality || ""),
+                    size: String(effectiveConfig.size || ""),
+                    capabilityTrace: resultTrace,
+                }),
+            );
+            const variantId = boundVariantId(sourceAsset, useAssetStore.getState().variants);
+            if (variantId) setVariantCurrentAsset(variantId, assetId);
+            savedAsset = useAssetStore.getState().assets.find((asset) => asset.id === assetId);
         } else {
             assetId = await addAssetOnce({
                 kind: "image",
@@ -439,6 +470,10 @@ export function AssetImageWorkbench() {
         }
         if (sourceAsset && workflowAssetInfo(sourceAsset)) {
             message.success(linkedBibleItem ? "已回写到视频工作流素材卡，并绑定到设定库" : "已回写到视频工作流素材卡");
+            return;
+        }
+        if (sourceAsset?.kind === "image" && sourceContext.source === "asset-revision") {
+            message.success(sourceAsset.assetBinding ? "已保存为新的正式版本并设为当前主图" : "已保存为新的图片资产，原图已保留");
             return;
         }
         if (sourceContext.briefId) {

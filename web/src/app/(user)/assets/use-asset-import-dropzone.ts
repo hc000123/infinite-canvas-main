@@ -45,9 +45,12 @@ export function useAssetImportDropzone({
         }
         try {
             const result = await importAssetFileList(fileList, { folderId: activeFolderId, projectId: activeProjectId, addAssetOnce });
-            setPage(1);
-            onImported?.(result.assetIds);
-            message.success(assetImportSuccessMessage(result.count, activeFolderName));
+            if (result.count) {
+                setPage(1);
+                onImported?.(result.assetIds);
+                message.success(assetImportSuccessMessage(result.count, activeFolderName));
+            }
+            if (result.skippedTextCount) message.warning(result.count ? `已跳过 ${result.skippedTextCount} 个文本资产` : "没有可导入的媒体资产");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "导入失败，请选择有效的素材压缩包或媒体文件");
         } finally {

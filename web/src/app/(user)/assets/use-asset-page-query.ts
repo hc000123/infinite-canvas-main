@@ -218,6 +218,20 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
         const assetsByEpisode = activeEpisodeOption ? projectFilteredAssets.filter((asset) => assetMatchesEpisodeOption(asset, activeEpisodeOption)) : projectFilteredAssets;
         return sortAssetList(assetsByEpisode, sortMode);
     }, [activeEpisodeOption, projectFilteredAssets, sortMode]);
+    const hasScopedAssetFilter = Boolean(
+        episodeFilter ||
+            favoriteOnly ||
+            folderFilter !== "all" ||
+            generationSourceFilter ||
+            generationActionFilter ||
+            generationModelProviderFilter ||
+            generationTaskFilter !== "all" ||
+            sourceScope !== "all" ||
+            canvasLibraryFilter ||
+            storyboardGroupFilter ||
+            projectLibraryFilter !== "all" ||
+            referenceVersionFilter !== "all",
+    );
     const visibleProductionBibleItems = useMemo(() => {
         if (sourceScope === "canvas" || canvasLibraryFilter) return [];
         if (favoriteOnly || referenceVersionFilter !== "all" || kindFilter !== "all" || episodeFilter) return [];
@@ -319,6 +333,7 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
         generationModelProviderFilter,
         generationSourceFilter,
         generationTaskFilter,
+        hasScopedAssetFilter,
         kindFilter,
         keyword,
         outdatedAssetVersionUsages,

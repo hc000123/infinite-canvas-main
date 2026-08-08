@@ -91,8 +91,8 @@ export function useEpisodeProductionAssets({
             return;
         }
         const folderId = ensureProjectFolder(projectId, projectTitle);
-        const assetIds = await importAssetFile(file, { folderId, addAssetOnce });
-        const uploaded = useAssetStore.getState().assets.find((asset) => assetIds.includes(asset.id) && asset.kind === "image");
+        const result = await importAssetFile(file, { folderId, addAssetOnce });
+        const uploaded = useAssetStore.getState().assets.find((asset) => result.assetIds.includes(asset.id) && asset.kind === "image");
         if (!uploaded) {
             message.warning("图片已导入素材库，但没有找到可绑定的图片素材。");
             return;

@@ -31,14 +31,12 @@ const createItems: MenuProps["items"] = [
     { key: "prop", label: "道具" },
     { key: "position", label: "站位" },
     { type: "divider" },
-    { key: "text", label: "文本" },
     { key: "video", label: "视频" },
     { key: "audio", label: "音频" },
 ];
 
 const kindOptions = [
     { label: "全部资产", value: "all" },
-    { label: "文本", value: "text" },
     { label: "图片", value: "image" },
     { label: "视频", value: "video" },
     { label: "音频", value: "audio" },

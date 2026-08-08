@@ -8,6 +8,8 @@
 
 **Tech Stack:** Next.js App Router、React 19、TypeScript、Ant Design 6、Tailwind CSS、Zustand、localforage、Node test runner。
 
+**Implementation status:** Tasks 1–8 已完成代码与文档修改；按项目规范未自动执行测试、类型检查或构建，页面与定向测试仍以 `docs/pending-test.md` 为准。
+
 ---
 
 ### Task 1: 定义图库媒体和主体摘要模型

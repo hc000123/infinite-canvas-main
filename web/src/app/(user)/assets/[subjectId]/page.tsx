@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { App, Button, Empty, Input, Modal, Select, Tag } from "antd";
 import { ArrowLeft, ImageIcon, Sparkles } from "lucide-react";
@@ -15,6 +15,7 @@ import { useThemeStore } from "@/stores/use-theme-store";
 import { candidateAssetInput, copyWorkbenchImageInput, referenceFromWorkbenchImageInput, workbenchImageReference } from "../asset-workbench";
 import { useCreativeProjectStore } from "../../projects/use-creative-project-store";
 import { assetCategoryLabel } from "../asset-subjects";
+import { buildAssetImageRevisionHref } from "../asset-image-revision";
 import { AssetCandidateGrid } from "./components/asset-candidate-grid";
 import { AssetReferencePanel } from "./components/asset-reference-panel";
 import { AssetReferencePicker } from "./components/asset-reference-picker";
@@ -34,6 +35,7 @@ export default function AssetSubjectWorkbenchPage() {
 
 function AssetSubjectWorkbench({ subject }: { subject: AssetSubject }) {
     const { message, modal } = App.useApp();
+    const router = useRouter();
     const candidateInputRef = useRef<HTMLInputElement>(null);
     const referenceInputRef = useRef<HTMLInputElement>(null);
     const assets = useAssetStore((state) => state.assets);
@@ -185,7 +187,7 @@ function AssetSubjectWorkbench({ subject }: { subject: AssetSubject }) {
                             <div className="absolute left-3 top-3 rounded-lg bg-[var(--studio-media-overlay)] px-2.5 py-1 text-xs text-[var(--studio-on-media)]">{activeVariant.name}</div>
                         </section>
                         <AssetCandidateGrid candidates={candidates} running={generation.running} slots={generation.slots} onCopy={openCopyCandidate} onDelete={(image) => removeWorkbenchImage(image.id)} onGenerate={() => void generation.generate()} onPromote={(candidate) => void promoteCandidate(candidate)} onRetry={(slotId) => void generation.retrySlot(slotId)} onUpload={() => candidateInputRef.current?.click()} onUseAsReference={useCandidateAsReference} />
-                        <AssetVersionPanel assets={formalAssets} currentAssetId={activeVariant.currentAssetId} onSetCurrent={(assetId) => setVariantCurrentAsset(activeVariant.id, assetId)} />
+                        <AssetVersionPanel assets={formalAssets} currentAssetId={activeVariant.currentAssetId} onRevise={(asset) => { if (asset.kind === "image") router.push(buildAssetImageRevisionHref(asset, `/assets/${subject.id}`)); }} onSetCurrent={(assetId) => setVariantCurrentAsset(activeVariant.id, assetId)} />
                     </div>
                 </div>
             </main>

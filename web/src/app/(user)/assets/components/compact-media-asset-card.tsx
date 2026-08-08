@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckSquare, Download, PencilLine, RefreshCw, ShieldCheck, Square, Star, Trash2 } from "lucide-react";
+import { AudioLines, CheckSquare, Download, PencilLine, RefreshCw, ShieldCheck, Sparkles, Square, Star, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { canSubmitVolcengineReview, isVolcengineReviewProcessing, shouldShowVolcengineReviewAction } from "@/services/volcengine-asset-metadata";
@@ -21,9 +21,10 @@ export function CompactMediaAssetCard(props: {
     onDelete: () => void;
     onReview: () => void;
     onRefreshReview: () => void;
+    onReviseImage?: () => void;
 }) {
     const { asset } = props;
-    const imageUrl = asset.kind === "image" ? asset.coverUrl || asset.data.dataUrl : asset.coverUrl;
+    const imageUrl = asset.kind === "image" ? asset.coverUrl || asset.data.dataUrl : asset.kind === "video" ? asset.coverUrl : "";
 
     return (
         <article
@@ -32,7 +33,7 @@ export function CompactMediaAssetCard(props: {
                 props.selected ? "border-[var(--studio-accent)] shadow-[0_0_0_1px_var(--studio-accent)]" : "border-[var(--studio-border-subtle)] hover:border-[var(--studio-accent)]",
             )}
         >
-            <div className="relative aspect-[4/3] overflow-hidden bg-[var(--studio-shell-bg)]">
+            <div className="relative aspect-square overflow-hidden bg-[var(--studio-shell-bg)]">
                 <button
                     type="button"
                     aria-label={props.selected ? `取消选择素材 ${asset.title}` : `选择素材 ${asset.title}`}
@@ -63,7 +64,7 @@ export function CompactMediaAssetCard(props: {
                         <img src={imageUrl} alt={asset.title} className="size-full object-cover" />
                     ) : asset.kind === "video" ? (
                         <video src={videoPreviewUrl(asset.data.url)} muted playsInline preload="metadata" className="size-full object-cover" />
-                    ) : null}
+                    ) : <span className="flex size-full flex-col items-center justify-center gap-2 text-[var(--studio-text-muted)]"><AudioLines className="size-8" /><span className="text-xs font-medium">音频</span></span>}
                 </button>
                 <div
                     className={cn(
@@ -72,6 +73,7 @@ export function CompactMediaAssetCard(props: {
                     )}
                 >
                     <AssetIconButton title="编辑" icon={<PencilLine className="size-3.5" />} onClick={props.onEdit} />
+                    {asset.kind === "image" && props.onReviseImage ? <AssetIconButton title="进入生图修改" icon={<Sparkles className="size-3.5" />} onClick={props.onReviseImage} /> : null}
                     <AssetIconButton title="下载" icon={<Download className="size-3.5" />} onClick={props.onDownload} />
                     {shouldShowVolcengineReviewAction(asset.kind) ? (
                         asset.metadata?.volcengineAsset?.assetId && !canSubmitVolcengineReview(asset.metadata.volcengineAsset) ? (
@@ -89,7 +91,7 @@ export function CompactMediaAssetCard(props: {
                 </div>
             </div>
             <button type="button" className="block w-full p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--studio-accent)]" title={asset.title} onClick={props.onOpen}>
-                <span className="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-[var(--studio-text-primary)]">{asset.title || (asset.kind === "image" ? "未命名图片" : "未命名视频")}</span>
+                <span className="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-[var(--studio-text-primary)]">{asset.title || (asset.kind === "image" ? "未命名图片" : asset.kind === "video" ? "未命名视频" : "未命名音频")}</span>
                 <span className="mt-2 block truncate text-[11px] text-[var(--studio-text-muted)]">{assetMediaInfo(asset)}</span>
                 <span className="mt-1 flex min-w-0 items-center gap-2 text-[11px] text-[var(--studio-text-secondary)]">
                     {asset.source ? <span className="truncate">{asset.source}</span> : null}

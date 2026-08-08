@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { Asset } from "../../../stores/use-asset-store.ts";
+import { partitionPackageAssets } from "./asset-import-actions.ts";
 import { assetImportSuccessMessage, importedImageAssetInput, importedMediaAssetInput, importedPackageAssetInput, uniqueImportedAssetIds } from "./asset-import-payloads.ts";
 
 const now = "2026-06-05T00:00:00.000Z";
@@ -120,4 +121,12 @@ test("strips package asset identity and applies import folder", () => {
 
 test("counts a deduplicated import result once", () => {
     assert.deepEqual(uniqueImportedAssetIds(["asset-1", "asset-1", "asset-2"]), ["asset-1", "asset-2"]);
+});
+
+test("keeps package media and reports skipped text assets", () => {
+    const text = { id: "text-id", kind: "text", title: "文本", coverUrl: "", tags: [], createdAt: now, updatedAt: now, data: { content: "内容" } } as Asset;
+    const image = { id: "image-id", kind: "image", title: "图片", coverUrl: "blob:image", tags: [], createdAt: now, updatedAt: now, data: { dataUrl: "blob:image", width: 1, height: 1, bytes: 1, mimeType: "image/png" } } as Asset;
+    const partition = partitionPackageAssets([text, image]);
+    assert.deepEqual(partition.mediaAssets.map((asset) => asset.id), ["image-id"]);
+    assert.equal(partition.skippedTextCount, 1);
 });

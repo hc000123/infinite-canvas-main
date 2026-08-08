@@ -1,24 +1,19 @@
 "use client";
 
-import { useState } from "react";
 import { Button, Empty, Pagination, Tooltip } from "antd";
-import { CheckSquare, ChevronDown, ChevronRight, Square, Trash2 } from "lucide-react";
+import { CheckSquare, Square, Trash2 } from "lucide-react";
 
-import type { Asset, AssetSubject, AssetVariant } from "@/stores/use-asset-store";
+import type { Asset, AssetKind, AssetSubject, AssetVariant, ImageAsset } from "@/stores/use-asset-store";
 import { cn } from "@/lib/utils";
-import { assetEpisodeTitle, primaryAssetEpisodeKey } from "../asset-episode";
-import { isCompactMediaAssetGroup } from "../asset-result-layout";
-import { assetTypeGroupDomId, buildAssetTypeGroups, type AssetTypeGroup } from "../asset-type-groups";
+import { buildAssetSubjectSummary, isGalleryMediaAsset, visibleGallerySubjectGroups } from "../asset-gallery";
 import type { AssetProjectResultGroup } from "../asset-project-groups";
+import { subjectAssetGroups } from "../asset-subjects";
 import type { OutdatedAssetVersionUsage } from "../asset-version-outdated-references";
 import { productionBibleKindLabel, type ProductionBibleItem } from "../../canvas/utils/production-bible";
-import { workflowAssetInfo } from "../workflow-asset-image";
-import { subjectAssetGroups } from "../asset-subjects";
-import { AssetRow } from "./asset-card";
 import { AssetListToolbar } from "./asset-list-toolbar";
+import { AssetSubjectCard } from "./asset-subject-card";
 import { CompactMediaAssetCard } from "./compact-media-asset-card";
 import { OutdatedReferencesPanel } from "./outdated-references-panel";
-import { AssetSubjectSection } from "./asset-subject-section";
 
 type BulkReviewAction = "submit" | "refresh" | "";
 
@@ -26,16 +21,16 @@ type Props = {
     allFilteredSelected: boolean;
     allVisibleProductionBibleSelected: boolean;
     bulkReviewAction: BulkReviewAction;
-    episodeTitleMap: Record<string, string>;
     filteredCount: number;
+    hasScopedAssetFilter: boolean;
+    kindFilter: AssetKind | "all";
+    keyword: string;
     page: number;
     pageCount: number;
     productionBibleCount: number;
     projectContextFilter: string;
     referenceVersionFilter: "all" | "outdated";
     refreshingReviewId: string | null;
-    generatingWorkflowAssetId: string | null;
-    uploadingWorkflowAssetId: string | null;
     selectedAssetIds: Set<string>;
     selectedAssetSummary: string;
     selectedAssetsCount: number;
@@ -47,7 +42,6 @@ type Props = {
     selectedProductionBibleSummary: string;
     selectedVolcengineRefreshCount: number;
     selectedVolcengineSubmitCount: number;
-    showEpisodeGroups: boolean;
     subjects: AssetSubject[];
     submittingReviewId: string | null;
     usages: OutdatedAssetVersionUsage[];
@@ -60,7 +54,6 @@ type Props = {
     onClearOutdatedSelection: () => void;
     onClearSelected: () => void;
     onClearSelectedProductionBibleItems: () => void;
-    onCopyAsset: (asset: Asset) => void;
     onDeleteAsset: (asset: Asset) => void;
     onDeleteProductionBibleItem: (item: ProductionBibleItem) => void;
     onBulkDeleteProductionBibleItems: () => void;
@@ -71,11 +64,9 @@ type Props = {
     onOpenBulkOutdated: () => void;
     onPageChange: (page: number) => void;
     onRefreshAssetReview: (asset: Asset) => void;
-    onGenerateWorkflowImage: (asset: Asset) => void;
-    onMatchWorkflowImage: (asset: Asset) => void;
-    onUploadWorkflowImage: (asset: Asset) => void;
     onRefreshSelectedReviews: () => void;
     onRemoveFromProjectLibrary: () => void;
+    onReviseImage: (asset: ImageAsset) => void;
     onSelectFiltered: () => void;
     onSelectOutdatedUsages: () => void;
     onSelectVisibleProductionBibleItems: () => void;
@@ -88,290 +79,102 @@ type Props = {
     onUpdateOutdatedUsage: (usage: OutdatedAssetVersionUsage) => void;
 };
 
-export function AssetResultsSection({
-    allFilteredSelected,
-    allVisibleProductionBibleSelected,
-    bulkReviewAction,
-    episodeTitleMap,
-    filteredCount,
-    page,
-    pageCount,
-    productionBibleCount,
-    projectContextFilter,
-    referenceVersionFilter,
-    refreshingReviewId,
-    generatingWorkflowAssetId,
-    uploadingWorkflowAssetId,
-    selectedAssetIds,
-    selectedAssetSummary,
-    selectedAssetsCount,
-    selectedInFilteredCount,
-    selectedOutdatedUsageIds,
-    selectedProductionBibleCount,
-    selectedProductionBibleInVisibleCount,
-    selectedProductionBibleItemIds,
-    selectedProductionBibleSummary,
-    selectedVolcengineRefreshCount,
-    selectedVolcengineSubmitCount,
-    showEpisodeGroups,
-    subjects,
-    submittingReviewId,
-    usages,
-    variants,
-    visibleAssetGroups,
-    onAddToProjectLibrary,
-    onBulkDelete,
-    onBulkMove,
-    onBulkTag,
-    onClearOutdatedSelection,
-    onClearSelected,
-    onClearSelectedProductionBibleItems,
-    onCopyAsset,
-    onDeleteAsset,
-    onDeleteProductionBibleItem,
-    onBulkDeleteProductionBibleItems,
-    onDownloadAsset,
-    onEditAsset,
-    onExportSelected,
-    onOpenAsset,
-    onOpenBulkOutdated,
-    onPageChange,
-    onRefreshAssetReview,
-    onGenerateWorkflowImage,
-    onMatchWorkflowImage,
-    onUploadWorkflowImage,
-    onRefreshSelectedReviews,
-    onRemoveFromProjectLibrary,
-    onSelectFiltered,
-    onSelectOutdatedUsages,
-    onSelectVisibleProductionBibleItems,
-    onSubmitAssetReview,
-    onSubmitSelectedReviews,
-    onToggleAsset,
-    onToggleFavorite,
-    onToggleOutdatedUsage,
-    onToggleProductionBibleItem,
-    onUpdateOutdatedUsage,
-}: Props) {
-    const [collapsedAssetTypeGroups, setCollapsedAssetTypeGroups] = useState<Record<string, boolean>>({});
-    const hasVisibleResults = visibleAssetGroups.some((group) => group.assets.length || group.productionBibleItems.length || (!group.isUnfiled && subjects.some((subject) => subject.projectId === group.id)));
-    const showAssetPagination = pageCount > 1;
-    const toggleAssetTypeGroup = (id: string) => setCollapsedAssetTypeGroups((value) => ({ ...value, [id]: !value[id] }));
-    const renderAssetTypeGroups = (groupId: string, typeGroups: AssetTypeGroup[], scopeId = "") => (
-        <div className="grid gap-3">
-            {typeGroups.map((typeGroup) => {
-                const typeGroupId = assetTypeGroupDomId(groupId, scopeId ? `${scopeId}-${typeGroup.id}` : typeGroup.id);
-                const collapsed = collapsedAssetTypeGroups[typeGroupId] === true;
-                const stats = workflowAssetTypeStats(typeGroup.assets);
-                const compactMediaAssets = isCompactMediaAssetGroup(typeGroup.assets) ? typeGroup.assets : null;
-                return (
-                    <section key={typeGroup.id} id={typeGroupId} className="rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]">
-                        <button type="button" className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left" onClick={() => toggleAssetTypeGroup(typeGroupId)} aria-expanded={!collapsed}>
-                            <span className="flex min-w-0 items-center gap-2">
-                                {collapsed ? <ChevronRight className="size-4 shrink-0 text-[var(--studio-text-muted)]" /> : <ChevronDown className="size-4 shrink-0 text-[var(--studio-accent)]" />}
-                                <span className="truncate text-base font-semibold text-[var(--studio-text-primary)]">{typeGroup.title}</span>
-                                <span className="rounded-md border border-[var(--studio-border-subtle)] px-2 py-0.5 text-xs text-[var(--studio-text-secondary)]">{typeGroup.assets.length}</span>
-                            </span>
-                            {stats.total ? (
-                                <span className="shrink-0 text-xs text-[var(--studio-text-muted)]">
-                                    已生图 {stats.generated} / 待生图 {stats.pending}
-                                </span>
-                            ) : null}
-                        </button>
-                        {!collapsed ? (
-                            <div className={cn("border-t border-[var(--studio-border-subtle)] p-3", compactMediaAssets ? "grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6" : "grid gap-2.5")}>
-                                {compactMediaAssets
-                                    ? compactMediaAssets.map((asset) => (
-                                          <CompactMediaAssetCard
-                                              key={asset.id}
-                                              asset={asset}
-                                              selected={selectedAssetIds.has(asset.id)}
-                                              refreshingReview={refreshingReviewId === asset.id}
-                                              submittingReview={submittingReviewId === asset.id}
-                                              onSelect={() => onToggleAsset(asset.id)}
-                                              onOpen={() => onOpenAsset(asset)}
-                                              onEdit={() => onEditAsset(asset)}
-                                              onToggleFavorite={() => onToggleFavorite(asset)}
-                                              onDownload={() => onDownloadAsset(asset)}
-                                              onDelete={() => onDeleteAsset(asset)}
-                                              onReview={() => onSubmitAssetReview(asset)}
-                                              onRefreshReview={() => onRefreshAssetReview(asset)}
-                                          />
-                                      ))
-                                    : typeGroup.assets.map((asset) => (
-                                          <AssetRow
-                                              key={asset.id}
-                                              asset={asset}
-                                              selected={selectedAssetIds.has(asset.id)}
-                                              refreshingReview={refreshingReviewId === asset.id}
-                                              generatingWorkflowImage={generatingWorkflowAssetId === asset.id}
-                                              uploadingWorkflowImage={uploadingWorkflowAssetId === asset.id}
-                                              onSelect={() => onToggleAsset(asset.id)}
-                                              onOpen={() => onOpenAsset(asset)}
-                                              onEdit={() => onEditAsset(asset)}
-                                              onToggleFavorite={() => onToggleFavorite(asset)}
-                                              onCopy={onCopyAsset}
-                                              onDownload={onDownloadAsset}
-                                              onDelete={() => onDeleteAsset(asset)}
-                                              submittingReview={submittingReviewId === asset.id}
-                                              onReview={() => onSubmitAssetReview(asset)}
-                                              onRefreshReview={() => onRefreshAssetReview(asset)}
-                                              onGenerateWorkflowImage={onGenerateWorkflowImage}
-                                              onMatchWorkflowImage={onMatchWorkflowImage}
-                                              onUploadWorkflowImage={onUploadWorkflowImage}
-                                          />
-                                      ))}
-                            </div>
-                        ) : null}
-                    </section>
-                );
-            })}
-        </div>
-    );
+export function AssetResultsSection(props: Props) {
+    const galleryGroups = props.visibleAssetGroups.map((group) => {
+        const subjectGroups = group.isUnfiled ? [] : subjectAssetGroups(props.subjects, group.assets, group.id);
+        const visibleSubjects = visibleGallerySubjectGroups({ groups: subjectGroups, kindFilter: props.kindFilter, keyword: props.keyword, hasScopedAssetFilter: props.hasScopedAssetFilter });
+        const structuredIds = new Set(subjectGroups.flatMap((item) => item.assets.map((asset) => asset.id)));
+        const ordinaryAssets = group.assets.filter((asset) => !structuredIds.has(asset.id)).filter(isGalleryMediaAsset);
+        return { group, visibleSubjects, ordinaryAssets };
+    });
+    const hasVisibleResults = galleryGroups.some(({ group, visibleSubjects, ordinaryAssets }) => group.productionBibleItems.length || visibleSubjects.length || ordinaryAssets.length);
 
     return (
         <div className="mx-auto flex max-w-[1680px] flex-col gap-5">
-            {referenceVersionFilter === "outdated" ? (
-                <OutdatedReferencesPanel
-                    usages={usages}
-                    selectedIds={selectedOutdatedUsageIds}
-                    onToggle={onToggleOutdatedUsage}
-                    onSelectAll={onSelectOutdatedUsages}
-                    onClear={onClearOutdatedSelection}
-                    onUpdateOne={onUpdateOutdatedUsage}
-                    onOpenBatch={onOpenBulkOutdated}
-                />
-            ) : null}
-            {referenceVersionFilter !== "outdated" ? (
-                <AssetListToolbar
-                    allFilteredSelected={allFilteredSelected}
-                    allVisibleProductionBibleSelected={allVisibleProductionBibleSelected}
-                    bulkReviewAction={bulkReviewAction}
-                    filteredCount={filteredCount}
-                    productionBibleCount={productionBibleCount}
-                    projectContextFilter={projectContextFilter}
-                    selectedCount={selectedAssetsCount}
-                    selectedInFilteredCount={selectedInFilteredCount}
-                    selectedProductionBibleCount={selectedProductionBibleCount}
-                    selectedProductionBibleInVisibleCount={selectedProductionBibleInVisibleCount}
-                    selectedProductionBibleSummary={selectedProductionBibleSummary}
-                    selectedSummary={selectedAssetSummary}
-                    selectedVolcengineRefreshCount={selectedVolcengineRefreshCount}
-                    selectedVolcengineSubmitCount={selectedVolcengineSubmitCount}
-                    onAddToProjectLibrary={onAddToProjectLibrary}
-                    onBulkDelete={onBulkDelete}
-                    onBulkDeleteProductionBibleItems={onBulkDeleteProductionBibleItems}
-                    onBulkMove={onBulkMove}
-                    onBulkTag={onBulkTag}
-                    onClearSelected={onClearSelected}
-                    onClearSelectedProductionBibleItems={onClearSelectedProductionBibleItems}
-                    onExportSelected={onExportSelected}
-                    onRefreshSelectedReviews={onRefreshSelectedReviews}
-                    onRemoveFromProjectLibrary={onRemoveFromProjectLibrary}
-                    onSelectFiltered={onSelectFiltered}
-                    onSelectVisibleProductionBibleItems={onSelectVisibleProductionBibleItems}
-                    onSubmitSelectedReviews={onSubmitSelectedReviews}
-                />
-            ) : null}
-            {referenceVersionFilter !== "outdated" ? (
+            {props.referenceVersionFilter === "outdated" ? (
+                <OutdatedReferencesPanel usages={props.usages} selectedIds={props.selectedOutdatedUsageIds} onToggle={props.onToggleOutdatedUsage} onSelectAll={props.onSelectOutdatedUsages} onClear={props.onClearOutdatedSelection} onUpdateOne={props.onUpdateOutdatedUsage} onOpenBatch={props.onOpenBulkOutdated} />
+            ) : (
                 <>
+                    <AssetListToolbar
+                        allFilteredSelected={props.allFilteredSelected}
+                        allVisibleProductionBibleSelected={props.allVisibleProductionBibleSelected}
+                        bulkReviewAction={props.bulkReviewAction}
+                        filteredCount={props.filteredCount}
+                        productionBibleCount={props.productionBibleCount}
+                        projectContextFilter={props.projectContextFilter}
+                        selectedCount={props.selectedAssetsCount}
+                        selectedInFilteredCount={props.selectedInFilteredCount}
+                        selectedProductionBibleCount={props.selectedProductionBibleCount}
+                        selectedProductionBibleInVisibleCount={props.selectedProductionBibleInVisibleCount}
+                        selectedProductionBibleSummary={props.selectedProductionBibleSummary}
+                        selectedSummary={props.selectedAssetSummary}
+                        selectedVolcengineRefreshCount={props.selectedVolcengineRefreshCount}
+                        selectedVolcengineSubmitCount={props.selectedVolcengineSubmitCount}
+                        onAddToProjectLibrary={props.onAddToProjectLibrary}
+                        onBulkDelete={props.onBulkDelete}
+                        onBulkDeleteProductionBibleItems={props.onBulkDeleteProductionBibleItems}
+                        onBulkMove={props.onBulkMove}
+                        onBulkTag={props.onBulkTag}
+                        onClearSelected={props.onClearSelected}
+                        onClearSelectedProductionBibleItems={props.onClearSelectedProductionBibleItems}
+                        onExportSelected={props.onExportSelected}
+                        onRefreshSelectedReviews={props.onRefreshSelectedReviews}
+                        onRemoveFromProjectLibrary={props.onRemoveFromProjectLibrary}
+                        onSelectFiltered={props.onSelectFiltered}
+                        onSelectVisibleProductionBibleItems={props.onSelectVisibleProductionBibleItems}
+                        onSubmitSelectedReviews={props.onSubmitSelectedReviews}
+                    />
+
                     <div className="grid gap-8">
-                        {visibleAssetGroups.map((group) => {
-                            const subjectGroups = group.isUnfiled ? [] : subjectAssetGroups(subjects, group.assets, group.id);
-                            const structuredIds = new Set(subjectGroups.flatMap((item) => item.assets.map((asset) => asset.id)));
-                            const ordinaryAssets = group.assets.filter((asset) => !structuredIds.has(asset.id));
-                            const episodeGroups = showEpisodeGroups ? buildAssetEpisodeGroups(ordinaryAssets, episodeTitleMap) : [];
-                            const projectTypeGroups = showEpisodeGroups ? [] : buildAssetTypeGroups(ordinaryAssets);
-                            return (
-                                <section key={group.id} className="grid gap-4 border-t border-[var(--studio-border-subtle)] pt-6 first:border-t-0 first:pt-0">
-                                    <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-                                        <div className="min-w-0">
-                                            <div className="text-xs font-semibold tracking-normal text-[var(--studio-accent)]">项目资产</div>
-                                            <h2 className="mt-1 truncate text-xl font-semibold leading-7 text-[var(--studio-text-primary)]">{group.title}</h2>
-                                        </div>
-                                        <div className="text-xs text-[var(--studio-text-muted)]">
-                                            设定 {group.productionBibleItems.length} · 资产 {group.assets.length}
-                                        </div>
+                        {galleryGroups.map(({ group, visibleSubjects, ordinaryAssets }) => (
+                            <section key={group.id} className="grid gap-4 border-t border-[var(--studio-border-subtle)] pt-6 first:border-t-0 first:pt-0">
+                                <div className="flex items-end justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <div className="text-xs font-semibold text-[var(--studio-accent)]">项目资产</div>
+                                        <h2 className="mt-1 truncate text-xl font-semibold leading-7 text-[var(--studio-text-primary)]">{group.title}</h2>
                                     </div>
+                                    <div className="shrink-0 text-xs text-[var(--studio-text-muted)]">设定 {group.productionBibleItems.length} · 资产 {group.assets.length}</div>
+                                </div>
 
-                                    {group.productionBibleItems.length ? (
-                                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                                            {group.productionBibleItems.map((item) => (
-                                                <ProductionBibleSummaryCard key={item.id} item={item} selected={selectedProductionBibleItemIds.has(item.id)} onDelete={onDeleteProductionBibleItem} onSelect={() => onToggleProductionBibleItem(item.id)} />
-                                            ))}
-                                        </div>
-                                    ) : null}
+                                {group.productionBibleItems.length ? (
+                                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                                        {group.productionBibleItems.map((item) => <ProductionBibleSummaryCard key={item.id} item={item} selected={props.selectedProductionBibleItemIds.has(item.id)} onDelete={props.onDeleteProductionBibleItem} onSelect={() => props.onToggleProductionBibleItem(item.id)} />)}
+                                    </div>
+                                ) : null}
 
-                                    <AssetSubjectSection groups={subjectGroups} variants={variants} episodeTitleMap={episodeTitleMap} selectedAssetIds={selectedAssetIds} onEditAsset={onEditAsset} onOpenAsset={onOpenAsset} onToggleAsset={onToggleAsset} />
-
-                                    {subjectGroups.length && ordinaryAssets.length ? <div className="text-xs font-semibold text-[var(--studio-text-muted)]">待分类 / 其他素材</div> : null}
-
-                                    {showEpisodeGroups && episodeGroups.length ? (
-                                        <div className="grid gap-5">
-                                            {episodeGroups.map((episodeGroup) => {
-                                                const assetTypeGroups = buildAssetTypeGroups(episodeGroup.assets);
-                                                return (
-                                                    <section key={episodeGroup.id} className="grid gap-3 rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3">
-                                                        <div className="flex flex-col gap-2 px-1 sm:flex-row sm:items-center sm:justify-between">
-                                                            <div className="min-w-0">
-                                                                <div className="text-xs font-semibold tracking-normal text-[var(--studio-text-muted)]">集数</div>
-                                                                <h3 className="mt-0.5 truncate text-base font-semibold text-[var(--studio-text-primary)]">{episodeGroup.title}</h3>
-                                                            </div>
-                                                            <span className="text-xs text-[var(--studio-text-muted)]">资产 {episodeGroup.assets.length}</span>
-                                                        </div>
-                                                        {renderAssetTypeGroups(group.id, assetTypeGroups, episodeGroup.id)}
-                                                    </section>
-                                                );
-                                            })}
-                                        </div>
-                                    ) : null}
-                                    {!showEpisodeGroups && projectTypeGroups.length ? renderAssetTypeGroups(group.id, projectTypeGroups) : null}
-                                </section>
-                            );
-                        })}
+                                {visibleSubjects.length || ordinaryAssets.length ? (
+                                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+                                        {visibleSubjects.map(({ subject, assets }) => <AssetSubjectCard key={subject.id} summary={buildAssetSubjectSummary(subject, assets, props.variants)} />)}
+                                        {ordinaryAssets.map((asset) => (
+                                            <CompactMediaAssetCard
+                                                key={asset.id}
+                                                asset={asset}
+                                                selected={props.selectedAssetIds.has(asset.id)}
+                                                refreshingReview={props.refreshingReviewId === asset.id}
+                                                submittingReview={props.submittingReviewId === asset.id}
+                                                onSelect={() => props.onToggleAsset(asset.id)}
+                                                onOpen={() => props.onOpenAsset(asset)}
+                                                onEdit={() => props.onEditAsset(asset)}
+                                                onToggleFavorite={() => props.onToggleFavorite(asset)}
+                                                onDownload={() => props.onDownloadAsset(asset)}
+                                                onDelete={() => props.onDeleteAsset(asset)}
+                                                onReview={() => props.onSubmitAssetReview(asset)}
+                                                onRefreshReview={() => props.onRefreshAssetReview(asset)}
+                                                onReviseImage={asset.kind === "image" ? () => props.onReviseImage(asset) : undefined}
+                                            />
+                                        ))}
+                                    </div>
+                                ) : null}
+                            </section>
+                        ))}
                     </div>
 
-                    {!hasVisibleResults ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到资产或设定" className="py-20" /> : null}
-
-                    {showAssetPagination ? (
-                        <div className="flex justify-center">
-                            <Pagination current={page} pageSize={1} total={pageCount} showSizeChanger={false} onChange={onPageChange} />
-                        </div>
-                    ) : null}
+                    {!hasVisibleResults ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到媒体资产或设定" className="py-20" /> : null}
+                    {props.pageCount > 1 ? <div className="flex justify-center"><Pagination current={props.page} pageSize={1} total={props.pageCount} showSizeChanger={false} onChange={props.onPageChange} /></div> : null}
                 </>
-            ) : null}
+            )}
         </div>
     );
-}
-
-type AssetEpisodeGroup = {
-    id: string;
-    title: string;
-    assets: Asset[];
-};
-
-function buildAssetEpisodeGroups(assets: Asset[], labels: Record<string, string>): AssetEpisodeGroup[] {
-    const groups = new Map<string, AssetEpisodeGroup>();
-    assets.forEach((asset) => {
-        const id = primaryAssetEpisodeKey(asset) || "__episode_unknown";
-        const title = assetEpisodeTitle(asset, labels);
-        const group = groups.get(id) || { id, title, assets: [] };
-        group.assets.push(asset);
-        groups.set(id, group);
-    });
-    return Array.from(groups.values()).sort((a, b) => assetEpisodeSortIndex(a.title) - assetEpisodeSortIndex(b.title) || a.title.localeCompare(b.title, "zh-Hans-CN"));
-}
-
-function assetEpisodeSortIndex(title: string) {
-    const match = title.match(/第\s*(\d+)\s*集/);
-    return match?.[1] ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
-}
-
-function workflowAssetTypeStats(assets: Asset[]) {
-    const workflowAssets = assets.filter((asset) => workflowAssetInfo(asset));
-    const generated = workflowAssets.filter((asset) => asset.kind === "image" || workflowAssetInfo(asset)?.status === "image_generated").length;
-    const pending = workflowAssets.filter((asset) => asset.kind === "text").length;
-    return { total: workflowAssets.length, generated, pending };
 }
 
 function ProductionBibleSummaryCard({ item, selected, onDelete, onSelect }: { item: ProductionBibleItem; selected: boolean; onDelete: (item: ProductionBibleItem) => void; onSelect: () => void }) {
@@ -381,56 +184,13 @@ function ProductionBibleSummaryCard({ item, selected, onDelete, onSelect }: { it
         <article className={cn("rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-elevated-bg)] p-4", selected && "border-[var(--studio-accent)] ring-2 ring-[var(--studio-accent)]")}>
             <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 gap-2">
-                    <Tooltip title={selected ? "取消选择设定" : "选择设定"}>
-                        <Button
-                            aria-label={selected ? `取消选择设定 ${title}` : `选择设定 ${title}`}
-                            aria-pressed={selected}
-                            className={cn("mt-0.5 !h-7 !w-7 !min-w-7 !p-0", selected && "!border-[var(--studio-accent)] !bg-[var(--studio-accent)] !text-[var(--primary-foreground)]")}
-                            icon={selected ? <CheckSquare size={14} /> : <Square size={14} />}
-                            size="small"
-                            type={selected ? "primary" : "default"}
-                            onClick={(event) => {
-                                event.stopPropagation();
-                                onSelect();
-                            }}
-                        />
-                    </Tooltip>
-                    <div className="min-w-0">
-                        <div className="flex flex-wrap gap-1.5 text-[11px] font-medium">
-                            <span className="rounded-md bg-[var(--studio-accent-soft)] px-2 py-0.5 text-[var(--studio-accent)]">设定库</span>
-                            <span className="rounded-md border border-[var(--studio-border-subtle)] px-2 py-0.5 text-[var(--studio-text-secondary)]">{productionBibleKindLabel(item.kind)}</span>
-                        </div>
-                        <h3 className="mt-2 truncate text-base font-semibold leading-6 text-[var(--studio-text-primary)]">{title}</h3>
-                    </div>
+                    <Tooltip title={selected ? "取消选择设定" : "选择设定"}><Button aria-label={selected ? `取消选择设定 ${title}` : `选择设定 ${title}`} aria-pressed={selected} className={cn("mt-0.5 !h-7 !w-7 !min-w-7 !p-0", selected && "!border-[var(--studio-accent)] !bg-[var(--studio-accent)] !text-[var(--primary-foreground)]")} icon={selected ? <CheckSquare size={14} /> : <Square size={14} />} size="small" type={selected ? "primary" : "default"} onClick={(event) => { event.stopPropagation(); onSelect(); }} /></Tooltip>
+                    <div className="min-w-0"><div className="flex flex-wrap gap-1.5 text-[11px] font-medium"><span className="rounded-md bg-[var(--studio-accent-soft)] px-2 py-0.5 text-[var(--studio-accent)]">设定库</span><span className="rounded-md border border-[var(--studio-border-subtle)] px-2 py-0.5 text-[var(--studio-text-secondary)]">{productionBibleKindLabel(item.kind)}</span></div><h3 className="mt-2 truncate text-base font-semibold leading-6 text-[var(--studio-text-primary)]">{title}</h3></div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
-                    <span className="rounded-md border border-[var(--studio-border-subtle)] px-2 py-1 text-xs text-[var(--studio-text-secondary)]">{item.assetRefs.length ? `已绑定 ${item.assetRefs.length}` : "未绑定"}</span>
-                    <Tooltip title="删除设定">
-                        <Button
-                            aria-label={`删除设定 ${title}`}
-                            className="text-[var(--studio-text-muted)] hover:text-[var(--studio-danger)]"
-                            danger
-                            icon={<Trash2 size={14} />}
-                            size="small"
-                            type="text"
-                            onClick={(event) => {
-                                event.stopPropagation();
-                                onDelete(item);
-                            }}
-                        />
-                    </Tooltip>
-                </div>
+                <div className="flex shrink-0 items-center gap-1"><span className="rounded-md border border-[var(--studio-border-subtle)] px-2 py-1 text-xs text-[var(--studio-text-secondary)]">{item.assetRefs.length ? `已绑定 ${item.assetRefs.length}` : "未绑定"}</span><Tooltip title="删除设定"><Button aria-label={`删除设定 ${title}`} className="text-[var(--studio-text-muted)] hover:text-[var(--studio-danger)]" danger icon={<Trash2 size={14} />} size="small" type="text" onClick={(event) => { event.stopPropagation(); onDelete(item); }} /></Tooltip></div>
             </div>
             <p className="mt-3 line-clamp-2 text-sm leading-6 text-[var(--studio-text-secondary)]">{item.description || "暂无设定描述"}</p>
-            {item.tags.length ? (
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                    {item.tags.slice(0, 4).map((tag) => (
-                        <span key={tag} className="rounded-md border border-[var(--studio-border-subtle)] px-2 py-0.5 text-xs text-[var(--studio-text-muted)]">
-                            {tag}
-                        </span>
-                    ))}
-                </div>
-            ) : null}
+            {item.tags.length ? <div className="mt-3 flex flex-wrap gap-1.5">{item.tags.slice(0, 4).map((tag) => <span key={tag} className="rounded-md border border-[var(--studio-border-subtle)] px-2 py-0.5 text-xs text-[var(--studio-text-muted)]">{tag}</span>)}</div> : null}
             {snippet ? <div className="mt-3 line-clamp-2 text-xs leading-5 text-[var(--studio-text-muted)]">{snippet}</div> : null}
         </article>
     );

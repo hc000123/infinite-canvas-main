@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { Asset } from "../../../stores/use-asset-store.ts";
-import { buildAssetProjectContexts, DEFAULT_ASSET_SORT_MODE, filterAssetList, projectReferencedAssetIds, selectedAssetSummary, selectedAssetsFromIds, sortAssetList, storyboardGroupReferencedAssetIds } from "./asset-page-filters.ts";
+import { buildAssetProjectContexts, DEFAULT_ASSET_SORT_MODE, filterAssetList, projectReferencedAssetIds, selectedAssetSummary, selectedAssetsFromIds, sortAssetList, storyboardGroupReferencedAssetIds, supportedAssetList } from "./asset-page-filters.ts";
 
 const now = "2026-06-05T00:00:00.000Z";
 
@@ -22,6 +22,13 @@ function textAsset(id: string, title: string, folderId?: string, metadata?: Asse
         data: { content: title },
     };
 }
+
+test("keeps text records in storage but excludes them from the asset page", () => {
+    const image = { ...textAsset("image", "图片"), kind: "image", data: { dataUrl: "blob:image", width: 1, height: 1, bytes: 1, mimeType: "image/png" } } as Asset;
+    const video = { ...textAsset("video", "视频"), kind: "video", data: { url: "blob:video", width: 1, height: 1, bytes: 1, mimeType: "video/mp4" } } as Asset;
+    const audio = { ...textAsset("audio", "音频"), kind: "audio", data: { url: "blob:audio", bytes: 1, mimeType: "audio/wav" } } as Asset;
+    assert.deepEqual(supportedAssetList([textAsset("text", "文本"), image, video, audio]).map((asset) => asset.kind), ["image", "video", "audio"]);
+});
 
 test("builds asset project contexts with creative projects before legacy canvases", () => {
     const contexts = buildAssetProjectContexts(

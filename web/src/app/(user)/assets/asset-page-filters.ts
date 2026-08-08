@@ -80,7 +80,7 @@ type AssetListFilters = {
 };
 
 export function supportedAssetList(assets: Array<Asset | { kind?: string }>): Asset[] {
-    return assets.filter((asset): asset is Asset => asset.kind === "text" || asset.kind === "image" || asset.kind === "video" || asset.kind === "audio");
+    return assets.filter((asset): asset is Asset => asset.kind === "image" || asset.kind === "video" || asset.kind === "audio");
 }
 
 export function activeAssetFolderId(folderFilter: string | "all" | "root") {

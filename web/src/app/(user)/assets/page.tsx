@@ -10,6 +10,7 @@ import { useScriptStore } from "../canvas/stores/use-script-store";
 import type { ProductionBibleItem } from "../canvas/utils/production-bible";
 import { normalizeCanvasAssetTitles } from "./asset-canvas-title";
 import { assetEpisodeTitle } from "./asset-episode";
+import { buildAssetImageRevisionHref } from "./asset-image-revision";
 import type { AssetFormValues } from "./components/asset-editor-modal";
 import { AssetFilterPanel } from "./components/asset-filter-panel";
 import { AssetPageHeader } from "./components/asset-page-header";
@@ -123,6 +124,7 @@ function AssetsPageContent() {
         generationModelProviderFilter,
         generationSourceFilter,
         generationTaskFilter,
+        hasScopedAssetFilter,
         kindFilter,
         keyword,
         outdatedAssetVersionUsages,
@@ -425,6 +427,9 @@ function AssetsPageContent() {
         updateAsset(asset.id, { favorite });
         if (previewAsset?.id === asset.id) setPreviewAsset({ ...previewAsset, favorite });
     };
+    const reviseImageAsset = (asset: Extract<Asset, { kind: "image" }>) => {
+        router.push(buildAssetImageRevisionHref(asset, `${window.location.pathname}${window.location.search}`));
+    };
     const openBulkProductionBibleDelete = () => {
         if (!selectedProductionBibleItems.length) return message.warning("请先选择设定");
         setBulkProductionBibleDeleteOpen(true);
@@ -518,16 +523,16 @@ function AssetsPageContent() {
                     allFilteredSelected={allFilteredSelected}
                     allVisibleProductionBibleSelected={allVisibleProductionBibleSelected}
                     bulkReviewAction={bulkReviewAction}
-                    episodeTitleMap={episodeTitleMap}
                     filteredCount={filteredAssets.length}
+                    hasScopedAssetFilter={hasScopedAssetFilter}
+                    kindFilter={kindFilter}
+                    keyword={keyword}
                     page={page}
                     pageCount={pageCount}
                     productionBibleCount={visibleProductionBibleItems.length}
                     projectContextFilter={projectContextFilter}
                     referenceVersionFilter={referenceVersionFilter}
                     refreshingReviewId={refreshingReviewId}
-                    generatingWorkflowAssetId={generatingWorkflowAssetId}
-                    uploadingWorkflowAssetId={uploadingWorkflowAssetId}
                     selectedAssetIds={selectedAssetIds}
                     selectedAssetSummary={selectedAssetSummary}
                     selectedAssetsCount={selectedAssets.length}
@@ -539,7 +544,6 @@ function AssetsPageContent() {
                     selectedProductionBibleSummary={selectedProductionBibleItemSummary}
                     selectedVolcengineRefreshCount={selectedVolcengineRefreshAssets.length}
                     selectedVolcengineSubmitCount={selectedVolcengineSubmitAssets.length}
-                    showEpisodeGroups={Boolean(projectContextFilter && sourceScope !== "canvas")}
                     subjects={subjects}
                     submittingReviewId={submittingReviewId}
                     usages={outdatedAssetVersionUsages}
@@ -553,7 +557,6 @@ function AssetsPageContent() {
                     onClearOutdatedSelection={clearSelectedOutdatedUsages}
                     onClearSelected={clearSelectedAssets}
                     onClearSelectedProductionBibleItems={clearSelectedProductionBibleItems}
-                    onCopyAsset={copyAssetText}
                     onDeleteAsset={setDeletingAsset}
                     onDeleteProductionBibleItem={setDeletingProductionBibleItem}
                     onDownloadAsset={downloadMedia}
@@ -563,11 +566,9 @@ function AssetsPageContent() {
                     onOpenBulkOutdated={() => setBulkOutdatedOpen(true)}
                     onPageChange={setPage}
                     onRefreshAssetReview={(asset) => void refreshImageReview(asset)}
-                    onGenerateWorkflowImage={(asset) => void generateWorkflowAssetImage(asset)}
-                    onMatchWorkflowImage={openWorkflowImageMatch}
-                    onUploadWorkflowImage={openWorkflowImageUpload}
                     onRefreshSelectedReviews={() => void refreshSelectedVolcengineReviews()}
                     onRemoveFromProjectLibrary={removeSelectedFromProjectLibrary}
+                    onReviseImage={reviseImageAsset}
                     onSelectFiltered={selectFilteredAssets}
                     onSelectOutdatedUsages={selectAllOutdatedUsages}
                     onSelectVisibleProductionBibleItems={selectVisibleProductionBibleItems}
