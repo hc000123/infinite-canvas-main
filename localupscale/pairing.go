@@ -100,6 +100,10 @@ func NewPairingStore(path string, now func() time.Time) (*PairingStore, error) {
 	if err != nil {
 		return nil, err
 	}
+	path, err = canonicalPairingStoragePath(path)
+	if err != nil {
+		return nil, err
+	}
 	dir := filepath.Dir(path)
 	if err := preparePairingDirectory(dir); err != nil {
 		return nil, err
@@ -338,36 +342,35 @@ func validateOrigin(origin string) error {
 }
 
 func preparePairingDirectory(dir string) error {
-	start, err := pairingDirectoryCheckStart(dir)
+	root := filepath.Clean(filepath.VolumeName(dir) + string(filepath.Separator))
+	missing, err := checkPairingDirectoryComponents(root, dir, true)
 	if err != nil {
 		return err
 	}
-	missing, err := checkPairingDirectoryComponents(start, dir, true)
-	if err != nil {
-		return err
+	if !missing {
+		return validatePrivatePairingDirectory(dir)
 	}
-	if missing {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
+	ancestor := dir
+	for {
+		info, err := os.Lstat(ancestor)
+		if err == nil {
+			if info.Mode().Perm()&0o022 != 0 && !(info.Mode()&os.ModeSticky != 0 && info.Mode().Perm()&0o002 != 0) {
+				return fmt.Errorf("pairing store ancestor is group/other writable: %o", info.Mode().Perm())
+			}
+			break
+		}
+		if !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
+		ancestor = filepath.Dir(ancestor)
 	}
-	_, err = checkPairingDirectoryComponents(start, dir, false)
-	return err
-}
-
-func pairingDirectoryCheckStart(dir string) (string, error) {
-	root := filepath.Clean(filepath.VolumeName(dir) + string(filepath.Separator))
-	start := root
-	for _, candidate := range []string{os.TempDir(), "."} {
-		candidate, err := filepath.Abs(candidate)
-		if err != nil {
-			return "", err
-		}
-		if pathWithin(candidate, dir) && len(candidate) > len(start) {
-			start = candidate
-		}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
 	}
-	return start, nil
+	if _, err := checkPairingDirectoryComponents(root, dir, false); err != nil {
+		return err
+	}
+	return validatePrivatePairingDirectory(dir)
 }
 
 func pathWithin(base, target string) bool {
@@ -402,11 +405,40 @@ func checkPairingDirectoryComponents(start, dir string, allowMissing bool) (bool
 		if !info.IsDir() {
 			return false, fmt.Errorf("pairing store path is not a directory: %s", current)
 		}
-		if info.Mode().Perm()&0o022 != 0 {
-			return false, fmt.Errorf("pairing store directory is group/other writable: %o", info.Mode().Perm())
-		}
 	}
 	return false, nil
+}
+
+func validatePrivatePairingDirectory(dir string) error {
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return err
+	}
+	if info.Mode().Perm()&0o022 != 0 {
+		return fmt.Errorf("pairing store directory is group/other writable: %o", info.Mode().Perm())
+	}
+	return nil
+}
+
+func canonicalPairingStoragePath(path string) (string, error) {
+	lexicalTempRoot, err := filepath.Abs(filepath.Clean(os.TempDir()))
+	if err != nil {
+		return "", err
+	}
+	canonicalTempRoot, err := filepath.EvalSymlinks(lexicalTempRoot)
+	if err != nil {
+		return "", err
+	}
+	if !pathWithin(lexicalTempRoot, path) {
+		return path, nil
+	}
+	relative, err := filepath.Rel(lexicalTempRoot, path)
+	if err != nil {
+		return "", err
+	}
+	// Only normalize the system-provided temp root alias (not arbitrary storage
+	// symlinks) so macOS /var temp paths can still receive a full component walk.
+	return filepath.Join(canonicalTempRoot, relative), nil
 }
 
 func cloneGrants(grants map[string]Grant) map[string]Grant {

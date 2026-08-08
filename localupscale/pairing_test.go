@@ -674,6 +674,27 @@ func TestPairingStoreRejectsWritableAncestorWithoutCreatingDirectory(t *testing.
 	}
 }
 
+func TestPairingStoreCreatesPrivateDirectoryBelowStickyTempBoundary(t *testing.T) {
+	boundary := filepath.Join(t.TempDir(), "public-temp")
+	if err := os.Mkdir(boundary, 0o777|os.ModeSticky); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(boundary, 0o777|os.ModeSticky); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(boundary, "private", "nested")
+	if _, err := NewPairingStore(filepath.Join(dir, "grants.json"), time.Now); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.IsDir() || info.Mode().Perm()&0o022 != 0 {
+		t.Fatalf("created storage directory mode = %v", info.Mode())
+	}
+}
+
 func TestPairingStoreRejectsSymlinkInMissingDirectoryPath(t *testing.T) {
 	root := t.TempDir()
 	realDirectory := filepath.Join(root, "real")
