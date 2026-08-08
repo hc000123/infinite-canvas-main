@@ -5,6 +5,7 @@ import { persist, type PersistStorage, type StorageValue } from "zustand/middlew
 import { nanoid } from "nanoid";
 
 import { localForageStorage } from "@/lib/localforage-storage";
+import { resolveImageUrl } from "@/services/image-storage";
 import {
     applyStoryboardShotGenerationError,
     applyStoryboardShotGenerationStarted,
@@ -24,6 +25,7 @@ import {
     orderedStoryboardShots,
     orderedStoryboardTableShots,
     reorderStoryboardItems,
+    reorderStoryboardTableShotByTarget,
     reorderStoryboardTableShots,
     type ShotGroup,
     type ShotGroupWriteInput,
@@ -34,6 +36,7 @@ import {
     type StoryboardShotWriteInput,
     type StoryboardTableShot,
     type StoryboardTableShotWriteInput,
+    type StoryboardWorkbenchImage,
 } from "../utils/storyboard-management";
 import type { ScriptEpisode, ScriptScene } from "../utils/script-management";
 
@@ -42,6 +45,7 @@ type StoryboardStore = {
     shots: StoryboardShot[];
     tableShots: StoryboardTableShot[];
     shotGroups: ShotGroup[];
+    workbenchImages: StoryboardWorkbenchImage[];
     addGroup: (input: Omit<StoryboardGroupWriteInput, "order"> & { order?: number }) => string;
     updateGroup: (id: string, patch: Partial<StoryboardGroupWriteInput>) => void;
     removeGroup: (id: string) => void;
@@ -61,6 +65,11 @@ type StoryboardStore = {
     updateTableShot: (id: string, patch: Partial<StoryboardTableShotWriteInput>) => void;
     removeTableShot: (id: string) => void;
     moveTableShot: (id: string, direction: "up" | "down") => void;
+    reorderTableShot: (activeId: string, overId: string) => void;
+    addWorkbenchImage: (image: Omit<StoryboardWorkbenchImage, "createdAt" | "id">) => string;
+    updateWorkbenchImage: (id: string, patch: Partial<Omit<StoryboardWorkbenchImage, "createdAt" | "id" | "projectId" | "canvasId" | "episodeId" | "shotId">>) => void;
+    removeWorkbenchImage: (id: string) => void;
+    selectCandidate: (shotId: string, candidateId?: string) => void;
     createShotGroup: (shotIds: string[]) => { id?: string; errors?: string[] };
     updateShotGroup: (id: string, patch: Partial<ShotGroupWriteInput>) => void;
     removeShotGroup: (id: string) => void;
@@ -81,9 +90,16 @@ const storyboardStorage: PersistStorage<StoryboardStore> = {
         parsed.state.shots = parsed.state.shots || [];
         parsed.state.tableShots = parsed.state.tableShots || [];
         parsed.state.shotGroups = parsed.state.shotGroups || [];
+        parsed.state.workbenchImages = await Promise.all(
+            (parsed.state.workbenchImages || []).map(async (image) => ({ ...image, dataUrl: image.storageKey ? await resolveImageUrl(image.storageKey, image.dataUrl) : image.dataUrl })),
+        );
         return parsed;
     },
-    setItem: (name, value) => localForageStorage.setItem(name, JSON.stringify(value)),
+    setItem: (name, value) =>
+        localForageStorage.setItem(
+            name,
+            JSON.stringify({ ...value, state: { ...value.state, workbenchImages: value.state.workbenchImages.map((image) => ({ ...image, dataUrl: image.storageKey ? "" : image.dataUrl })) } }),
+        ),
     removeItem: (name) => localForageStorage.removeItem(name),
 };
 
@@ -94,6 +110,7 @@ export const useStoryboardStore = create<StoryboardStore>()(
             shots: [],
             tableShots: [],
             shotGroups: [],
+            workbenchImages: [],
             addGroup: (input) => {
                 const now = new Date().toISOString();
                 const id = nanoid();
@@ -177,6 +194,7 @@ export const useStoryboardStore = create<StoryboardStore>()(
                 set((state) => ({
                     tableShots: [...state.tableShots.filter((shot) => !(shot.canvasId === input.canvasId && shot.episodeId === input.episodeId)), ...drafts],
                     shotGroups: state.shotGroups.filter((group) => !(group.canvasId === input.canvasId && group.episodeId === input.episodeId)),
+                    workbenchImages: state.workbenchImages.filter((image) => !(image.canvasId === input.canvasId && image.episodeId === input.episodeId)),
                 }));
                 return drafts.length;
             },
@@ -193,6 +211,7 @@ export const useStoryboardStore = create<StoryboardStore>()(
                 set((state) => ({
                     tableShots: input.mode === "replace" ? [...state.tableShots.filter((shot) => !(shot.canvasId === input.canvasId && shot.episodeId === input.episodeId)), ...drafts] : [...state.tableShots, ...drafts],
                     shotGroups: input.mode === "replace" ? state.shotGroups.filter((group) => !(group.canvasId === input.canvasId && group.episodeId === input.episodeId)) : state.shotGroups,
+                    workbenchImages: input.mode === "replace" ? state.workbenchImages.filter((image) => !(image.canvasId === input.canvasId && image.episodeId === input.episodeId)) : state.workbenchImages,
                 }));
                 return drafts.length;
             },
@@ -212,8 +231,31 @@ export const useStoryboardStore = create<StoryboardStore>()(
                 set((state) => ({
                     tableShots: state.tableShots.filter((shot) => shot.id !== id),
                     shotGroups: state.shotGroups.map((group) => ({ ...group, shotIds: group.shotIds.filter((shotId) => shotId !== id) })).filter((group) => group.shotIds.length),
+                    workbenchImages: state.workbenchImages.filter((image) => image.shotId !== id),
                 })),
             moveTableShot: (id, direction) => set((state) => ({ tableShots: reorderStoryboardTableShots(state.tableShots, id, direction) })),
+            reorderTableShot: (activeId, overId) => set((state) => ({ tableShots: reorderStoryboardTableShotByTarget(state.tableShots, activeId, overId) })),
+            addWorkbenchImage: (input) => {
+                const id = nanoid();
+                set((state) => ({ workbenchImages: [{ ...input, id, createdAt: new Date().toISOString() }, ...state.workbenchImages] }));
+                return id;
+            },
+            updateWorkbenchImage: (id, patch) => set((state) => ({ workbenchImages: state.workbenchImages.map((image) => (image.id === id ? { ...image, ...patch } : image)) })),
+            removeWorkbenchImage: (id) =>
+                set((state) => ({
+                    workbenchImages: state.workbenchImages.filter((image) => image.id !== id),
+                    tableShots: state.tableShots.map((shot) => ({
+                        ...shot,
+                        referenceImageIds: shot.referenceImageIds?.filter((imageId) => imageId !== id),
+                        selectedCandidateId: shot.selectedCandidateId === id ? undefined : shot.selectedCandidateId,
+                    })),
+                })),
+            selectCandidate: (shotId, candidateId) =>
+                set((state) => {
+                    const candidate = candidateId ? state.workbenchImages.find((image) => image.id === candidateId && image.shotId === shotId && image.role === "candidate") : undefined;
+                    if (candidateId && !candidate) return {};
+                    return { tableShots: state.tableShots.map((shot) => (shot.id === shotId ? { ...shot, selectedCandidateId: candidate?.id, updatedAt: new Date().toISOString() } : shot)) };
+                }),
             createShotGroup: (shotIds) => {
                 const tableShots = get().tableShots.filter((shot) => shotIds.includes(shot.id));
                 const result = createShotGroupFromSelection({ shots: tableShots, id: nanoid() });
@@ -255,7 +297,7 @@ export const useStoryboardStore = create<StoryboardStore>()(
         {
             name: STORYBOARD_STORE_KEY,
             storage: storyboardStorage,
-            partialize: (state) => ({ groups: state.groups, shots: state.shots, tableShots: state.tableShots, shotGroups: state.shotGroups }) as StorageValue<StoryboardStore>["state"],
+            partialize: (state) => ({ groups: state.groups, shots: state.shots, tableShots: state.tableShots, shotGroups: state.shotGroups, workbenchImages: state.workbenchImages }) as StorageValue<StoryboardStore>["state"],
         },
     ),
 );

@@ -6,6 +6,7 @@ import { App, Button, Checkbox, Drawer, Dropdown, Empty, Image, Input, Modal, Ta
 import type { TextAreaRef } from "antd/es/input/TextArea";
 import { saveAs } from "file-saver";
 import dynamic from "next/dynamic";
+import { useSearchParams } from "next/navigation";
 
 import { ImageSettingsPanel } from "@/components/image-settings-panel";
 import { ModelPicker } from "@/components/model-picker";
@@ -32,6 +33,8 @@ import { useProductionBibleStore } from "../canvas/stores/use-production-bible-s
 import type { ArtifactEnvelope } from "@/services/api/invocations";
 import type { CapabilityConsumeTrace } from "@/components/capability-runtime/use-capability-run";
 import { buildImageCapabilityTrace, imagePromptFromArtifacts, imageRenditionsFromArtifacts, type ImageCapabilityTrace } from "./image-capability-context";
+import { StoryboardImageWorkbench } from "./storyboard-image-workbench";
+import { isAssetImageWorkbenchContext } from "./storyboard-workbench";
 
 const CapabilityRunDrawer = dynamic(() => import("@/components/capability-runtime/capability-run-drawer").then((module) => module.CapabilityRunDrawer), { ssr: false });
 
@@ -135,6 +138,11 @@ function buildReferencePrompt(prompt: string, references: ReferenceImage[]) {
 }
 
 export default function ImagePage() {
+    const searchParams = useSearchParams();
+    return isAssetImageWorkbenchContext(searchParams) ? <AssetImageWorkbench /> : <StoryboardImageWorkbench />;
+}
+
+export function AssetImageWorkbench() {
     const { message } = App.useApp();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const promptInputRef = useRef<TextAreaRef>(null);

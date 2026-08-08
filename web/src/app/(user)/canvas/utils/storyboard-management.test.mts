@@ -11,10 +11,12 @@ import {
     buildStoryboardGroupFromScriptScene,
     createShotGroupFromSelection,
     normalizeStoryboardShot,
+    normalizeStoryboardTableShot,
     orderedStoryboardGroups,
     orderedStoryboardShots,
     planShotGroupCanvasInsert,
     reorderStoryboardTableShots,
+    reorderStoryboardTableShotByTarget,
     planStoryboardGroupCanvasInsert,
     reorderStoryboardItems,
     validateShotGroupSelection,
@@ -66,6 +68,30 @@ test("normalizes shot references and removes duplicates", () => {
     assert.deepEqual(normalized.resultAssetIds, ["asset-result"]);
     assert.equal(normalized.primaryAssetId, undefined);
     assert.equal(normalized.productionBibleRefs.length, 1);
+});
+
+test("normalizes storyboard image configuration", () => {
+    const normalized = normalizeStoryboardTableShot({
+        ...tableShot("shot-1", 1),
+        imagePrompt: "  中景跟拍  ",
+        imageConfig: { imageModel: " model-a ", quality: " high ", size: " 16:9 ", count: "99" },
+        referenceImageIds: [" ref-1 ", "ref-1", ""],
+        selectedCandidateId: " candidate-1 ",
+    });
+    assert.equal(normalized.imagePrompt, "中景跟拍");
+    assert.equal(normalized.imageConfig?.count, "10");
+    assert.deepEqual(normalized.referenceImageIds, ["ref-1"]);
+    assert.equal(normalized.selectedCandidateId, "candidate-1");
+});
+
+test("reorders a table shot inside its project episode scope", () => {
+    const shots = [tableShot("shot-1", 1), tableShot("shot-2", 2), tableShot("shot-3", 3), tableShot("other", 1, { projectId: "project-2" })];
+    const reordered = reorderStoryboardTableShotByTarget(shots, "shot-3", "shot-1");
+    assert.deepEqual(
+        reordered.filter((shot) => shot.projectId === "project-1").sort((left, right) => left.order - right.order).map((shot) => shot.id),
+        ["shot-3", "shot-1", "shot-2"],
+    );
+    assert.equal(reordered.find((shot) => shot.id === "other")?.order, 1);
 });
 
 test("creates storyboard group and first shot from a script scene", () => {
