@@ -36,3 +36,8 @@ test("uses asset terminology for the touched canvas save actions", () => {
     assert.doesNotMatch(toolbar, /我的素材/);
     assert.match(toolbar, /加入资产/);
 });
+
+test("uses the current Ant Design Alert title API", () => {
+    assert.match(modal, /<Alert[^>]+title=/);
+    assert.doesNotMatch(modal, /<Alert[^>]+message=/);
+});
