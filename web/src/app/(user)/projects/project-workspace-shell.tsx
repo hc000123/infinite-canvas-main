@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { ArrowLeft, Menu } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
-import { MobileNavDrawer } from "@/components/layout/mobile-nav-drawer";
 import { UserStatusActions } from "@/components/layout/user-status-actions";
 import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
 
@@ -21,7 +20,6 @@ export function ProjectWorkspaceShell({ children }: { children: ReactNode }) {
 function ProjectWorkspaceTopBar() {
     const pathname = usePathname();
     const searchParams = useSearchParams();
-    const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const returnTarget = buildWorkspaceReturnTarget(searchParams);
     const slug = pathname.split("/").filter(Boolean)[0];
     const activeToolSlug = navigationTools.some((tool) => tool.slug === slug) ? (slug as NavigationToolSlug) : undefined;
@@ -34,7 +32,7 @@ function ProjectWorkspaceTopBar() {
     return (
         <header className="relative z-[80] h-14 shrink-0 border-b border-[var(--studio-border-subtle)] shadow-[var(--studio-shadow)] backdrop-blur-xl" style={barStyle}>
             <div className="mx-auto flex h-full w-full max-w-7xl items-stretch justify-between gap-3 px-4 sm:px-5">
-                <div className="flex min-w-0 items-center">
+                <div className="flex min-w-0 flex-1 items-center">
                     <Link href="/" className="group flex h-full shrink-0 items-center gap-3 text-sm font-semibold leading-none tracking-tight transition hover:text-[var(--studio-accent)]">
                         <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-active-bg)] text-[var(--studio-accent)] transition group-hover:border-[var(--studio-border-strong)] group-hover:bg-[var(--studio-hover-bg)]">
                             <span
@@ -61,18 +59,7 @@ function ProjectWorkspaceTopBar() {
                         </span>
                     </Link>
 
-                    <button
-                        type="button"
-                        className="ml-2 inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-transparent transition hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-accent)] md:hidden"
-                        style={{ color: "var(--studio-text-secondary)" }}
-                        onClick={() => setMobileNavOpen(true)}
-                        aria-label="打开导航菜单"
-                        title="导航菜单"
-                    >
-                        <Menu className="size-5" />
-                    </button>
-
-                    <nav className="ml-4 hidden h-10 min-w-0 items-center gap-0.5 overflow-hidden rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-rail-bg)] p-1 md:flex">
+                    <nav className="ml-4 flex h-10 min-w-0 flex-1 items-center gap-0.5 overflow-x-auto rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-rail-bg)] p-1 thin-scrollbar">
                         {navigationTools.map((tool) => {
                             const Icon = tool.icon;
                             return <ProjectWorkspaceLink key={tool.slug} icon={<Icon className="size-4" />} label={tool.label} href={getToolHref(tool.slug)} active={tool.slug === activeToolSlug} />;
@@ -96,7 +83,6 @@ function ProjectWorkspaceTopBar() {
                     <UserStatusActions />
                 </div>
             </div>
-            <MobileNavDrawer open={mobileNavOpen} activeToolSlug={activeToolSlug} getHref={getToolHref} onClose={() => setMobileNavOpen(false)} />
         </header>
     );
 }

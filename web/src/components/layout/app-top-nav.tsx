@@ -6,19 +6,16 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
 import { AppConfigModal } from "@/components/layout/app-config-modal";
-import { MobileNavDrawer } from "@/components/layout/mobile-nav-drawer";
 import { UserStatusActions } from "@/components/layout/user-status-actions";
 import { VersionReleaseModal } from "@/components/layout/version-release-modal";
 import { useConfigStore } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
-import { useState } from "react";
 import { useCanvasStore } from "@/app/(user)/canvas/stores/use-canvas-store";
 
 export function AppTopNav() {
     const pathname = usePathname();
     const searchParams = useSearchParams();
-    const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const theme = useThemeStore((state) => state.theme);
     const setTheme = useThemeStore((state) => state.setTheme);
@@ -45,16 +42,12 @@ export function AppTopNav() {
             {!hideHeader ? (
                 <header className="sticky top-0 z-[80] h-14 shrink-0 border-b border-[var(--studio-border-subtle)] bg-[color-mix(in_srgb,var(--studio-app-bg)_94%,transparent)] backdrop-blur-xl">
                     <div className="mx-auto flex h-full w-full max-w-7xl items-stretch justify-between gap-3 px-4 sm:px-5">
-                        <div className="flex min-w-0 items-center">
+                        <div className="flex min-w-0 flex-1 items-center">
                             <Link href="/" className="workspace-top-button whitespace-nowrap !px-3 text-base !font-semibold tracking-tight">
                                 AI · 画布
                             </Link>
 
-                            <button type="button" className="workspace-top-button ml-3 md:hidden" onClick={() => setMobileNavOpen(true)} aria-label="打开导航菜单" title="导航菜单">
-                                菜单
-                            </button>
-
-                            <nav className="ml-4 hidden h-10 min-w-0 items-center gap-1 overflow-hidden md:flex">
+                            <nav className="ml-4 flex h-10 min-w-0 flex-1 items-center gap-1 overflow-x-auto thin-scrollbar">
                                 {navigationTools.map((tool) => {
                                     const active = tool.slug === activeToolSlug;
                                     return (
@@ -66,7 +59,7 @@ export function AppTopNav() {
                             </nav>
                         </div>
 
-                        <div className="my-auto flex h-9 min-w-0 items-center justify-end gap-2 justify-self-end whitespace-nowrap">
+                        <div className="my-auto flex h-9 min-w-0 shrink-0 items-center justify-end gap-2 justify-self-end whitespace-nowrap">
                             {returnTarget ? (
                                 <button type="button" className="workspace-top-button hidden sm:flex" onClick={() => window.location.assign(returnTarget.href)} title={returnTarget.label}>
                                     {returnTarget.label}
@@ -92,8 +85,6 @@ export function AppTopNav() {
                     </div>
                 </header>
             ) : null}
-
-            <MobileNavDrawer open={mobileNavOpen} activeToolSlug={activeToolSlug} getHref={getToolHref} onClose={() => setMobileNavOpen(false)} />
             <AppConfigModal />
         </>
     );
