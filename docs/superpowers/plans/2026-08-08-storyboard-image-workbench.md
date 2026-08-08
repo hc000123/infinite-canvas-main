@@ -400,7 +400,7 @@ git commit -m "feat: select and archive storyboard candidates"
 
 `navigationTools` 中 `slug: "image"` 的 `label` 改为“分镜制作台”，`shortLabel` 改为“分镜”，图标使用现有 lucide `Clapperboard`。
 
-- [ ] **Step 2: 更新计划与待验收**
+- [x] **Step 2: 更新计划与待验收**
 
 在 `docs/pending-test.md` 当前版本首部记录：
 
@@ -412,7 +412,7 @@ git commit -m "feat: select and archive storyboard candidates"
 
 检查 `docs/todo.md`；只有存在对应未完成事项时才移除或调整，不改无关路线图。
 
-- [ ] **Step 3: 静态变更范围检查**
+- [x] **Step 3: 静态变更范围检查**
 
 Run:
 
@@ -439,7 +439,7 @@ cd web && node --experimental-strip-types --test \
 
 Expected: 全部 PASS。
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add web/src/constant/navigation-tools.ts docs/todo.md docs/pending-test.md docs/superpowers/plans/2026-08-08-storyboard-image-workbench.md
