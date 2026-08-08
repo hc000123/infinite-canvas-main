@@ -9,6 +9,7 @@ import { listWorkflowRuns, type WorkflowRunListItem } from "@/services/api/workf
 import { useUserStore } from "@/stores/use-user-store";
 import { useScriptStore } from "../canvas/stores/use-script-store";
 import { useCreativeProjectStore } from "../projects/use-creative-project-store";
+import { EpisodeWorkflowWorkbench } from "../projects/[id]/episodes/[episodeId]/workflow/episode-workflow-workbench";
 import { buildAgentProjectViews, filterAgentProjectViews, type AgentAttentionStatus } from "./agent-workspace-model";
 import { AgentEpisodeOverview } from "./components/agent-episode-overview";
 import { AgentProjectOverview } from "./components/agent-project-overview";
@@ -103,6 +104,7 @@ export function AgentWorkspace() {
                             </div>
                             <AgentEpisodeOverview episodes={selectedProject.episodes} projectId={selectedProject.id} selectedEpisodeId={episodeId} />
                             {selectedEpisode ? <AgentStageGates episode={selectedEpisode} /> : null}
+                            {selectedEpisode ? <div className="h-[calc(100dvh-5rem)] min-h-[720px] overflow-hidden border border-[var(--studio-border-subtle)]"><EpisodeWorkflowWorkbench episodeId={episodeId} projectId={projectId} /></div> : null}
                         </>
                     ) : <Alert type="info" showIcon message="项目不存在或已归档" action={<Button size="small" onClick={() => router.push("/agent")}>返回所有项目</Button>} />}
                 </div>

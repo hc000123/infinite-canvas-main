@@ -7,12 +7,13 @@ import { useScriptStore } from "@/app/(user)/canvas/stores/use-script-store";
 import { buildEpisodeScriptSnapshot } from "@/app/(user)/canvas/utils/canvas-episode-context";
 import { orderedScriptScenes } from "@/app/(user)/canvas/utils/script-management";
 import { useCreativeProjectStore } from "@/app/(user)/projects/use-creative-project-store";
+import { agentWorkspaceHref } from "@/app/(user)/projects/agent-workspace-route";
 import { useVideoPackageStore } from "@/app/(user)/video/use-video-package-store";
 import { ensureWorkflowRun, getWorkflowRun, pollWorkflowRun, type RemoteWorkflowEvent, type RemoteWorkflowRunDetail, type WorkflowRunPoll, type WorkflowWorkerHealth } from "@/services/api/workflow-runs";
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
-import { normalizeWorkflowRouteState, workflowRouteSearch, type WorkflowStageKey } from "./workflow-route-state";
+import { normalizeWorkflowRouteState, type WorkflowStageKey } from "./workflow-route-state";
 import { appendWorkflowEvents, workflowPollNeedsDetail } from "./workflow-poll-state";
 import { summarizeWorkflowStages } from "./workflow-stage-summary";
 import type { WorkflowStageView } from "./workflow-view-types";
@@ -142,10 +143,10 @@ export function useWorkflowWorkbench(projectId: string, episodeId: string) {
     }, [detail?.run.id, hasActiveRemoteStage, pollRemote]);
 
     useEffect(() => {
-        const normalized = workflowRouteSearch(routeState);
-        if (normalized === searchParams.toString()) return;
-        window.history.replaceState(null, "", `${window.location.pathname}?${normalized}`);
-    }, [routeState, searchParams]);
+        const target = agentWorkspaceHref({ projectId, episodeId, stage: routeState.stage, shot: routeState.shot });
+        if (`/agent?${searchParams.toString()}` === target) return;
+        window.history.replaceState(null, "", target);
+    }, [episodeId, projectId, routeState, searchParams]);
 
     const stageViews = useMemo(
         () =>
@@ -164,11 +165,11 @@ export function useWorkflowWorkbench(projectId: string, episodeId: string) {
 
     const selectRoute = useCallback(
         (stage: WorkflowStageKey, shot = routeState.shot) => {
-            const next = workflowRouteSearch(normalizeWorkflowRouteState({ shot, stage }, packages.map((item) => item.id)));
-            window.history.replaceState(null, "", `${window.location.pathname}?${next}`);
+            const next = normalizeWorkflowRouteState({ shot, stage }, packages.map((item) => item.id));
+            window.history.replaceState(null, "", agentWorkspaceHref({ projectId, episodeId, stage: next.stage, shot: next.shot }));
             window.dispatchEvent(new PopStateEvent("popstate"));
         },
-        [packages, routeState.shot],
+        [episodeId, packages, projectId, routeState.shot],
     );
     const continueNext = useCallback(() => {
         const currentIndex = stageViews.findIndex((stage) => stage.key === routeState.stage);
