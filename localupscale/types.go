@@ -75,9 +75,14 @@ func ValidateCreateJob(input CreateJobInput) error {
 	if input.InputWidth <= 0 || input.InputHeight <= 0 {
 		return errors.New("图片尺寸无效")
 	}
-	inputPixels := int64(input.InputWidth) * int64(input.InputHeight)
-	outputPixels := inputPixels * int64(input.Scale*input.Scale)
-	if inputPixels > MaxInputPixels || outputPixels > MaxOutputPixels {
+	width := int64(input.InputWidth)
+	height := int64(input.InputHeight)
+	if width > MaxInputPixels/height {
+		return errors.New("图片尺寸超过本地超分限制")
+	}
+	inputPixels := width * height
+	scaleSquared := int64(input.Scale * input.Scale)
+	if inputPixels > MaxOutputPixels/scaleSquared {
 		return errors.New("图片尺寸超过本地超分限制")
 	}
 	return nil
