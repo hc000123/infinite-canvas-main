@@ -8,6 +8,38 @@ export type StoryboardAssetKind = "image" | "video" | "audio";
 export type StoryboardShotStatus = "draft" | "ready" | "in_canvas" | "generating" | "review" | "done" | "error";
 export type ShotGroupStatus = "draft" | "prompt_ready" | "in_canvas" | "generating" | "done" | "error";
 
+export type StoryboardImageConfig = {
+    imageModel: string;
+    quality: string;
+    size: string;
+    count: string;
+};
+
+export type StoryboardWorkbenchImage = {
+    id: string;
+    projectId: string;
+    canvasId: string;
+    episodeId: string;
+    shotId: string;
+    role: "reference" | "candidate";
+    source: "upload" | "clipboard" | "asset" | "generation" | "candidate";
+    sourceAssetId?: string;
+    savedAssetId?: string;
+    title: string;
+    dataUrl: string;
+    storageKey?: string;
+    width: number;
+    height: number;
+    bytes: number;
+    mimeType?: string;
+    durationMs?: number;
+    prompt?: string;
+    model?: string;
+    quality?: string;
+    size?: string;
+    createdAt: string;
+};
+
 export type StoryboardAssetRef = {
     assetId: string;
     kind: StoryboardAssetKind;
@@ -87,6 +119,10 @@ export type StoryboardTableShot = {
     estimatedDuration: number;
     assetNeeds?: string[];
     assetRefs: StoryboardAssetRef[];
+    imagePrompt?: string;
+    imageConfig?: StoryboardImageConfig;
+    referenceImageIds?: string[];
+    selectedCandidateId?: string;
     productionBibleRefs?: StoryboardProductionBibleRef[];
     agentRunId?: string;
     agentConfigId?: string;
@@ -207,6 +243,17 @@ export function normalizeStoryboardTableShot(input: StoryboardTableShotWriteInpu
         estimatedDuration: clampDuration(input.estimatedDuration),
         assetNeeds: uniqueStrings((input.assetNeeds || []).map((item) => item.trim()).filter(Boolean)),
         assetRefs: dedupeAssetRefs(input.assetRefs),
+        imagePrompt: input.imagePrompt?.trim() || undefined,
+        imageConfig: input.imageConfig
+            ? {
+                  imageModel: input.imageConfig.imageModel.trim(),
+                  quality: input.imageConfig.quality.trim(),
+                  size: input.imageConfig.size.trim(),
+                  count: String(Math.max(1, Math.min(10, Number(input.imageConfig.count) || 1))),
+              }
+            : undefined,
+        referenceImageIds: uniqueStrings((input.referenceImageIds || []).map((id) => id.trim()).filter(Boolean)),
+        selectedCandidateId: input.selectedCandidateId?.trim() || undefined,
         productionBibleRefs: dedupeBibleRefs(input.productionBibleRefs || []),
         agentRunId: input.agentRunId?.trim() || undefined,
         agentConfigId: input.agentConfigId?.trim() || undefined,
@@ -388,6 +435,21 @@ export function reorderStoryboardTableShots(shots: StoryboardTableShot[], id: st
     const current = shots.find((shot) => shot.id === id);
     if (!current) return shots;
     return reorderStoryboardItems(shots, id, direction, (shot) => shot.projectId === current.projectId && shot.canvasId === current.canvasId && shot.episodeId === current.episodeId);
+}
+
+export function reorderStoryboardTableShotByTarget(shots: StoryboardTableShot[], activeId: string, overId: string) {
+    const active = shots.find((shot) => shot.id === activeId);
+    const over = shots.find((shot) => shot.id === overId);
+    if (!active || !over || active.id === over.id || active.projectId !== over.projectId || active.canvasId !== over.canvasId || active.episodeId !== over.episodeId) return shots;
+    const scoped = orderedStoryboardTableShots(shots, active.canvasId, active.episodeId).filter((shot) => shot.projectId === active.projectId);
+    const activeIndex = scoped.findIndex((shot) => shot.id === activeId);
+    const overIndex = scoped.findIndex((shot) => shot.id === overId);
+    if (activeIndex < 0 || overIndex < 0) return shots;
+    const reordered = [...scoped];
+    const [moved] = reordered.splice(activeIndex, 1);
+    reordered.splice(overIndex, 0, moved);
+    const orderById = new Map(reordered.map((shot, index) => [shot.id, index + 1]));
+    return shots.map((shot) => (orderById.has(shot.id) ? { ...shot, order: orderById.get(shot.id)! } : shot));
 }
 
 export function buildStoryboardTableDraftsFromScript({
