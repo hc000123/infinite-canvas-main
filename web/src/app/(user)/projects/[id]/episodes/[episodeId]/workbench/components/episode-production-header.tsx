@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Button } from "antd";
 import { Workflow } from "lucide-react";
 
+import { agentWorkspaceHref } from "@/app/(user)/projects/agent-workspace-route";
 import type { CanvasProject } from "../../../../../../canvas/stores/use-canvas-store";
 import type { ScriptEpisode } from "../../../../../../canvas/utils/script-management";
 import { padEpisodeOrder } from "../episode-workbench-display";
@@ -11,17 +12,12 @@ import { EpisodeStatusPill } from "./episode-module-panel";
 
 export function EpisodeProductionHeader({
     boundCanvas,
-    canRunFullWorkflow,
     currentPhase,
     episode,
-    fullWorkflowRunning,
     legacyWorkflowVisible = true,
     nextActionText,
     onBackProject,
     onOpenCanvas,
-    onOpenOriginalWorkflow,
-    onRunFullWorkflow,
-    openingOriginalWorkflow = false,
     project,
 }: {
     boundCanvas?: CanvasProject;
@@ -57,17 +53,12 @@ export function EpisodeProductionHeader({
                 </div>
                 <div className="flex flex-wrap gap-2">
                     {legacyWorkflowVisible ? (
-                        <>
-                            <Button className="!h-9 !rounded-md !px-3" disabled={!canRunFullWorkflow} loading={fullWorkflowRunning} type="primary" onClick={onRunFullWorkflow}>
-                                完整工作流
-                            </Button>
-                            <Button className="!h-9 !rounded-md !px-3" href={`/projects/${project.id}/episodes/${episode.id}/workflow`} icon={<Workflow className="size-4" />}>
-                                工作流落地页
-                            </Button>
-                        </>
+                        <Button className="!h-9 !rounded-md !px-3" href={agentWorkspaceHref({ projectId: project.id, episodeId: episode.id, stage: "script" })} icon={<Workflow className="size-4" />} type="primary">
+                            打开 Agent
+                        </Button>
                     ) : (
-                        <Button className="!h-9 !rounded-md !px-3" icon={<Workflow className="size-4" />} loading={openingOriginalWorkflow} type="primary" onClick={onOpenOriginalWorkflow}>
-                            打开视频工作流
+                        <Button className="!h-9 !rounded-md !px-3" href={agentWorkspaceHref({ projectId: project.id, episodeId: episode.id, stage: "script" })} icon={<Workflow className="size-4" />} type="primary">
+                            继续 Agent 生产
                         </Button>
                     )}
                     <Button className="!h-9 !rounded-md !px-3" onClick={onBackProject}>

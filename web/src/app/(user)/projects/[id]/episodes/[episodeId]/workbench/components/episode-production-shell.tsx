@@ -398,13 +398,13 @@ function OriginalWorkflowReplacementPanel({ opening, onOpen }: { opening: boolea
     return (
         <section className="rounded-md border border-[var(--studio-border-strong)] bg-[var(--studio-active-bg)] p-5 shadow-[var(--studio-shadow)]">
             <div className="max-w-3xl">
-                <div className="text-sm font-semibold text-[var(--studio-text-primary)]">本集生产台工作流已暂时收起</div>
+                <div className="text-sm font-semibold text-[var(--studio-text-primary)]">本集生产流程已统一到 Agent</div>
                 <p className="mt-2 text-sm leading-6 text-[var(--studio-text-secondary)]">
-                    导演分析、资产提示词、Seedance 提示词和 Copy-only 拆分先统一交给独立“视频工作流”控制台处理。资产图先行入口已迁移到 Stage 2，质量门通过后可在“导入到工具”里写入“我的素材待生图卡”。
+                    剧本确认、资产解析与生产、结构化分镜、最终提示词和视频预览都在项目 Agent 中按阶段闸门推进。
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
                     <button type="button" className="inline-flex h-9 items-center justify-center rounded-md bg-[var(--studio-accent)] px-3 text-sm font-semibold text-white transition hover:bg-[var(--studio-accent-hover)] disabled:cursor-not-allowed disabled:opacity-60" disabled={opening} onClick={onOpen}>
-                        {opening ? "正在同步..." : "打开视频工作流"}
+                        {opening ? "正在同步..." : "打开项目 Agent"}
                     </button>
                 </div>
             </div>
