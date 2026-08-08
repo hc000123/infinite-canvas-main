@@ -350,19 +350,8 @@ func preparePairingDirectory(dir string) error {
 	if !missing {
 		return validatePrivatePairingDirectory(dir)
 	}
-	ancestor := dir
-	for {
-		info, err := os.Lstat(ancestor)
-		if err == nil {
-			if info.Mode().Perm()&0o022 != 0 && !(info.Mode()&os.ModeSticky != 0 && info.Mode().Perm()&0o002 != 0) {
-				return fmt.Errorf("pairing store ancestor is group/other writable: %o", info.Mode().Perm())
-			}
-			break
-		}
-		if !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-		ancestor = filepath.Dir(ancestor)
+	if _, _, err := nearestExistingPairingAncestor(dir, os.Lstat); err != nil {
+		return err
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
@@ -371,6 +360,24 @@ func preparePairingDirectory(dir string) error {
 		return err
 	}
 	return validatePrivatePairingDirectory(dir)
+}
+
+func nearestExistingPairingAncestor(path string, lstat func(string) (os.FileInfo, error)) (string, os.FileInfo, error) {
+	current := filepath.Clean(path)
+	for {
+		info, err := lstat(current)
+		if err == nil {
+			return current, info, nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", nil, err
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", nil, fmt.Errorf("no existing pairing store ancestor above %s", path)
+		}
+		current = parent
+	}
 }
 
 func pathWithin(base, target string) bool {
@@ -404,6 +411,9 @@ func checkPairingDirectoryComponents(start, dir string, allowMissing bool) (bool
 		}
 		if !info.IsDir() {
 			return false, fmt.Errorf("pairing store path is not a directory: %s", current)
+		}
+		if info.Mode().Perm()&0o022 != 0 && !(info.Mode()&os.ModeSticky != 0 && info.Mode().Perm()&0o002 != 0) {
+			return false, fmt.Errorf("pairing store directory is group/other writable: %s (%o)", current, info.Mode().Perm())
 		}
 	}
 	return false, nil

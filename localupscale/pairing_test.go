@@ -674,6 +674,26 @@ func TestPairingStoreRejectsWritableAncestorWithoutCreatingDirectory(t *testing.
 	}
 }
 
+func TestPairingStoreRejectsWritableAncestorAboveExistingPrivateDirectory(t *testing.T) {
+	ancestor := filepath.Join(t.TempDir(), "writable")
+	dir := filepath.Join(ancestor, "private")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(ancestor, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "grants.json")
+	original := []byte("[]\n")
+	if err := os.WriteFile(path, original, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewPairingStore(path, time.Now); err == nil {
+		t.Fatal("existing private storage directory below writable ancestor accepted")
+	}
+	assertFileUnchanged(t, path, original, 0o644)
+}
+
 func TestPairingStoreCreatesPrivateDirectoryBelowStickyTempBoundary(t *testing.T) {
 	boundary := filepath.Join(t.TempDir(), "public-temp")
 	if err := os.Mkdir(boundary, 0o777|os.ModeSticky); err != nil {
@@ -692,6 +712,37 @@ func TestPairingStoreCreatesPrivateDirectoryBelowStickyTempBoundary(t *testing.T
 	}
 	if !info.IsDir() || info.Mode().Perm()&0o022 != 0 {
 		t.Fatalf("created storage directory mode = %v", info.Mode())
+	}
+}
+
+func TestPairingStoreAcceptsExistingPrivateDirectoryBelowStickyTempBoundary(t *testing.T) {
+	boundary := filepath.Join(t.TempDir(), "public-temp")
+	dir := filepath.Join(boundary, "private")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(boundary, 0o777|os.ModeSticky); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewPairingStore(filepath.Join(dir, "grants.json"), time.Now); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNearestExistingPairingAncestorRejectsMissingRoot(t *testing.T) {
+	calls := 0
+	_, _, err := nearestExistingPairingAncestor(filepath.Join("missing-volume", "nested"), func(string) (os.FileInfo, error) {
+		calls++
+		if calls > 3 {
+			t.Fatal("ancestor lookup did not stop at the path root")
+		}
+		return nil, os.ErrNotExist
+	})
+	if err == nil || !strings.Contains(err.Error(), "no existing pairing store ancestor") {
+		t.Fatalf("ancestor lookup error = %v", err)
+	}
+	if calls != 3 {
+		t.Fatalf("ancestor lookup calls = %d, want 3", calls)
 	}
 }
 
