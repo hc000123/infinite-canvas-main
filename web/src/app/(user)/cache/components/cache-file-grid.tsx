@@ -70,7 +70,7 @@ function CacheFileCard({ file, onDelete, onMove, onPreview }: { file: ProjectCac
 function CacheFileCover({ file }: { file: ProjectCacheFile }) {
     if (file.status === "missing") return <TypeCover icon={<FileQuestion className="size-10" />} label="文件缺失" />;
     if (file.kind === "image") return <CacheImageThumbnail file={file} />;
-    if (file.kind === "video") return <TypeCover icon={<Video className="size-10" />} label="视频" />;
+    if (file.kind === "video") return <CacheVideoThumbnail file={file} />;
     return <TypeCover icon={<AudioLines className="size-10" />} label="音频" />;
 }
 
@@ -94,6 +94,41 @@ function CacheImageThumbnail({ file }: { file: ProjectCacheFile }) {
     return (
         <div ref={targetRef} className="grid h-full w-full place-items-center">
             {url ? <img src={url} alt={file.originalName || "缓存图片"} loading="lazy" className="h-full w-full object-contain" /> : loading ? <Spin size="small" /> : error ? <TypeCover icon={<ImageIcon className="size-9" />} label="缩略图读取失败" /> : <ImageIcon className="size-9" />}
+        </div>
+    );
+}
+
+function CacheVideoThumbnail({ file }: { file: ProjectCacheFile }) {
+    const targetRef = useRef<HTMLDivElement>(null);
+    const [visible, setVisible] = useState(false);
+    const { url, loading, error } = useCacheFileObjectUrl(file.id, visible);
+
+    useEffect(() => {
+        const target = targetRef.current;
+        if (!target) return;
+        const observer = new IntersectionObserver(([entry]) => {
+            if (!entry.isIntersecting) return;
+            setVisible(true);
+            observer.disconnect();
+        }, { rootMargin: "160px" });
+        observer.observe(target);
+        return () => observer.disconnect();
+    }, []);
+
+    return (
+        <div ref={targetRef} className="grid h-full w-full place-items-center">
+            {url ? (
+                <video
+                    src={url}
+                    muted
+                    playsInline
+                    preload="metadata"
+                    className="h-full w-full object-contain"
+                    onLoadedMetadata={(event) => {
+                        if (event.currentTarget.duration > 0.1) event.currentTarget.currentTime = 0.1;
+                    }}
+                />
+            ) : loading ? <Spin size="small" /> : error ? <TypeCover icon={<Video className="size-9" />} label="视频预览读取失败" /> : <Video className="size-9" />}
         </div>
     );
 }
