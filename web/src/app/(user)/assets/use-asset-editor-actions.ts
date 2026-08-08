@@ -11,6 +11,7 @@ import { buildAssetVersionedUpdatePatch } from "./asset-version-history";
 import type { AssetFormValues, ImageDraft, MediaDraft } from "./components/asset-editor-modal";
 import { NEW_ASSET_SUBJECT } from "./components/asset-binding-fields";
 import { defaultAssetVariantName } from "./asset-subjects";
+import { buildProjectLibraryMetadata } from "./asset-project-library";
 
 type MessageApi = {
     error: (content: string) => unknown;
@@ -39,12 +40,29 @@ export function useAssetEditorActions({ activeFolderId, activeProjectId, addAsse
     const tags = Form.useWatch("tags", form) || [];
     const content = Form.useWatch("content", form) || "";
 
-    const openCreate = () => {
+    const openCreate = (preset: { category?: AssetCategory; kind?: AssetKind } = {}) => {
+        const kind = preset.kind || (preset.category ? "image" : "text");
         setEditingAsset(null);
         setImageDraft(null);
         setMediaDraft(null);
-        setFormKind("text");
-        form.setFieldsValue({ kind: "text", title: "", coverUrl: "", folderId: activeFolderId || "", tags: [], source: "手动添加", note: "", content: "", projectId: activeProjectId || "", allEpisodes: true, episodeIds: [] });
+        setFormKind(kind);
+        form.setFieldsValue({
+            kind,
+            title: "",
+            coverUrl: "",
+            folderId: activeFolderId || "",
+            tags: [],
+            source: "手动添加",
+            note: "",
+            content: "",
+            projectId: activeProjectId || "",
+            category: preset.category,
+            subjectId: preset.category ? NEW_ASSET_SUBJECT : undefined,
+            subjectName: "",
+            variantName: preset.category ? defaultAssetVariantName(preset.category) : undefined,
+            allEpisodes: true,
+            episodeIds: [],
+        });
         setIsAssetOpen(true);
     };
 
@@ -86,7 +104,7 @@ export function useAssetEditorActions({ activeFolderId, activeProjectId, addAsse
             tags: values.tags || [],
             source: values.source?.trim(),
             note: values.note?.trim(),
-            metadata: editingAsset?.metadata || { source: "manual" },
+            metadata: editingAsset?.metadata || buildProjectLibraryMetadata({ source: "manual" }, values.projectId || activeProjectId || "", new Date().toISOString()),
         };
 
         if (values.kind === "text") {
@@ -126,7 +144,7 @@ export function useAssetEditorActions({ activeFolderId, activeProjectId, addAsse
             else await addAssetOnce(asset);
         }
 
-        message.success(editingAsset ? "素材已更新" : "素材已保存");
+        message.success(editingAsset ? "资产已更新" : "资产已保存");
         setIsAssetOpen(false);
     };
 

@@ -9,10 +9,7 @@ import { AppTopNav } from "@/components/layout/app-top-nav";
 import { useProjectCacheQueueRunner } from "@/hooks/use-project-cache-queue-runner";
 import { activateUserStorageScope } from "@/lib/localforage-storage";
 import { useUserStore } from "@/stores/use-user-store";
-import { ProjectWorkspaceShell } from "./projects/project-workspace-shell";
 import { protectedUserRouteState, userLoginHref } from "./user-auth-route";
-
-const workspaceShellPaths = ["/canvas", "/image", "/video", "/prompts", "/assets", "/cache"];
 
 export function UserLayoutClient({ children }: { children: ReactNode }) {
     const pathname = usePathname();
@@ -23,7 +20,6 @@ export function UserLayoutClient({ children }: { children: ReactNode }) {
     const authState = protectedUserRouteState(pathname, isReady, token, Boolean(user));
     const [storageReady, setStorageReady] = useState(false);
     useProjectCacheQueueRunner(storageReady ? token : undefined);
-    const useWorkspaceShell = workspaceShellPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 
     useEffect(() => {
         if (authState === "redirect") router.replace(userLoginHref(pathname));
@@ -62,7 +58,7 @@ export function UserLayoutClient({ children }: { children: ReactNode }) {
     return (
         <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
             <AppTopNav />
-            <div className="min-h-0 flex-1 overflow-hidden">{useWorkspaceShell ? <ProjectWorkspaceShell>{children}</ProjectWorkspaceShell> : children}</div>
+            <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
         </div>
     );
 }

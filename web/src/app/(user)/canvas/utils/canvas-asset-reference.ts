@@ -10,3 +10,14 @@ export function canvasAssetReferenceMetadata(input: { sourceAssetId?: string; as
         ...(input.assetVersion ? { assetVersion: input.assetVersion, assetReferenceMode: "fixed-version" as const } : {}),
     };
 }
+
+export function syncCanvasNodeAssetTitles<T extends { title: string; metadata?: { sourceAssetId?: string } }>(nodes: T[], assetTitleById: ReadonlyMap<string, string>): T[] {
+    let changed = false;
+    const next = nodes.map((node) => {
+        const title = node.metadata?.sourceAssetId ? assetTitleById.get(node.metadata.sourceAssetId)?.trim() : "";
+        if (!title || title === node.title) return node;
+        changed = true;
+        return { ...node, title };
+    });
+    return changed ? next : nodes;
+}

@@ -18,7 +18,7 @@ import { accountDestinationItems } from "./user-status-actions-view";
 
 type UserStatusActionsProps = {
     showConfig?: boolean;
-    variant?: "default" | "canvas";
+    variant?: "default" | "canvas" | "text";
     onOpenShortcuts?: () => void;
     accountOpen?: boolean;
     onAccountOpenChange?: (open: boolean) => void;
@@ -38,10 +38,12 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
     const credits = user?.credits ?? 0;
     const avatarUrl = user?.avatarUrl?.trim();
     const avatarText = (userName.trim()[0] || "U").toUpperCase();
-    const naturalIconClass =
+    const actionClass =
         variant === "canvas"
             ? "inline-flex size-8 shrink-0 items-center justify-center rounded-md opacity-85 transition hover:bg-[var(--studio-hover-bg)] hover:opacity-100 [&_svg]:size-4"
-            : "inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-transparent text-[var(--studio-text-secondary)] transition hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)] [&_svg]:size-4";
+            : variant === "text"
+              ? "workspace-top-button"
+              : "inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-transparent text-[var(--studio-text-secondary)] transition hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)] [&_svg]:size-4";
     const iconStyle: CSSProperties | undefined = variant === "canvas" ? { color: canvasTheme.node.text } : undefined;
     const versionStyle = iconStyle;
     const avatarStyle: CSSProperties | undefined = variant === "canvas" ? { borderColor: canvasTheme.toolbar.border, color: canvasTheme.node.text, background: "transparent" } : undefined;
@@ -71,12 +73,14 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
     return (
         <div className="inline-flex shrink-0 items-center gap-1.5">
             {showConfig ? (
-                <button type="button" className={naturalIconClass} style={iconStyle} onClick={() => openConfigDialog(false)} aria-label="配置" title="配置">
-                    <Settings2 className="size-4" />
+                <button type="button" className={`${actionClass} ${variant === "text" ? "hidden sm:inline-flex" : ""}`} style={iconStyle} onClick={() => openConfigDialog(false)} aria-label="配置" title="配置">
+                    {variant === "text" ? "配置" : <Settings2 className="size-4" />}
                 </button>
             ) : null}
-            <AnimatedThemeToggler theme={theme} onThemeChange={setTheme} className={naturalIconClass} style={iconStyle} aria-label={themeToggleLabel} title={themeToggleLabel} />
-            <VersionReleaseModal style={versionStyle} />
+            <AnimatedThemeToggler theme={theme} onThemeChange={setTheme} className={`${actionClass} ${variant === "text" ? "hidden sm:inline-flex" : ""}`} style={iconStyle} aria-label={themeToggleLabel} title={themeToggleLabel}>
+                {variant === "text" ? (theme === "dark" ? "浅色" : "深色") : undefined}
+            </AnimatedThemeToggler>
+            <VersionReleaseModal className={variant === "text" ? `${actionClass} hidden sm:inline-flex` : undefined} style={versionStyle} />
             {variant === "canvas" && user ? (
                 <Tooltip title="查看数据中心" placement="bottom">
                     <Link href="/data-center" className="flex h-8 shrink-0 items-center gap-1.5 px-1.5 text-xs font-medium tabular-nums opacity-75 transition hover:opacity-100" style={{ color: canvasTheme.node.text }}>
@@ -86,8 +90,8 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
                 </Tooltip>
             ) : null}
             {!user && onOpenShortcuts ? (
-                <button type="button" className={naturalIconClass} style={iconStyle} onClick={onOpenShortcuts} aria-label="快捷键" title="快捷键">
-                    <Keyboard className="size-4" />
+                <button type="button" className={actionClass} style={iconStyle} onClick={onOpenShortcuts} aria-label="快捷键" title="快捷键">
+                    {variant === "text" ? "快捷键" : <Keyboard className="size-4" />}
                 </button>
             ) : null}
             {!user ? (
@@ -96,7 +100,9 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
                     className={
                         variant === "canvas"
                             ? "px-1.5 text-sm font-medium opacity-85 underline-offset-4 transition hover:opacity-100 hover:underline"
-                            : "rounded-md px-2 py-1 text-sm font-medium text-[var(--studio-text-secondary)] underline-offset-4 transition hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)] hover:no-underline"
+                            : variant === "text"
+                              ? "workspace-top-button"
+                              : "rounded-md px-2 py-1 text-sm font-medium text-[var(--studio-text-secondary)] underline-offset-4 transition hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)] hover:no-underline"
                     }
                     style={iconStyle}
                 >
@@ -106,16 +112,24 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
             {user ? (
                 <div ref={accountRef}>
                     <Dropdown open={accountOpen} onOpenChange={onAccountOpenChange} trigger={["click"]} placement="bottomRight" getPopupContainer={getPopupContainer} styles={{ root: { minWidth: 150 } }} menu={{ items: menuItems }}>
-                        <button type="button" className="flex size-8 shrink-0 items-center justify-center rounded-full bg-transparent p-0 text-[0] leading-[0] transition" aria-label="账户菜单">
-                            <Avatar
-                                size={28}
-                                src={avatarUrl ? <img src={avatarUrl} alt={userName} referrerPolicy="no-referrer" /> : undefined}
-                                alt={userName}
-                                className="!flex !items-center !justify-center border border-[var(--studio-border-subtle)] bg-transparent text-xs font-semibold text-[var(--studio-text-primary)] transition hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-accent)]"
-                                style={avatarStyle}
-                            >
-                                {avatarText}
-                            </Avatar>
+                        <button
+                            type="button"
+                            className={variant === "text" ? `${actionClass} max-w-28 overflow-hidden text-ellipsis whitespace-nowrap` : "flex size-8 shrink-0 items-center justify-center rounded-full bg-transparent p-0 text-[0] leading-[0] transition"}
+                            aria-label="账户菜单"
+                        >
+                            {variant === "text" ? (
+                                userName
+                            ) : (
+                                <Avatar
+                                    size={28}
+                                    src={avatarUrl ? <img src={avatarUrl} alt={userName} referrerPolicy="no-referrer" /> : undefined}
+                                    alt={userName}
+                                    className="!flex !items-center !justify-center border border-[var(--studio-border-subtle)] bg-transparent text-xs font-semibold text-[var(--studio-text-primary)] transition hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-accent)]"
+                                    style={avatarStyle}
+                                >
+                                    {avatarText}
+                                </Avatar>
+                            )}
                         </button>
                     </Dropdown>
                 </div>

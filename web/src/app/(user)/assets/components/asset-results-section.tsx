@@ -4,13 +4,12 @@ import { useState } from "react";
 import { Button, Empty, Pagination, Tooltip } from "antd";
 import { CheckSquare, ChevronDown, ChevronRight, Square, Trash2 } from "lucide-react";
 
-import type { Asset, AssetSubject } from "@/stores/use-asset-store";
+import type { Asset, AssetSubject, AssetVariant } from "@/stores/use-asset-store";
 import { cn } from "@/lib/utils";
 import { assetEpisodeTitle, primaryAssetEpisodeKey } from "../asset-episode";
 import { isCompactMediaAssetGroup } from "../asset-result-layout";
 import { assetTypeGroupDomId, buildAssetTypeGroups, type AssetTypeGroup } from "../asset-type-groups";
 import type { AssetProjectResultGroup } from "../asset-project-groups";
-import type { AssetSortMode } from "../asset-page-filters";
 import type { OutdatedAssetVersionUsage } from "../asset-version-outdated-references";
 import { productionBibleKindLabel, type ProductionBibleItem } from "../../canvas/utils/production-bible";
 import { workflowAssetInfo } from "../workflow-asset-image";
@@ -49,10 +48,10 @@ type Props = {
     selectedVolcengineRefreshCount: number;
     selectedVolcengineSubmitCount: number;
     showEpisodeGroups: boolean;
-    sortMode: AssetSortMode;
     subjects: AssetSubject[];
     submittingReviewId: string | null;
     usages: OutdatedAssetVersionUsage[];
+    variants: AssetVariant[];
     visibleAssetGroups: AssetProjectResultGroup[];
     onAddToProjectLibrary: () => void;
     onBulkDelete: () => void;
@@ -80,7 +79,6 @@ type Props = {
     onSelectFiltered: () => void;
     onSelectOutdatedUsages: () => void;
     onSelectVisibleProductionBibleItems: () => void;
-    onSortModeChange: (value: AssetSortMode) => void;
     onSubmitAssetReview: (asset: Asset) => void;
     onSubmitSelectedReviews: () => void;
     onToggleAsset: (assetId: string) => void;
@@ -116,10 +114,10 @@ export function AssetResultsSection({
     selectedVolcengineRefreshCount,
     selectedVolcengineSubmitCount,
     showEpisodeGroups,
-    sortMode,
     subjects,
     submittingReviewId,
     usages,
+    variants,
     visibleAssetGroups,
     onAddToProjectLibrary,
     onBulkDelete,
@@ -147,7 +145,6 @@ export function AssetResultsSection({
     onSelectFiltered,
     onSelectOutdatedUsages,
     onSelectVisibleProductionBibleItems,
-    onSortModeChange,
     onSubmitAssetReview,
     onSubmitSelectedReviews,
     onToggleAsset,
@@ -157,7 +154,7 @@ export function AssetResultsSection({
     onUpdateOutdatedUsage,
 }: Props) {
     const [collapsedAssetTypeGroups, setCollapsedAssetTypeGroups] = useState<Record<string, boolean>>({});
-    const hasVisibleResults = visibleAssetGroups.some((group) => group.assets.length || group.productionBibleItems.length);
+    const hasVisibleResults = visibleAssetGroups.some((group) => group.assets.length || group.productionBibleItems.length || (!group.isUnfiled && subjects.some((subject) => subject.projectId === group.id)));
     const showAssetPagination = pageCount > 1;
     const toggleAssetTypeGroup = (id: string) => setCollapsedAssetTypeGroups((value) => ({ ...value, [id]: !value[id] }));
     const renderAssetTypeGroups = (groupId: string, typeGroups: AssetTypeGroup[], scopeId = "") => (
@@ -261,7 +258,6 @@ export function AssetResultsSection({
                     selectedSummary={selectedAssetSummary}
                     selectedVolcengineRefreshCount={selectedVolcengineRefreshCount}
                     selectedVolcengineSubmitCount={selectedVolcengineSubmitCount}
-                    sortMode={sortMode}
                     onAddToProjectLibrary={onAddToProjectLibrary}
                     onBulkDelete={onBulkDelete}
                     onBulkDeleteProductionBibleItems={onBulkDeleteProductionBibleItems}
@@ -274,7 +270,6 @@ export function AssetResultsSection({
                     onRemoveFromProjectLibrary={onRemoveFromProjectLibrary}
                     onSelectFiltered={onSelectFiltered}
                     onSelectVisibleProductionBibleItems={onSelectVisibleProductionBibleItems}
-                    onSortModeChange={onSortModeChange}
                     onSubmitSelectedReviews={onSubmitSelectedReviews}
                 />
             ) : null}
@@ -291,11 +286,11 @@ export function AssetResultsSection({
                                 <section key={group.id} className="grid gap-4 border-t border-[var(--studio-border-subtle)] pt-6 first:border-t-0 first:pt-0">
                                     <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
                                         <div className="min-w-0">
-                                            <div className="text-xs font-semibold tracking-normal text-[var(--studio-accent)]">项目素材库</div>
+                                            <div className="text-xs font-semibold tracking-normal text-[var(--studio-accent)]">项目资产</div>
                                             <h2 className="mt-1 truncate text-xl font-semibold leading-7 text-[var(--studio-text-primary)]">{group.title}</h2>
                                         </div>
                                         <div className="text-xs text-[var(--studio-text-muted)]">
-                                            设定 {group.productionBibleItems.length} · 素材 {group.assets.length}
+                                            设定 {group.productionBibleItems.length} · 资产 {group.assets.length}
                                         </div>
                                     </div>
 
@@ -307,7 +302,7 @@ export function AssetResultsSection({
                                         </div>
                                     ) : null}
 
-                                    <AssetSubjectSection groups={subjectGroups} episodeTitleMap={episodeTitleMap} selectedAssetIds={selectedAssetIds} onEditAsset={onEditAsset} onOpenAsset={onOpenAsset} onToggleAsset={onToggleAsset} />
+                                    <AssetSubjectSection groups={subjectGroups} variants={variants} episodeTitleMap={episodeTitleMap} selectedAssetIds={selectedAssetIds} onEditAsset={onEditAsset} onOpenAsset={onOpenAsset} onToggleAsset={onToggleAsset} />
 
                                     {subjectGroups.length && ordinaryAssets.length ? <div className="text-xs font-semibold text-[var(--studio-text-muted)]">待分类 / 其他素材</div> : null}
 
@@ -322,7 +317,7 @@ export function AssetResultsSection({
                                                                 <div className="text-xs font-semibold tracking-normal text-[var(--studio-text-muted)]">集数</div>
                                                                 <h3 className="mt-0.5 truncate text-base font-semibold text-[var(--studio-text-primary)]">{episodeGroup.title}</h3>
                                                             </div>
-                                                            <span className="text-xs text-[var(--studio-text-muted)]">素材 {episodeGroup.assets.length}</span>
+                                                            <span className="text-xs text-[var(--studio-text-muted)]">资产 {episodeGroup.assets.length}</span>
                                                         </div>
                                                         {renderAssetTypeGroups(group.id, assetTypeGroups, episodeGroup.id)}
                                                     </section>
@@ -336,7 +331,7 @@ export function AssetResultsSection({
                         })}
                     </div>
 
-                    {!hasVisibleResults ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到素材或设定" className="py-20" /> : null}
+                    {!hasVisibleResults ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到资产或设定" className="py-20" /> : null}
 
                     {showAssetPagination ? (
                         <div className="flex justify-center">

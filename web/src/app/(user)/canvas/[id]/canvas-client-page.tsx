@@ -13,6 +13,7 @@ import { useCanvasConfigNodeActions } from "../hooks/use-canvas-config-node-acti
 import { useCanvasCapacity } from "../hooks/use-canvas-capacity";
 import { useCanvasCapabilityActions } from "../hooks/use-canvas-capability-actions";
 import { useCanvasDerivedState } from "../hooks/use-canvas-derived-state";
+import { useCanvasAssetTitleSync } from "../hooks/use-canvas-asset-title-sync";
 import { useCanvasDeleteActions } from "../hooks/use-canvas-delete-actions";
 import { useCanvasGlobalPointerEvents } from "../hooks/use-canvas-global-pointer-events";
 import { useCanvasHistory } from "../hooks/use-canvas-history";
@@ -414,6 +415,7 @@ function InfiniteCanvasPage() {
         size,
         viewport,
     });
+    useCanvasAssetTitleSync({ assetTitleById, nodes, setNodes });
     useCanvasPageRuntimeEffects({
         connections,
         connectionsRef,

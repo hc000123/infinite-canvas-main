@@ -21,6 +21,7 @@ export function buildAssetProjectResultGroups({
     projectOrder,
     projectReferencedAssetIdsByProject,
     projectTitles,
+    subjectProjectIds = [],
 }: {
     assets: Asset[];
     folderMap: Map<string, AssetFolder>;
@@ -29,6 +30,7 @@ export function buildAssetProjectResultGroups({
     projectOrder: string[];
     projectReferencedAssetIdsByProject: Map<string, Set<string>>;
     projectTitles: Record<string, string>;
+    subjectProjectIds?: string[];
 }): AssetProjectResultGroup[] {
     const groups = new Map<string, AssetProjectResultGroup>();
     const ensureGroup = (projectId: string) => {
@@ -52,10 +54,11 @@ export function buildAssetProjectResultGroups({
     productionBibleItems.forEach((item) => {
         ensureGroup(item.projectId).productionBibleItems.push(item);
     });
+    subjectProjectIds.filter(Boolean).forEach(ensureGroup);
 
     const orderMap = new Map(projectOrder.map((projectId, index) => [projectId, index]));
     return Array.from(groups.values())
-        .filter((group) => group.assets.length || group.productionBibleItems.length)
+        .filter((group) => group.assets.length || group.productionBibleItems.length || subjectProjectIds.includes(group.id))
         .sort((a, b) => projectGroupSortIndex(a, orderMap) - projectGroupSortIndex(b, orderMap) || a.title.localeCompare(b.title, "zh-Hans-CN"));
 }
 

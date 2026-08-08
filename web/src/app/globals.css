@@ -200,18 +200,57 @@
 }
 
 @layer utilities {
+    .workspace-top-button {
+        display: inline-flex;
+        height: 2.125rem;
+        flex-shrink: 0;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--studio-border-subtle);
+        border-radius: 0.5rem;
+        background: var(--studio-control-bg) !important;
+        padding: 0 0.75rem;
+        color: var(--studio-text-secondary) !important;
+        font-size: 0.875rem;
+        font-weight: 550;
+        line-height: 1;
+        transition:
+            background-color 160ms ease,
+            border-color 160ms ease,
+            color 160ms ease,
+            transform 160ms ease;
+    }
+
+    .workspace-top-button:hover {
+        border-color: var(--studio-border-strong);
+        background: var(--studio-hover-bg) !important;
+        color: var(--studio-accent-hover) !important;
+        transform: translateY(-1px);
+    }
+
+    .workspace-top-button:active {
+        transform: translateY(0);
+    }
+
+    .workspace-top-button:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px var(--studio-focus-ring);
+    }
+
+    .workspace-top-button[aria-current="page"] {
+        border-color: var(--studio-accent);
+        background: var(--studio-active-bg) !important;
+        color: var(--studio-text-primary) !important;
+        box-shadow: inset 0 -2px 0 var(--studio-accent);
+        font-weight: 650;
+    }
+
     .studio-shell {
-        background:
-            linear-gradient(180deg, rgba(49, 95, 159, 0.05) 0%, transparent 210px),
-            linear-gradient(90deg, rgba(15, 23, 42, 0.04), transparent 34%, rgba(49, 95, 159, 0.035)),
-            var(--studio-shell-bg);
+        background: linear-gradient(180deg, rgba(49, 95, 159, 0.05) 0%, transparent 210px), linear-gradient(90deg, rgba(15, 23, 42, 0.04), transparent 34%, rgba(49, 95, 159, 0.035)), var(--studio-shell-bg);
     }
 
     .dark .studio-shell {
-        background:
-            linear-gradient(180deg, rgba(111, 168, 255, 0.045) 0%, transparent 230px),
-            linear-gradient(90deg, rgba(255, 255, 255, 0.025), transparent 38%, rgba(111, 168, 255, 0.025)),
-            var(--studio-shell-bg);
+        background: linear-gradient(180deg, rgba(111, 168, 255, 0.045) 0%, transparent 230px), linear-gradient(90deg, rgba(255, 255, 255, 0.025), transparent 38%, rgba(111, 168, 255, 0.025)), var(--studio-shell-bg);
     }
 
     .studio-panel {

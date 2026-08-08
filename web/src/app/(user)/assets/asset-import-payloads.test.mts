@@ -80,6 +80,16 @@ test("builds imported video and audio asset inputs", () => {
     });
 });
 
+test("binds imported assets to the selected project", () => {
+    const asset = importedImageAssetInput("角色参考.png", { url: "blob:image", storageKey: "image:1", width: 1024, height: 768, bytes: 2048, mimeType: "image/png" }, undefined, "project-1");
+    const entries = asset.metadata?.projectLibraries as Array<Record<string, unknown>>;
+
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].projectId, "project-1");
+    assert.equal(entries[0].role, "owner");
+    assert.equal(entries[0].syncStatus, "local");
+});
+
 test("strips package asset identity and applies import folder", () => {
     const packaged: Asset = {
         id: "asset-1",
@@ -105,7 +115,7 @@ test("strips package asset identity and applies import folder", () => {
         note: "",
         data: { content: "内容" },
     });
-    assert.equal(assetImportSuccessMessage(3, "项目素材"), "已导入 3 个素材到「项目素材」");
+    assert.equal(assetImportSuccessMessage(3, "项目资产"), "已导入 3 个资产到「项目资产」");
 });
 
 test("counts a deduplicated import result once", () => {

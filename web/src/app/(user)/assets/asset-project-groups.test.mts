@@ -30,6 +30,20 @@ test("uses the selected project as the result group instead of re-resolving anot
     assert.deepEqual(groups.map((group) => [group.id, group.title, group.assets.length]), [["selected-project", "当前项目", 1]]);
 });
 
+test("keeps projects that only contain asset subjects visible", () => {
+    const groups = buildAssetProjectResultGroups({
+        assets: [],
+        folderMap: new Map(),
+        productionBibleItems: [],
+        projectOrder: ["project-1"],
+        projectReferencedAssetIdsByProject: new Map(),
+        projectTitles: { "project-1": "主体项目" },
+        subjectProjectIds: ["project-1"],
+    });
+
+    assert.deepEqual(groups.map((group) => [group.id, group.title, group.assets.length]), [["project-1", "主体项目", 0]]);
+});
+
 test("resolves workflow video and tail-frame assets from their project metadata", () => {
     const referencedAssets = new Map<string, Set<string>>();
     const folderMap = new Map();

@@ -45,7 +45,7 @@ export function buildImageWorkbenchHref(asset: Asset, prompt: string, info: Retu
     if (episode) params.set("episodeId", episode);
     if (returnTo || typeof window !== "undefined") {
         params.set("returnTo", returnTo || `${window.location.pathname}${window.location.search}`);
-        params.set("returnLabel", "返回我的素材");
+        params.set("returnLabel", "返回资产");
     }
     return `/image?${params.toString()}`;
 }

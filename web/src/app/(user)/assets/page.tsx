@@ -1,11 +1,11 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { App, Empty, Form, Input, Modal } from "antd";
 
 import { uploadImage } from "@/services/image-storage";
-import { useAssetStore, type Asset } from "@/stores/use-asset-store";
+import { useAssetStore, type Asset, type AssetCategory, type AssetKind } from "@/stores/use-asset-store";
 import { useScriptStore } from "../canvas/stores/use-script-store";
 import type { ProductionBibleItem } from "../canvas/utils/production-bible";
 import { normalizeCanvasAssetTitles } from "./asset-canvas-title";
@@ -13,6 +13,7 @@ import { assetEpisodeTitle } from "./asset-episode";
 import type { AssetFormValues } from "./components/asset-editor-modal";
 import { AssetFilterPanel } from "./components/asset-filter-panel";
 import { AssetPageHeader } from "./components/asset-page-header";
+import { AssetSubjectCreateModal } from "./components/asset-subject-create-modal";
 import { AssetPageOverlays } from "./components/asset-page-overlays";
 import { AssetResultsSection } from "./components/asset-results-section";
 import { AssetUploadDropOverlay } from "./components/asset-upload-drop-overlay";
@@ -40,9 +41,9 @@ export default function AssetsPage() {
 
 function AssetsPageContent() {
     const { message, modal } = App.useApp();
+    const router = useRouter();
     const searchParams = useSearchParams();
     const scriptEpisodes = useScriptStore((state) => state.episodes);
-    const returnTarget = buildAssetsPageReturnTarget(searchParams);
     const requestedAssetId = searchParams.get("assetId") || "";
     const [form] = Form.useForm<AssetFormValues>();
     const coverInputRef = useRef<HTMLInputElement>(null);
@@ -70,6 +71,7 @@ function AssetsPageContent() {
         storyboardShots,
         storyboardTableShots,
         subjects,
+        variants,
         token,
         updateAsset,
         updateCanvasProject,
@@ -90,6 +92,7 @@ function AssetsPageContent() {
     const [matchingWorkflowAsset, setMatchingWorkflowAsset] = useState<Asset | null>(null);
     const [matchKeyword, setMatchKeyword] = useState("");
     const [pendingClassificationIds, setPendingClassificationIds] = useState<string[]>([]);
+    const [subjectCreateCategory, setSubjectCreateCategory] = useState<AssetCategory | null>(null);
 
     useEffect(() => {
         if (!requestedAssetId || openedRequestedAssetId === requestedAssetId) return;
@@ -169,6 +172,7 @@ function AssetsPageContent() {
         storyboardGroups,
         storyboardShots,
         storyboardTableShots,
+        subjects,
     });
     const { deleteFolder, editingFolder, folderDialogOpen, folderName, openCreateFolder, openEditFolder, saveFolder, setFolderDialogOpen, setFolderName } = useAssetFolderActions({
         addFolder,
@@ -190,6 +194,28 @@ function AssetsPageContent() {
         message,
         updateAsset,
     });
+    const createProjectAsset = (kind: AssetKind, category?: AssetCategory) => {
+        if (!projectContextFilter) return message.warning("请先选择资产所属项目");
+        if (category && category !== "other") {
+            setSubjectCreateCategory(category);
+            return;
+        }
+        openCreate({ kind, category });
+    };
+    const createSubject = (values: { name: string; projectId: string; note?: string }) => {
+        if (!subjectCreateCategory) return;
+        const subjectId = ensureSubject({ projectId: values.projectId, category: subjectCreateCategory, name: values.name, note: values.note?.trim(), tags: [] });
+        setSubjectCreateCategory(null);
+        router.push(`/assets/${subjectId}`);
+    };
+    const createProjectFolder = () => {
+        if (!projectContextFilter) return message.warning("请先选择资产所属项目");
+        openCreateFolder();
+    };
+    const openProjectImport = () => {
+        if (!projectContextFilter) return message.warning("请先选择资产所属项目");
+        assetInputRef.current?.click();
+    };
     useEffect(() => {
         if (isAssetOpen || !pendingClassificationIds.length) return;
         const asset = useAssetStore.getState().assets.find((item) => item.id === pendingClassificationIds[0]);
@@ -284,6 +310,7 @@ function AssetsPageContent() {
     const { handleUploadDragEnter, handleUploadDragLeave, handleUploadDragOver, handleUploadDrop, importAssetFiles, isDraggingUpload } = useAssetImportDropzone({
         activeFolderId: activeFolderId || undefined,
         activeFolderName,
+        activeProjectId: projectContextFilter || undefined,
         addAssetOnce,
         assetInputRef,
         message,
@@ -412,10 +439,24 @@ function AssetsPageContent() {
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-[var(--studio-shell-bg)] text-[var(--studio-text-primary)]">
-            <main className="studio-shell relative min-h-0 flex-1 overflow-y-auto px-6 py-8" onDragEnter={handleUploadDragEnter} onDragLeave={handleUploadDragLeave} onDragOver={handleUploadDragOver} onDrop={handleUploadDrop}>
+            <main className="studio-shell relative min-h-0 flex-1 overflow-y-auto px-4 py-4 xl:px-6" onDragEnter={handleUploadDragEnter} onDragLeave={handleUploadDragLeave} onDragOver={handleUploadDragOver} onDrop={handleUploadDrop}>
                 {isDraggingUpload ? <AssetUploadDropOverlay activeFolderName={activeFolderName} /> : null}
-                <div className="mx-auto max-w-[1680px] pb-8">
-                    <AssetPageHeader returnHref={returnTarget.href} returnLabel={returnTarget.label} onCreate={openCreate} onExportAll={() => void exportAllAssets()} onImportClick={() => assetInputRef.current?.click()} />
+                <div className="mx-auto max-w-[1680px] pb-5">
+                    <AssetPageHeader
+                        kindFilter={kindFilter}
+                        keyword={keyword}
+                        projectContextFilter={projectContextFilter}
+                        projectOptions={projectOptions}
+                        sortMode={sortMode}
+                        onCreate={createProjectAsset}
+                        onCreateFolder={createProjectFolder}
+                        onExportAll={() => void exportAllAssets()}
+                        onImportClick={openProjectImport}
+                        onKindFilterChange={assetFilterActions.changeKindFilter}
+                        onKeywordChange={assetFilterActions.changeKeyword}
+                        onProjectChange={assetFilterActions.changeProjectContextFilter}
+                        onSortModeChange={assetFilterActions.changeSortMode}
+                    />
 
                     <AssetFilterPanel
                         actions={{
@@ -499,10 +540,10 @@ function AssetsPageContent() {
                     selectedVolcengineRefreshCount={selectedVolcengineRefreshAssets.length}
                     selectedVolcengineSubmitCount={selectedVolcengineSubmitAssets.length}
                     showEpisodeGroups={Boolean(projectContextFilter && sourceScope !== "canvas")}
-                    sortMode={sortMode}
                     subjects={subjects}
                     submittingReviewId={submittingReviewId}
                     usages={outdatedAssetVersionUsages}
+                    variants={variants}
                     visibleAssetGroups={visibleAssetGroups}
                     onAddToProjectLibrary={addSelectedToProjectLibrary}
                     onBulkDelete={openBulkDelete}
@@ -530,7 +571,6 @@ function AssetsPageContent() {
                     onSelectFiltered={selectFilteredAssets}
                     onSelectOutdatedUsages={selectAllOutdatedUsages}
                     onSelectVisibleProductionBibleItems={selectVisibleProductionBibleItems}
-                    onSortModeChange={assetFilterActions.changeSortMode}
                     onSubmitAssetReview={(asset) => void submitImageReview(asset)}
                     onSubmitSelectedReviews={() => void submitSelectedVolcengineReviews()}
                     onToggleAsset={toggleAssetSelected}
@@ -540,6 +580,15 @@ function AssetsPageContent() {
                     onUpdateOutdatedUsage={updateOutdatedUsageToLatest}
                 />
             </main>
+
+            <AssetSubjectCreateModal
+                category={subjectCreateCategory}
+                initialProjectId={projectContextFilter}
+                open={Boolean(subjectCreateCategory)}
+                projects={creativeProjects}
+                onCancel={() => setSubjectCreateCategory(null)}
+                onCreate={createSubject}
+            />
 
             <AssetPageOverlays
                 assetInputRef={assetInputRef}
@@ -661,10 +710,6 @@ function AssetsPageContent() {
     );
 }
 
-type SearchParamReader = {
-    get: (name: string) => string | null;
-};
-
 function assetMatchProjectId(asset: Asset, info: ReturnType<typeof workflowAssetInfo>, fallback: string) {
     const metadata = asset.metadata || {};
     return readMetadataString(metadata.projectId) || info?.sourceProjectId || info?.projectSlug || fallback;
@@ -677,21 +722,4 @@ function assetMatchSearchText(asset: Asset, episodeTitleMap: Record<string, stri
 
 function readMetadataString(value: unknown) {
     return typeof value === "string" ? value : "";
-}
-
-function buildAssetsPageReturnTarget(searchParams: SearchParamReader) {
-    const returnTo = searchParams.get("returnTo") || "";
-    if (returnTo.startsWith("/")) return { href: returnTo, label: searchParams.get("returnLabel") || "返回上一步" };
-
-    const source = searchParams.get("source") || "";
-    const projectId = searchParams.get("projectId") || "";
-    if (source === "episode-workbench" && projectId) {
-        return {
-            href: `/projects/${encodeURIComponent(projectId)}`,
-            label: "返回项目",
-        };
-    }
-    if (projectId) return { href: `/projects/${encodeURIComponent(projectId)}`, label: "返回项目" };
-
-    return { href: "/projects", label: "返回项目中心" };
 }

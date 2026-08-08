@@ -14,6 +14,7 @@ type AssetImportMessage = {
 export function useAssetImportDropzone({
     activeFolderId,
     activeFolderName,
+    activeProjectId,
     addAssetOnce,
     assetInputRef,
     message,
@@ -22,6 +23,7 @@ export function useAssetImportDropzone({
 }: {
     activeFolderId?: string;
     activeFolderName: string;
+    activeProjectId?: string;
     addAssetOnce: (asset: AssetWriteInput, options?: { blob?: Blob }) => Promise<string>;
     assetInputRef: RefObject<HTMLInputElement | null>;
     message: AssetImportMessage;
@@ -32,13 +34,17 @@ export function useAssetImportDropzone({
     const [isDraggingUpload, setIsDraggingUpload] = useState(false);
 
     const importAssetFiles = async (files?: FileList | File[]) => {
+        if (!activeProjectId) {
+            message.warning("请先选择所属项目，再导入资产");
+            return;
+        }
         const fileList = importableAssetFiles(files);
         if (!fileList.length) {
             message.warning("请选择图片、视频、音频或素材压缩包");
             return;
         }
         try {
-            const result = await importAssetFileList(fileList, { folderId: activeFolderId, addAssetOnce });
+            const result = await importAssetFileList(fileList, { folderId: activeFolderId, projectId: activeProjectId, addAssetOnce });
             setPage(1);
             onImported?.(result.assetIds);
             message.success(assetImportSuccessMessage(result.count, activeFolderName));

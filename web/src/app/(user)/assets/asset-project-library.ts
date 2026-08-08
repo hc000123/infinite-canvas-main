@@ -40,14 +40,17 @@ export function assetInProjectLibrary(asset: Pick<Asset, "metadata"> | null | un
 }
 
 export function buildProjectLibraryAssetPatch(asset: Asset, projectId: string, now: string, role: AssetProjectLibraryEntry["role"] = "editor") {
-    const entries = assetProjectLibraryEntries(asset);
+    return { metadata: buildProjectLibraryMetadata(asset.metadata, projectId, now, role) };
+}
+
+export function buildProjectLibraryMetadata(metadata: Asset["metadata"], projectId: string, now: string, role: AssetProjectLibraryEntry["role"] = "owner") {
+    if (!projectId) return metadata || {};
+    const entries = assetProjectLibraryEntries({ metadata });
     const existing = entries.find((entry) => entry.projectId === projectId);
     const nextEntry: AssetProjectLibraryEntry = existing ? { ...existing, role, syncStatus: existing.syncStatus || "local", updatedAt: now } : { projectId, visibility: "project", role, syncStatus: "local", addedAt: now, updatedAt: now };
     return {
-        metadata: {
-            ...(asset.metadata || {}),
-            projectLibraries: existing ? entries.map((entry) => (entry.projectId === projectId ? nextEntry : entry)) : [...entries, nextEntry],
-        },
+        ...(metadata || {}),
+        projectLibraries: existing ? entries.map((entry) => (entry.projectId === projectId ? nextEntry : entry)) : [...entries, nextEntry],
     };
 }
 

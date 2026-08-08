@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import type { Asset, AssetFolder, AssetKind } from "@/stores/use-asset-store";
+import type { Asset, AssetFolder, AssetKind, AssetSubject } from "@/stores/use-asset-store";
 import type { CanvasProject } from "../canvas/stores/use-canvas-store";
 import type { ScriptEpisode } from "../canvas/utils/script-management";
 import { isReadableProductionBibleItem, type ProductionBibleItem } from "../canvas/utils/production-bible";
@@ -45,9 +45,10 @@ type Props = {
     storyboardGroups: StoryboardGroup[];
     storyboardShots: StoryboardShot[];
     storyboardTableShots: StoryboardTableShot[];
+    subjects: AssetSubject[];
 };
 
-export function useAssetPageQuery({ assets, creativeProjects, folders, initialProjectId, previewAsset, productionBibleItems, projects, scriptEpisodes, shotGroups, storyboardGroups, storyboardShots, storyboardTableShots }: Props) {
+export function useAssetPageQuery({ assets, creativeProjects, folders, initialProjectId, previewAsset, productionBibleItems, projects, scriptEpisodes, shotGroups, storyboardGroups, storyboardShots, storyboardTableShots, subjects }: Props) {
     const [keyword, setKeyword] = useState("");
     const [kindFilter, setKindFilter] = useState<AssetKind | "all">("all");
     const [favoriteOnly, setFavoriteOnly] = useState(false);
@@ -254,8 +255,9 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
                 projectOrder: projectContexts.map((project) => project.id),
                 projectReferencedAssetIdsByProject,
                 projectTitles: projectLibraryProjectTitles,
+                subjectProjectIds: subjects.filter((subject) => !projectContextFilter || subject.projectId === projectContextFilter).map((subject) => subject.projectId),
             }),
-        [filteredAssets, folderMap, projectContextFilter, projectContexts, projectLibraryProjectTitles, projectReferencedAssetIdsByProject, visibleProductionBibleItems],
+        [filteredAssets, folderMap, projectContextFilter, projectContexts, projectLibraryProjectTitles, projectReferencedAssetIdsByProject, subjects, visibleProductionBibleItems],
     );
     const assetGroupPages = useMemo(() => (projectContextFilter ? [allAssetGroups] : packAssetProjectGroupPages(allAssetGroups)), [allAssetGroups, projectContextFilter]);
     const pageCount = Math.max(1, assetGroupPages.length);

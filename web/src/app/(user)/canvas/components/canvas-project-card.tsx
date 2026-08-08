@@ -9,7 +9,7 @@ import { useCanvasUiStore } from "../stores/use-canvas-ui-store";
 import { exportCanvasProjects } from "../utils/canvas-export";
 import { canvasProjectPresetSummary } from "../utils/canvas-project-preset";
 
-export function CanvasProjectCard({ project }: { project: CanvasProject }) {
+export function CanvasProjectCard({ project, projectTitle }: { project: CanvasProject; projectTitle?: string }) {
     const router = useRouter();
     const renameProject = useCanvasStore((state) => state.renameProject);
     const selectedIds = useCanvasUiStore((state) => state.selectedProjectIds);
@@ -54,6 +54,7 @@ export function CanvasProjectCard({ project }: { project: CanvasProject }) {
                         <p className="mt-3 text-sm leading-6 text-[var(--studio-text-secondary)]">
                             {project.nodes.length} 个节点 · {project.connections.length} 条连线
                         </p>
+                        {projectTitle ? <p className="mt-1 truncate text-xs leading-5 text-[var(--studio-text-muted)]">所属项目：{projectTitle}</p> : null}
                         {project.preset ? <p className="mt-1 break-words text-xs leading-5 text-[var(--studio-text-muted)]">{canvasProjectPresetSummary(project.preset)}</p> : null}
                     </button>
                 )}

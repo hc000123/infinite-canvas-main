@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { ChevronDown, ChevronUp, FolderPlus, PencilLine, Search, Star, Trash2 } from "lucide-react";
-import { Button, Input, Select, Tag } from "antd";
+import { ChevronDown, ChevronUp, CircleHelp, FolderPlus, PencilLine, Star, Trash2 } from "lucide-react";
+import { Button, Select, Tag } from "antd";
 
 import { cn } from "@/lib/utils";
 import type { AssetFolder, AssetKind } from "@/stores/use-asset-store";
@@ -67,13 +67,6 @@ type AssetFilterPanelValues = {
     storyboardGroupFilter: string;
 };
 
-const kindOptions = [
-    { label: "全部", value: "all" },
-    { label: "文本", value: "text" },
-    { label: "图片", value: "image" },
-    { label: "视频", value: "video" },
-    { label: "音频", value: "audio" },
-];
 export function AssetFilterPanel({ actions, counts, options, values }: { actions: AssetFilterPanelActions; counts: AssetFilterPanelCounts; options: AssetFilterPanelOptions; values: AssetFilterPanelValues }) {
     const {
         activeFolderId,
@@ -85,8 +78,6 @@ export function AssetFilterPanel({ actions, counts, options, values }: { actions
         generationModelProviderFilter,
         generationSourceFilter,
         generationTaskFilter,
-        kindFilter,
-        keyword,
         projectContextFilter,
         projectLibraryFilter,
         referenceVersionFilter,
@@ -94,7 +85,7 @@ export function AssetFilterPanel({ actions, counts, options, values }: { actions
         storyboardGroupFilter,
     } = values;
     const { folderCounts, outdatedUsageCount, validAssetCount } = counts;
-    const { canvasProjectOptions, episodeOptions, generationFilterOptions, projectOptions, regularFolders, storyboardGroupOptions } = options;
+    const { canvasProjectOptions, episodeOptions, generationFilterOptions, regularFolders, storyboardGroupOptions } = options;
     const {
         onCanvasLibraryFilterChange,
         onClearSelectedOutdatedUsages,
@@ -108,9 +99,6 @@ export function AssetFilterPanel({ actions, counts, options, values }: { actions
         onGenerationModelProviderFilterChange,
         onGenerationSourceFilterChange,
         onGenerationTaskFilterChange,
-        onKindFilterChange,
-        onKeywordChange,
-        onProjectContextFilterChange,
         onProjectLibraryFilterChange,
         onReferenceVersionFilterChange,
         onSourceScopeChange,
@@ -127,18 +115,12 @@ export function AssetFilterPanel({ actions, counts, options, values }: { actions
         generationActionFilter ||
         generationModelProviderFilter ||
         generationTaskFilter !== "all" ||
-        (!projectContextFilter && folderFilter !== "all"),
+        favoriteOnly ||
+        sourceScope !== "all" ||
+        folderFilter !== "all",
     );
     const showAdvancedFilters = advancedFiltersExpanded;
     const episodeAssetCount = episodeOptions.reduce((sum, option) => sum + option.count, 0);
-    const selectAllProjects = () => {
-        onProjectContextFilterChange("");
-        onClearSelectedOutdatedUsages();
-    };
-    const selectProject = (projectId: string) => {
-        onProjectContextFilterChange(projectId);
-        onClearSelectedOutdatedUsages();
-    };
     const selectCanvas = (canvasId: string) => {
         onCanvasLibraryFilterChange(canvasId);
         onStoryboardGroupFilterChange("");
@@ -148,201 +130,170 @@ export function AssetFilterPanel({ actions, counts, options, values }: { actions
     };
     const selectRegularFolder = (value: string) => {
         onCanvasLibraryFilterChange("");
-        onProjectContextFilterChange("");
         onFolderFilterChange(value);
     };
     return (
         <>
-            <div className="studio-toolbar mt-4 flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
-                <Input
-                    className="studio-command-input min-w-0 flex-1"
-                    size="large"
-                    allowClear
-                    prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />}
-                    value={keyword}
-                    placeholder="搜索标题、内容、标签或来源"
-                    onChange={(event) => onKeywordChange(event.target.value)}
-                />
+            <div className="mt-3 flex min-h-10 items-center justify-between gap-3 rounded-lg bg-[var(--studio-panel-muted-bg)] px-3 py-2 text-sm text-[var(--studio-text-secondary)]">
+                <span className="inline-flex min-w-0 items-center gap-2">
+                    <CircleHelp className="size-4 shrink-0 text-[var(--studio-text-muted)]" />
+                    <span className="truncate">{projectContextFilter ? "可将文件直接拖入当前项目，导入后会自动绑定项目" : "选择项目后，可批量导入并自动绑定资产"}</span>
+                </span>
                 <Button type="text" className="shrink-0 !text-[var(--studio-text-secondary)]" icon={showAdvancedFilters ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />} onClick={() => setAdvancedFiltersExpanded((value) => !value)}>
                     {showAdvancedFilters ? "收起筛选" : "更多筛选"}
                     {!showAdvancedFilters && hasActiveAdvancedFilter ? " · 已启用" : ""}
                 </Button>
             </div>
 
-            <div className="studio-rail mt-3 grid gap-0 px-4 text-left">
-                <FilterBlock label="类型">
-                    <div className="flex flex-wrap gap-2">
-                        {kindOptions.map((option) => (
-                            <Tag.CheckableTag key={option.value} checked={kindFilter === option.value} className={cn("prompt-filter-tag", kindFilter === option.value && "is-active")} onChange={() => onKindFilterChange(option.value as AssetKind | "all")}>
-                                {option.label}
+            {showAdvancedFilters ? (
+                <div className="studio-rail mt-3 grid gap-0 px-4 text-left">
+                    <FilterBlock label="收藏">
+                        <div className="flex flex-wrap gap-2">
+                            <Tag.CheckableTag checked={favoriteOnly} className={cn("prompt-filter-tag", favoriteOnly && "is-active")} onChange={onFavoriteOnlyChange}>
+                                <span className="inline-flex items-center gap-1.5">
+                                    <Star className={cn("size-3.5", favoriteOnly && "fill-current")} />
+                                    仅看收藏
+                                </span>
                             </Tag.CheckableTag>
-                        ))}
-                        <Tag.CheckableTag checked={favoriteOnly} className={cn("prompt-filter-tag", favoriteOnly && "is-active")} onChange={onFavoriteOnlyChange}>
-                            <span className="inline-flex items-center gap-1.5">
-                                <Star className={cn("size-3.5", favoriteOnly && "fill-current")} />
-                                收藏
-                            </span>
-                        </Tag.CheckableTag>
-                    </div>
-                </FilterBlock>
-                <FilterBlock label="项目">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Tag.CheckableTag checked={!projectContextFilter && !canvasLibraryFilter && folderFilter === "all"} className={cn("prompt-filter-tag", !projectContextFilter && !canvasLibraryFilter && folderFilter === "all" && "is-active")} onChange={selectAllProjects}>
-                            全部项目 {validAssetCount}
-                        </Tag.CheckableTag>
-                        <Select
-                            allowClear
-                            showSearch
-                            className="min-w-52"
-                            placeholder="选择项目"
-                            value={projectContextFilter || undefined}
-                            options={projectOptions}
-                            optionFilterProp="label"
-                            disabled={!projectOptions.length}
-                            onChange={(value) => (value ? selectProject(value) : selectAllProjects())}
-                        />
-                    </div>
-                </FilterBlock>
-                {projectContextFilter ? (
-                    <FilterBlock label="来源">
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Tag.CheckableTag checked={sourceScope === "all"} className={cn("prompt-filter-tag", sourceScope === "all" && "is-active")} onChange={() => onSourceScopeChange("all")}>
-                                全部来源
-                            </Tag.CheckableTag>
-                            <Tag.CheckableTag checked={sourceScope === "workflow"} className={cn("prompt-filter-tag", sourceScope === "workflow" && "is-active")} onChange={() => onSourceScopeChange("workflow")}>
-                                工作流
-                            </Tag.CheckableTag>
-                            <Tag.CheckableTag checked={sourceScope === "canvas"} className={cn("prompt-filter-tag", sourceScope === "canvas" && "is-active")} onChange={() => onSourceScopeChange("canvas")}>
-                                画布
-                            </Tag.CheckableTag>
-                            {projectContextFilter && sourceScope === "canvas" ? (
-                                <Select
-                                    allowClear
-                                    showSearch
-                                    className="min-w-52"
-                                    placeholder="选择画布"
-                                    value={canvasLibraryFilter || undefined}
-                                    options={canvasProjectOptions}
-                                    optionFilterProp="label"
-                                    disabled={!canvasProjectOptions.length}
-                                    onChange={(value) => selectCanvas(value || "")}
-                                />
-                            ) : null}
                         </div>
                     </FilterBlock>
-                ) : null}
-                {showAdvancedFilters ? (
-                    <>
-                        {projectContextFilter && sourceScope !== "canvas" ? (
-                            <FilterBlock label="范围">
-                                <div className="flex flex-wrap gap-2">
+                    {projectContextFilter ? (
+                        <FilterBlock label="来源">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Tag.CheckableTag checked={sourceScope === "all"} className={cn("prompt-filter-tag", sourceScope === "all" && "is-active")} onChange={() => onSourceScopeChange("all")}>
+                                    全部来源
+                                </Tag.CheckableTag>
+                                <Tag.CheckableTag checked={sourceScope === "workflow"} className={cn("prompt-filter-tag", sourceScope === "workflow" && "is-active")} onChange={() => onSourceScopeChange("workflow")}>
+                                    工作流
+                                </Tag.CheckableTag>
+                                <Tag.CheckableTag checked={sourceScope === "canvas"} className={cn("prompt-filter-tag", sourceScope === "canvas" && "is-active")} onChange={() => onSourceScopeChange("canvas")}>
+                                    画布
+                                </Tag.CheckableTag>
+                                {sourceScope === "canvas" ? (
                                     <Select
-                                        size="middle"
                                         allowClear
                                         showSearch
-                                        className="min-w-48"
-                                        placeholder="分镜组筛选"
-                                        value={storyboardGroupFilter || undefined}
-                                        options={storyboardGroupOptions}
+                                        className="min-w-52"
+                                        placeholder="选择画布"
+                                        value={canvasLibraryFilter || undefined}
+                                        options={canvasProjectOptions}
                                         optionFilterProp="label"
-                                        disabled={!storyboardGroupOptions.length}
-                                        onChange={(value) => onStoryboardGroupFilterChange(value || "")}
+                                        disabled={!canvasProjectOptions.length}
+                                        onChange={(value) => selectCanvas(value || "")}
                                     />
-                                    <Select
-                                        size="middle"
-                                        className="min-w-36"
-                                        value={projectLibraryFilter}
-                                        options={[
-                                            { label: "项目库：全部", value: "all" },
-                                            { label: "仅项目库", value: "shared" },
-                                            { label: "未入项目库", value: "not_shared" },
-                                        ]}
-                                        onChange={(value) => onProjectLibraryFilterChange(value as ProjectLibraryFilter)}
-                                    />
-                                    <Select
-                                        size="middle"
-                                        className="min-w-36"
-                                        value={referenceVersionFilter}
-                                        options={[
-                                            { label: "引用：全部", value: "all" },
-                                            { label: `过期引用${outdatedUsageCount ? ` ${outdatedUsageCount}` : ""}`, value: "outdated" },
-                                        ]}
-                                        onChange={(value) => {
-                                            onReferenceVersionFilterChange(value as ReferenceVersionFilter);
-                                            onClearSelectedOutdatedUsages();
-                                        }}
-                                    />
-                                </div>
-                            </FilterBlock>
-                        ) : null}
-                        {projectContextFilter && sourceScope !== "canvas" ? (
-                            <FilterBlock label="集数">
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <Tag.CheckableTag checked={!episodeFilter} className={cn("prompt-filter-tag", !episodeFilter && "is-active")} onChange={() => onEpisodeFilterChange("")}>
-                                        全部集数 {episodeAssetCount}
-                                    </Tag.CheckableTag>
-                                    {episodeOptions.map((option) => (
-                                        <Tag.CheckableTag key={option.value} checked={episodeFilter === option.value} className={cn("prompt-filter-tag", episodeFilter === option.value && "is-active")} onChange={() => onEpisodeFilterChange(option.value)}>
-                                            {option.label} {option.count}
-                                        </Tag.CheckableTag>
-                                    ))}
-                                    {!episodeOptions.length ? <span className="text-sm text-[var(--studio-text-muted)]">暂无可筛选集数</span> : null}
-                                </div>
-                            </FilterBlock>
-                        ) : null}
-                        <FilterBlock align="start" label="文件夹">
-                            <div className="flex flex-wrap items-center gap-2">
-                                <Tag.CheckableTag checked={folderFilter === "all"} className={cn("prompt-filter-tag", folderFilter === "all" && "is-active")} onChange={() => selectRegularFolder("all")}>
-                                    全部 {validAssetCount}
-                                </Tag.CheckableTag>
-                                <Tag.CheckableTag checked={folderFilter === "root"} className={cn("prompt-filter-tag", folderFilter === "root" && "is-active")} onChange={() => selectRegularFolder("root")}>
-                                    未分组 {folderCounts.root || 0}
-                                </Tag.CheckableTag>
-                                {regularFolders.map((folder) => (
-                                    <Tag.CheckableTag key={folder.id} checked={folderFilter === folder.id} className={cn("prompt-filter-tag", folderFilter === folder.id && "is-active")} onChange={() => selectRegularFolder(folder.id)}>
-                                        {folder.name} {folderCounts[folder.id] || 0}
-                                    </Tag.CheckableTag>
-                                ))}
-                                <Button size="middle" icon={<FolderPlus className="size-3.5" />} onClick={onCreateFolder}>
-                                    新建文件夹
-                                </Button>
-                                {activeRegularFolder ? (
-                                    <>
-                                        <AssetIconButton title="重命名文件夹" icon={<PencilLine className="size-3.5" />} onClick={() => onEditFolder(activeRegularFolder)} />
-                                        <AssetIconButton title="删除文件夹" icon={<Trash2 className="size-3.5" />} danger onClick={() => onDeleteFolder(activeRegularFolder)} />
-                                    </>
                                 ) : null}
                             </div>
                         </FilterBlock>
-                        <FilterBlock align="start" label="生成">
-                            <div className="grid gap-2 md:grid-cols-4">
-                                <Select size="middle" allowClear placeholder="来源" value={generationSourceFilter} options={generationFilterOptions.sources} onChange={onGenerationSourceFilterChange} />
-                                <Select size="middle" allowClear placeholder="生成方式" value={generationActionFilter} options={generationFilterOptions.actions} onChange={onGenerationActionFilterChange} />
+                    ) : null}
+                    {projectContextFilter && sourceScope !== "canvas" ? (
+                        <FilterBlock label="范围">
+                            <div className="flex flex-wrap gap-2">
                                 <Select
                                     size="middle"
                                     allowClear
                                     showSearch
-                                    placeholder="模型 / 供应商"
-                                    value={generationModelProviderFilter}
-                                    options={generationFilterOptions.modelProviders}
+                                    className="min-w-48"
+                                    placeholder="分镜组筛选"
+                                    value={storyboardGroupFilter || undefined}
+                                    options={storyboardGroupOptions}
                                     optionFilterProp="label"
-                                    onChange={onGenerationModelProviderFilterChange}
+                                    disabled={!storyboardGroupOptions.length}
+                                    onChange={(value) => onStoryboardGroupFilterChange(value || "")}
                                 />
                                 <Select
                                     size="middle"
-                                    value={generationTaskFilter}
+                                    className="min-w-36"
+                                    value={projectLibraryFilter}
                                     options={[
-                                        { label: "全部任务", value: "all" },
-                                        { label: "有 taskId", value: "with" },
-                                        { label: "无 taskId", value: "without" },
+                                        { label: "项目库：全部", value: "all" },
+                                        { label: "仅项目库", value: "shared" },
+                                        { label: "未入项目库", value: "not_shared" },
                                     ]}
-                                    onChange={(value) => onGenerationTaskFilterChange(value as GenerationTaskFilter)}
+                                    onChange={(value) => onProjectLibraryFilterChange(value as ProjectLibraryFilter)}
+                                />
+                                <Select
+                                    size="middle"
+                                    className="min-w-36"
+                                    value={referenceVersionFilter}
+                                    options={[
+                                        { label: "引用：全部", value: "all" },
+                                        { label: `过期引用${outdatedUsageCount ? ` ${outdatedUsageCount}` : ""}`, value: "outdated" },
+                                    ]}
+                                    onChange={(value) => {
+                                        onReferenceVersionFilterChange(value as ReferenceVersionFilter);
+                                        onClearSelectedOutdatedUsages();
+                                    }}
                                 />
                             </div>
                         </FilterBlock>
-                    </>
-                ) : null}
-            </div>
+                    ) : null}
+                    {projectContextFilter && sourceScope !== "canvas" ? (
+                        <FilterBlock label="集数">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Tag.CheckableTag checked={!episodeFilter} className={cn("prompt-filter-tag", !episodeFilter && "is-active")} onChange={() => onEpisodeFilterChange("")}>
+                                    全部集数 {episodeAssetCount}
+                                </Tag.CheckableTag>
+                                {episodeOptions.map((option) => (
+                                    <Tag.CheckableTag key={option.value} checked={episodeFilter === option.value} className={cn("prompt-filter-tag", episodeFilter === option.value && "is-active")} onChange={() => onEpisodeFilterChange(option.value)}>
+                                        {option.label} {option.count}
+                                    </Tag.CheckableTag>
+                                ))}
+                                {!episodeOptions.length ? <span className="text-sm text-[var(--studio-text-muted)]">暂无可筛选集数</span> : null}
+                            </div>
+                        </FilterBlock>
+                    ) : null}
+                    <FilterBlock align="start" label="文件夹">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Tag.CheckableTag checked={folderFilter === "all"} className={cn("prompt-filter-tag", folderFilter === "all" && "is-active")} onChange={() => selectRegularFolder("all")}>
+                                全部 {validAssetCount}
+                            </Tag.CheckableTag>
+                            <Tag.CheckableTag checked={folderFilter === "root"} className={cn("prompt-filter-tag", folderFilter === "root" && "is-active")} onChange={() => selectRegularFolder("root")}>
+                                未分组 {folderCounts.root || 0}
+                            </Tag.CheckableTag>
+                            {regularFolders.map((folder) => (
+                                <Tag.CheckableTag key={folder.id} checked={folderFilter === folder.id} className={cn("prompt-filter-tag", folderFilter === folder.id && "is-active")} onChange={() => selectRegularFolder(folder.id)}>
+                                    {folder.name} {folderCounts[folder.id] || 0}
+                                </Tag.CheckableTag>
+                            ))}
+                            <Button size="middle" icon={<FolderPlus className="size-3.5" />} onClick={onCreateFolder}>
+                                新建文件夹
+                            </Button>
+                            {activeRegularFolder ? (
+                                <>
+                                    <AssetIconButton title="重命名文件夹" icon={<PencilLine className="size-3.5" />} onClick={() => onEditFolder(activeRegularFolder)} />
+                                    <AssetIconButton title="删除文件夹" icon={<Trash2 className="size-3.5" />} danger onClick={() => onDeleteFolder(activeRegularFolder)} />
+                                </>
+                            ) : null}
+                        </div>
+                    </FilterBlock>
+                    <FilterBlock align="start" label="生成">
+                        <div className="grid gap-2 md:grid-cols-4">
+                            <Select size="middle" allowClear placeholder="来源" value={generationSourceFilter} options={generationFilterOptions.sources} onChange={onGenerationSourceFilterChange} />
+                            <Select size="middle" allowClear placeholder="生成方式" value={generationActionFilter} options={generationFilterOptions.actions} onChange={onGenerationActionFilterChange} />
+                            <Select
+                                size="middle"
+                                allowClear
+                                showSearch
+                                placeholder="模型 / 供应商"
+                                value={generationModelProviderFilter}
+                                options={generationFilterOptions.modelProviders}
+                                optionFilterProp="label"
+                                onChange={onGenerationModelProviderFilterChange}
+                            />
+                            <Select
+                                size="middle"
+                                value={generationTaskFilter}
+                                options={[
+                                    { label: "全部任务", value: "all" },
+                                    { label: "有 taskId", value: "with" },
+                                    { label: "无 taskId", value: "without" },
+                                ]}
+                                onChange={(value) => onGenerationTaskFilterChange(value as GenerationTaskFilter)}
+                            />
+                        </div>
+                    </FilterBlock>
+                </div>
+            ) : null}
         </>
     );
 }

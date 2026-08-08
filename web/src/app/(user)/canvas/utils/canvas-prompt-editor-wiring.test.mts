@@ -71,3 +71,9 @@ test("generation serializes structured references against the latest input order
     assert.match(promptPanel, /serializePromptDocument\(promptDocument, promptReferenceOptions\)\.trim\(\)/);
     assert.match(layer, /serializePromptDocument\(target\.metadata\.promptDocument, buildReferenceMentionOptions\(inputs\)\)/);
 });
+
+test("video submit keeps the prompt visible while generation is running", () => {
+    const promptPanel = readCanvasFile("../components/canvas-node-prompt-panel.tsx");
+
+    assert.match(promptPanel, /if \(!isGeneratedMedia && mode !== "video"\)/);
+});

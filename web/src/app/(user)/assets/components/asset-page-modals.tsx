@@ -108,7 +108,7 @@ export function AssetPageModals({
             </Modal>
 
             <Modal rootClassName="studio-modal" title="批量删除素材" open={bulkDeleteOpen} onCancel={onCancelBulkDelete} onOk={onApplyBulkDelete} okText="删除" okButtonProps={{ danger: true }} cancelText="取消" destroyOnHidden>
-                确定删除已选择的 {selectedCount} 个素材吗？删除后会从我的素材中移除。
+                确定删除已选择的 {selectedCount} 个资产吗？删除后会从资产中移除。
             </Modal>
 
             <Modal rootClassName="studio-modal" title="批量删除设定" open={bulkProductionBibleDeleteOpen} onCancel={onCancelBulkProductionBibleDelete} onOk={onApplyBulkProductionBibleDelete} okText="删除" okButtonProps={{ danger: true }} cancelText="取消" destroyOnHidden>
@@ -135,7 +135,7 @@ export function AssetPageModals({
             </Modal>
 
             <Modal rootClassName="studio-modal" title="删除素材" open={Boolean(deletingAsset)} onCancel={onCancelDeleteAsset} onOk={onConfirmDeleteAsset} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
-                确定删除「{deletingAsset?.title}」吗？删除后会从我的素材中移除。
+                确定删除「{deletingAsset?.title}」吗？删除后会从资产中移除。
             </Modal>
 
             <Modal rootClassName="studio-modal" title="删除设定" open={Boolean(deletingProductionBibleItem)} onCancel={onCancelDeleteProductionBibleItem} onOk={onConfirmDeleteProductionBibleItem} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">

@@ -1,8 +1,9 @@
 import type { UploadedFile } from "../../../services/file-storage.ts";
 import type { UploadedImage } from "../../../services/image-storage.ts";
 import type { Asset, AssetWriteInput } from "../../../stores/use-asset-store.ts";
+import { buildProjectLibraryMetadata } from "./asset-project-library.ts";
 
-export function importedImageAssetInput(fileName: string, image: UploadedImage, folderId?: string): AssetWriteInput {
+export function importedImageAssetInput(fileName: string, image: UploadedImage, folderId?: string, projectId?: string): AssetWriteInput {
     return {
         kind: "image",
         title: importedFileTitle(fileName),
@@ -11,7 +12,7 @@ export function importedImageAssetInput(fileName: string, image: UploadedImage, 
         tags: [],
         source: "本地导入",
         note: "",
-        metadata: { source: "import" },
+        metadata: buildProjectLibraryMetadata({ source: "import" }, projectId || "", new Date().toISOString()),
         data: {
             dataUrl: image.url,
             storageKey: image.storageKey,
@@ -23,7 +24,7 @@ export function importedImageAssetInput(fileName: string, image: UploadedImage, 
     };
 }
 
-export function importedMediaAssetInput(fileName: string, kind: "video" | "audio", media: UploadedFile, folderId?: string): AssetWriteInput {
+export function importedMediaAssetInput(fileName: string, kind: "video" | "audio", media: UploadedFile, folderId?: string, projectId?: string): AssetWriteInput {
     return {
         kind,
         title: importedFileTitle(fileName),
@@ -32,7 +33,7 @@ export function importedMediaAssetInput(fileName: string, kind: "video" | "audio
         tags: [],
         source: "本地导入",
         note: "",
-        metadata: { source: "import" },
+        metadata: buildProjectLibraryMetadata({ source: "import" }, projectId || "", new Date().toISOString()),
         data:
             kind === "video"
                 ? {
@@ -52,18 +53,20 @@ export function importedMediaAssetInput(fileName: string, kind: "video" | "audio
     } as AssetWriteInput;
 }
 
-export function importedPackageAssetInput(asset: Asset, folderId?: string): AssetWriteInput {
+export function importedPackageAssetInput(asset: Asset, folderId?: string, projectId?: string): AssetWriteInput {
     const payload = { ...asset } as Record<string, unknown>;
     delete payload.id;
     delete payload.createdAt;
     delete payload.updatedAt;
     if (folderId) payload.folderId = folderId;
     else delete payload.folderId;
+    if (projectId || asset.metadata) payload.metadata = buildProjectLibraryMetadata(asset.metadata, projectId || "", new Date().toISOString());
+    else delete payload.metadata;
     return payload as AssetWriteInput;
 }
 
 export function assetImportSuccessMessage(count: number, folderName?: string) {
-    return `已导入 ${count} 个素材${folderName ? `到「${folderName}」` : ""}`;
+    return `已导入 ${count} 个资产${folderName ? `到「${folderName}」` : ""}`;
 }
 
 export function uniqueImportedAssetIds(ids: string[]) {

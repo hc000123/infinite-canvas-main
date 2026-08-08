@@ -1,9 +1,7 @@
 "use client";
 
 import { Download, Library, Trash2 } from "lucide-react";
-import { Button, Select } from "antd";
-
-import type { AssetSortMode } from "../asset-page-filters";
+import { Button } from "antd";
 
 type BulkReviewAction = "submit" | "refresh" | "";
 
@@ -22,7 +20,6 @@ export function AssetListToolbar({
     selectedSummary,
     selectedVolcengineRefreshCount,
     selectedVolcengineSubmitCount,
-    sortMode,
     onAddToProjectLibrary,
     onBulkDelete,
     onBulkDeleteProductionBibleItems,
@@ -35,7 +32,6 @@ export function AssetListToolbar({
     onRemoveFromProjectLibrary,
     onSelectFiltered,
     onSelectVisibleProductionBibleItems,
-    onSortModeChange,
     onSubmitSelectedReviews,
 }: {
     allFilteredSelected: boolean;
@@ -52,7 +48,6 @@ export function AssetListToolbar({
     selectedSummary: string;
     selectedVolcengineRefreshCount: number;
     selectedVolcengineSubmitCount: number;
-    sortMode: AssetSortMode;
     onAddToProjectLibrary: () => void;
     onBulkDelete: () => void;
     onBulkDeleteProductionBibleItems: () => void;
@@ -65,16 +60,15 @@ export function AssetListToolbar({
     onRemoveFromProjectLibrary: () => void;
     onSelectFiltered: () => void;
     onSelectVisibleProductionBibleItems: () => void;
-    onSortModeChange: (value: AssetSortMode) => void;
     onSubmitSelectedReviews: () => void;
 }) {
     return (
         <div className="grid gap-3">
             <div className="studio-toolbar flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
-                    <div className="text-xs font-semibold tracking-[0.16em] text-[var(--studio-accent)]">素材结果</div>
+                    <div className="text-xs font-semibold tracking-[0.16em] text-[var(--studio-accent)]">资产结果</div>
                     <div className="mt-1 text-sm text-[var(--studio-text-secondary)]">
-                        当前筛选 <span className="font-semibold text-[var(--studio-text-primary)]">{filteredCount}</span> 个素材
+                        当前筛选 <span className="font-semibold text-[var(--studio-text-primary)]">{filteredCount}</span> 个资产
                         {productionBibleCount ? (
                             <>
                                 {" / "}
@@ -86,19 +80,6 @@ export function AssetListToolbar({
                     </div>
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
-                    <Select
-                        size="middle"
-                        className="w-32"
-                        value={sortMode}
-                        options={[
-                            { label: "名称升序", value: "title_asc" },
-                            { label: "原始顺序", value: "default" },
-                            { label: "最近更新", value: "updated_desc" },
-                            { label: "最近生成", value: "generation_desc" },
-                            { label: "创建时间", value: "created_desc" },
-                        ]}
-                        onChange={(value) => onSortModeChange(value as AssetSortMode)}
-                    />
                     <Button size="middle" disabled={!filteredCount || allFilteredSelected} onClick={onSelectFiltered}>
                         全选当前素材
                     </Button>

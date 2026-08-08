@@ -38,7 +38,7 @@ export function useCanvasAssistantWriteActions({
     setSelectedNodeIds: Dispatch<SetStateAction<Set<string>>>;
 }) {
     const insertAssistantImage = useCallback(
-        async (image: CanvasAssistantImage) => {
+        async (image: CanvasAssistantImage, title = "助手图片") => {
             const storedImage = image.storageKey ? { url: image.dataUrl, storageKey: image.storageKey, width: 1, height: 1, bytes: 0, mimeType: "image/png" } : await uploadImage(image.dataUrl);
             const meta = storedImage.width === 1 && storedImage.height === 1 ? await readImageMeta(storedImage.url) : storedImage;
             const config = fitNodeSize(meta.width, meta.height);
@@ -49,7 +49,7 @@ export function useCanvasAssistantWriteActions({
                     {
                         id,
                         type: CanvasNodeType.Image,
-                        title: "助手图片",
+                        title,
                         position: { x: center.x - config.width / 2, y: center.y - config.height / 2 },
                         width: config.width,
                         height: config.height,
@@ -121,15 +121,18 @@ export function useCanvasAssistantWriteActions({
                 setNodes((prev) => [...prev, placeCanvasNodeAwayFromNodes(buildInsertedMediaAssetNode(payload, id, center), prev)]);
                 setSelectedNodeIds(new Set([id]));
             } else {
-                await insertAssistantImage({
-                    id: `asset-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-                    prompt: payload.title,
-                    dataUrl: payload.dataUrl,
-                    storageKey: payload.storageKey,
-                    sourceAssetId: payload.sourceAssetId,
-                    assetVersion: payload.assetVersion,
-                    volcengineAsset: payload.volcengineAsset,
-                });
+                await insertAssistantImage(
+                    {
+                        id: `asset-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                        prompt: payload.title,
+                        dataUrl: payload.dataUrl,
+                        storageKey: payload.storageKey,
+                        sourceAssetId: payload.sourceAssetId,
+                        assetVersion: payload.assetVersion,
+                        volcengineAsset: payload.volcengineAsset,
+                    },
+                    payload.title,
+                );
             }
         },
         [getCanvasCenter, insertAssistantImage, insertAssistantText, setNodes, setSelectedNodeIds],

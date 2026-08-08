@@ -131,7 +131,7 @@ export function CanvasNodePromptPanel({ node, canvasAiConfig, isRunning, project
         const text = serializePromptDocument(promptDocument, promptReferenceOptions).trim();
         if (!canSubmit) return;
         onGenerate(node.id, mode, mode === "image" ? appendImageCameraPrompt(text, node.metadata) : text);
-        if (!isGeneratedMedia) {
+        if (!isGeneratedMedia && mode !== "video") {
             setPrompt("");
             setPromptDocument(promptDocumentFromText(""));
             setEditorRevision((revision) => revision + 1);
