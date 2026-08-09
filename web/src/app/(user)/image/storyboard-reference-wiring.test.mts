@@ -8,7 +8,7 @@ test("supports asset, clipboard and upload references per shot", () => {
     assert.match(page, /<AssetPickerModal/);
     assert.match(page, /navigator\.clipboard\.read/);
     assert.match(page, /appendReference/);
-    assert.match(editor, /@参考图/);
+    assert.match(editor, /referenceToken\(index\)/);
     assert.match(editor, /onUpload/);
 });
 

@@ -2,8 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { Asset } from "../../../stores/use-asset-store.ts";
-import { partitionPackageAssets } from "./asset-import-actions.ts";
-import { assetImportSuccessMessage, importedImageAssetInput, importedMediaAssetInput, importedPackageAssetInput, uniqueImportedAssetIds } from "./asset-import-payloads.ts";
+import { assetImportSuccessMessage, importedImageAssetInput, importedMediaAssetInput, importedPackageAssetInput, partitionPackageAssets, uniqueImportedAssetIds } from "./asset-import-payloads.ts";
 
 const now = "2026-06-05T00:00:00.000Z";
 

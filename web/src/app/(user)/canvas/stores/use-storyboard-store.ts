@@ -39,6 +39,7 @@ import {
     type StoryboardWorkbenchImage,
 } from "../utils/storyboard-management";
 import type { ScriptEpisode, ScriptScene } from "../utils/script-management";
+import { removeStoryboardTableShot, removeStoryboardWorkbenchImage, selectStoryboardCandidate } from "./storyboard-workbench-state";
 
 type StoryboardStore = {
     groups: StoryboardGroup[];
@@ -227,12 +228,7 @@ export const useStoryboardStore = create<StoryboardStore>()(
                 set((state) => ({
                     tableShots: state.tableShots.map((shot) => (shot.id === id ? { ...shot, ...normalizeStoryboardTableShot({ ...shot, ...patch }), updatedAt: new Date().toISOString() } : shot)),
                 })),
-            removeTableShot: (id) =>
-                set((state) => ({
-                    tableShots: state.tableShots.filter((shot) => shot.id !== id),
-                    shotGroups: state.shotGroups.map((group) => ({ ...group, shotIds: group.shotIds.filter((shotId) => shotId !== id) })).filter((group) => group.shotIds.length),
-                    workbenchImages: state.workbenchImages.filter((image) => image.shotId !== id),
-                })),
+            removeTableShot: (id) => set((state) => removeStoryboardTableShot(state, id)),
             moveTableShot: (id, direction) => set((state) => ({ tableShots: reorderStoryboardTableShots(state.tableShots, id, direction) })),
             reorderTableShot: (activeId, overId) => set((state) => ({ tableShots: reorderStoryboardTableShotByTarget(state.tableShots, activeId, overId) })),
             addWorkbenchImage: (input) => {
@@ -241,21 +237,8 @@ export const useStoryboardStore = create<StoryboardStore>()(
                 return id;
             },
             updateWorkbenchImage: (id, patch) => set((state) => ({ workbenchImages: state.workbenchImages.map((image) => (image.id === id ? { ...image, ...patch } : image)) })),
-            removeWorkbenchImage: (id) =>
-                set((state) => ({
-                    workbenchImages: state.workbenchImages.filter((image) => image.id !== id),
-                    tableShots: state.tableShots.map((shot) => ({
-                        ...shot,
-                        referenceImageIds: shot.referenceImageIds?.filter((imageId) => imageId !== id),
-                        selectedCandidateId: shot.selectedCandidateId === id ? undefined : shot.selectedCandidateId,
-                    })),
-                })),
-            selectCandidate: (shotId, candidateId) =>
-                set((state) => {
-                    const candidate = candidateId ? state.workbenchImages.find((image) => image.id === candidateId && image.shotId === shotId && image.role === "candidate") : undefined;
-                    if (candidateId && !candidate) return {};
-                    return { tableShots: state.tableShots.map((shot) => (shot.id === shotId ? { ...shot, selectedCandidateId: candidate?.id, updatedAt: new Date().toISOString() } : shot)) };
-                }),
+            removeWorkbenchImage: (id) => set((state) => removeStoryboardWorkbenchImage(state, id)),
+            selectCandidate: (shotId, candidateId) => set((state) => selectStoryboardCandidate(state, shotId, candidateId)),
             createShotGroup: (shotIds) => {
                 const tableShots = get().tableShots.filter((shot) => shotIds.includes(shot.id));
                 const result = createShotGroupFromSelection({ shots: tableShots, id: nanoid() });

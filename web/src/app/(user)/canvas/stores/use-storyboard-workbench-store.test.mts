@@ -1,53 +1,49 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { useStoryboardStore } from "./use-storyboard-store.ts";
+import type { StoryboardTableShot, StoryboardWorkbenchImage } from "../utils/storyboard-management.ts";
+import { removeStoryboardTableShot, removeStoryboardWorkbenchImage, selectStoryboardCandidate } from "./storyboard-workbench-state.ts";
+
+const now = "2026-08-10T00:00:00.000Z";
 
 test("selects only a candidate owned by the same shot", () => {
-    resetStore();
-    const store = useStoryboardStore.getState();
-    const shotId = store.addTableShot(emptyShot());
-    const otherShotId = store.addTableShot({ ...emptyShot(), title: "镜头 2" });
-    const candidateId = store.addWorkbenchImage(workbenchImage(shotId, "candidate"));
-    store.selectCandidate(otherShotId, candidateId);
-    assert.equal(useStoryboardStore.getState().tableShots.find((shot) => shot.id === otherShotId)?.selectedCandidateId, undefined);
-    store.selectCandidate(shotId, candidateId);
-    assert.equal(useStoryboardStore.getState().tableShots.find((shot) => shot.id === shotId)?.selectedCandidateId, candidateId);
-    store.selectCandidate(shotId);
-    assert.equal(useStoryboardStore.getState().tableShots.find((shot) => shot.id === shotId)?.selectedCandidateId, undefined);
+    const shot = tableShot("shot-1");
+    const otherShot = tableShot("shot-2");
+    const candidate = workbenchImage("candidate-1", shot.id, "candidate");
+    const state = { tableShots: [shot, otherShot], workbenchImages: [candidate] };
+
+    const rejected = selectStoryboardCandidate(state, otherShot.id, candidate.id, now);
+    assert.equal(rejected.tableShots.find((item) => item.id === otherShot.id)?.selectedCandidateId, undefined);
+
+    const selected = selectStoryboardCandidate(state, shot.id, candidate.id, now);
+    assert.equal(selected.tableShots.find((item) => item.id === shot.id)?.selectedCandidateId, candidate.id);
+
+    const cleared = selectStoryboardCandidate(selected, shot.id, undefined, now);
+    assert.equal(cleared.tableShots.find((item) => item.id === shot.id)?.selectedCandidateId, undefined);
 });
 
 test("removing a workbench image clears shot pointers", () => {
-    resetStore();
-    const store = useStoryboardStore.getState();
-    const shotId = store.addTableShot(emptyShot());
-    const referenceId = store.addWorkbenchImage(workbenchImage(shotId, "reference"));
-    const candidateId = store.addWorkbenchImage(workbenchImage(shotId, "candidate"));
-    store.updateTableShot(shotId, { referenceImageIds: [referenceId], selectedCandidateId: candidateId });
-    store.removeWorkbenchImage(referenceId);
-    store.removeWorkbenchImage(candidateId);
-    const shot = useStoryboardStore.getState().tableShots.find((item) => item.id === shotId);
-    assert.deepEqual(shot?.referenceImageIds, []);
-    assert.equal(shot?.selectedCandidateId, undefined);
+    const reference = workbenchImage("reference-1", "shot-1", "reference");
+    const candidate = workbenchImage("candidate-1", "shot-1", "candidate");
+    const state = { tableShots: [{ ...tableShot("shot-1"), referenceImageIds: [reference.id], selectedCandidateId: candidate.id }], workbenchImages: [reference, candidate] };
+    const withoutReference = removeStoryboardWorkbenchImage(state, reference.id);
+    const result = removeStoryboardWorkbenchImage(withoutReference, candidate.id);
+    assert.deepEqual(result.tableShots[0].referenceImageIds, []);
+    assert.equal(result.tableShots[0].selectedCandidateId, undefined);
 });
 
 test("removing a table shot removes only its draft workbench images", () => {
-    resetStore();
-    const store = useStoryboardStore.getState();
-    const firstId = store.addTableShot(emptyShot());
-    const secondId = store.addTableShot({ ...emptyShot(), title: "镜头 2" });
-    store.addWorkbenchImage(workbenchImage(firstId, "candidate"));
-    const remainingId = store.addWorkbenchImage(workbenchImage(secondId, "candidate"));
-    store.removeTableShot(firstId);
-    assert.deepEqual(useStoryboardStore.getState().workbenchImages.map((image) => image.id), [remainingId]);
+    const firstShot = tableShot("shot-1");
+    const secondShot = tableShot("shot-2");
+    const firstImage = workbenchImage("candidate-1", firstShot.id, "candidate");
+    const remainingImage = workbenchImage("candidate-2", secondShot.id, "candidate");
+    const result = removeStoryboardTableShot({ tableShots: [firstShot, secondShot], shotGroups: [], workbenchImages: [firstImage, remainingImage] }, firstShot.id);
+    assert.deepEqual(result.workbenchImages.map((image) => image.id), [remainingImage.id]);
 });
 
-function resetStore() {
-    useStoryboardStore.setState({ groups: [], shots: [], tableShots: [], shotGroups: [], workbenchImages: [] });
-}
-
-function emptyShot() {
+function tableShot(id: string) {
     return {
+        id,
         projectId: "project-1",
         canvasId: "canvas-1",
         episodeId: "episode-1",
@@ -67,11 +63,15 @@ function emptyShot() {
         assetNeeds: [],
         assetRefs: [],
         productionBibleRefs: [],
-    };
+        order: 1,
+        createdAt: now,
+        updatedAt: now,
+    } as StoryboardTableShot;
 }
 
-function workbenchImage(shotId: string, role: "candidate" | "reference") {
+function workbenchImage(id: string, shotId: string, role: "candidate" | "reference") {
     return {
+        id,
         projectId: "project-1",
         canvasId: "canvas-1",
         episodeId: "episode-1",
@@ -84,5 +84,6 @@ function workbenchImage(shotId: string, role: "candidate" | "reference") {
         height: 100,
         bytes: 100,
         mimeType: "image/png",
-    };
+        createdAt: now,
+    } as StoryboardWorkbenchImage;
 }

@@ -3,6 +3,13 @@ import type { UploadedImage } from "../../../services/image-storage.ts";
 import type { Asset, AssetWriteInput } from "../../../stores/use-asset-store.ts";
 import { buildProjectLibraryMetadata } from "./asset-project-library.ts";
 
+export function partitionPackageAssets(assets: Asset[]) {
+    return {
+        mediaAssets: assets.filter((asset) => asset.kind === "image" || asset.kind === "video" || asset.kind === "audio"),
+        skippedTextCount: assets.filter((asset) => asset.kind === "text").length,
+    };
+}
+
 export function importedImageAssetInput(fileName: string, image: UploadedImage, folderId?: string, projectId?: string): AssetWriteInput {
     return {
         kind: "image",

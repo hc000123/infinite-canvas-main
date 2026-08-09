@@ -1,9 +1,9 @@
 import { uploadMediaFile } from "../../../services/file-storage";
 import { uploadImage } from "../../../services/image-storage";
-import type { Asset, AssetWriteInput } from "../../../stores/use-asset-store";
+import type { AssetWriteInput } from "../../../stores/use-asset-store";
 import { readAssetPackage } from "./asset-transfer";
 import { assetFileKind, isImportableAssetFile } from "./asset-utils";
-import { importedImageAssetInput, importedMediaAssetInput, importedPackageAssetInput, uniqueImportedAssetIds } from "./asset-import-payloads";
+import { importedImageAssetInput, importedMediaAssetInput, importedPackageAssetInput, partitionPackageAssets, uniqueImportedAssetIds } from "./asset-import-payloads";
 
 type AddAssetOnce = (asset: AssetWriteInput) => Promise<string>;
 export type AssetImportResult = {
@@ -11,13 +11,6 @@ export type AssetImportResult = {
     assetIds: string[];
     skippedTextCount: number;
 };
-
-export function partitionPackageAssets(assets: Asset[]) {
-    return {
-        mediaAssets: assets.filter((asset) => asset.kind === "image" || asset.kind === "video" || asset.kind === "audio"),
-        skippedTextCount: assets.filter((asset) => asset.kind === "text").length,
-    };
-}
 
 export function importableAssetFiles(files?: FileList | File[]) {
     return Array.from(files || []).filter((file) => isImportableAssetFile(file));
