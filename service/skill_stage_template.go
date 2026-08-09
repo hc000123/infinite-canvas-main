@@ -206,12 +206,12 @@ func BuildImportedSkillPackage(key string, files map[string]string) (SkillPackag
 	}
 	for _, stageKey := range systemSkillSeedStageKeys {
 		if stageKey == template.Key {
-			return buildInvocationWorkflowSkillSeedPackage(stageKey, files)
+			return buildInvocationWorkflowSkillSeedPackageForSource(stageKey, files, "folder_import")
 		}
 	}
 	for _, seed := range capabilitySkillSeeds() {
 		if seed.Key == template.Key {
-			return buildCapabilitySkillPackage(seed, files)
+			return buildCapabilitySkillPackageForSource(seed, files, "folder_import")
 		}
 	}
 	return SkillPackage{}, safeMessageError{message: "Skill 所属阶段没有运行模板"}

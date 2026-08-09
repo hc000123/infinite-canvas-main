@@ -14,11 +14,15 @@ func stableSegmentHash(value string) string {
 }
 
 func safeDisplaySegment(value string) string {
+	return safeDisplaySegmentLimit(value, 48)
+}
+
+func safeDisplaySegmentLimit(value string, limit int) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return "未命名"
 	}
-	runes := make([]rune, 0, 48)
+	runes := make([]rune, 0, limit)
 	separator := false
 	for _, item := range value {
 		if unicode.IsLetter(item) || unicode.IsNumber(item) || item == '-' || item == '_' {
@@ -28,7 +32,7 @@ func safeDisplaySegment(value string) string {
 			runes = append(runes, '-')
 			separator = true
 		}
-		if len(runes) >= 48 {
+		if len(runes) >= limit {
 			break
 		}
 	}
@@ -37,6 +41,18 @@ func safeDisplaySegment(value string) string {
 		return "未命名"
 	}
 	return result
+}
+
+func safeProjectCacheFilename(filename, mimeType string) string {
+	extension := projectCacheExtension(mimeType, filename)
+	stem := strings.TrimSuffix(strings.TrimSpace(filename), filepath.Ext(strings.TrimSpace(filename)))
+	normalized := []rune(safeDisplaySegmentLimit(stem, len([]rune(stem))+1))
+	const maxStemRunes = 56
+	const preservedTailRunes = 20
+	if len(normalized) > maxStemRunes {
+		normalized = append(append(append([]rune{}, normalized[:maxStemRunes-preservedTailRunes-1]...), '-'), normalized[len(normalized)-preservedTailRunes:]...)
+	}
+	return string(normalized) + extension
 }
 
 func safeNamedID(name, id string) string {

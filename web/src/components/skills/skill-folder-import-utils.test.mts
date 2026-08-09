@@ -98,5 +98,8 @@ test("reads every directory reader batch recursively and preserves the top folde
     const files = await readDroppedSkillFolder([{ webkitGetAsEntry: () => root }]);
 
     assert.deepEqual(files.map((file) => file.webkitRelativePath), ["MySkill/SKILL.md", "MySkill/rules/preserve.md", "MySkill/asset.png"]);
-    await assert.rejects(() => readDroppedSkillFolder([{ webkitGetAsEntry: () => entryFile("SKILL.md", "# Skill") }]), /\u5b8c\u6574\u6587\u4ef6\u5939/);
+    const single = await readDroppedSkillFolder([{ webkitGetAsEntry: () => entryFile("SKILL.md", "# Skill") }]);
+    assert.equal(single.length, 1);
+    assert.equal(single[0].name, "SKILL.md");
+    await assert.rejects(() => readDroppedSkillFolder([{ webkitGetAsEntry: () => entryFile("other.md", "# Skill") }]), /SKILL\.md/);
 });

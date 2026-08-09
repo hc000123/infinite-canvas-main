@@ -49,6 +49,7 @@ test("builds generated image asset with canvas generation metadata", () => {
                 prompt: "节点提示词",
                 model: "node-image-model",
                 generationType: "edit",
+                sourceAssetId: "asset-source-1",
                 briefId: "brief-1",
                 assetBreakdownItemId: "need-1",
                 agentRunId: "run-1",
@@ -84,6 +85,7 @@ test("builds generated image asset with canvas generation metadata", () => {
     assert.equal(generation.model, "node-image-model");
     assert.equal(generation.provider, "openai");
     assert.equal(generation.actionType, "edit");
+    assert.equal(generation.sourceAssetId, "asset-source-1");
     assert.equal(generation.briefId, "brief-1");
     assert.equal(generation.assetBreakdownItemId, "need-1");
     assert.equal(generation.agentRunId, "run-1");

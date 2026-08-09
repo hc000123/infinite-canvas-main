@@ -8,7 +8,7 @@ export function buildDeliveryReport<T extends DeliveryPackageLike>(packages: T[]
         if (["checking", "creating", "queued", "running"].includes(item.generation?.status || "")) issues.push("视频任务仍在运行");
         if (item.generation?.status === "failed" || item.generation?.status === "cancelled") issues.push("视频任务失败或已停止");
         if (item.generation?.status !== "succeeded") issues.push("缺少成功视频版本");
-        else if (!item.generation.assetId) issues.push("成功版本尚未归档到我的素材");
+        else if (!item.generation.assetId) issues.push("成功版本尚未归档到资产");
         return { id: item.id, issues, ready: issues.length === 0 };
     });
     const blockingCount = items.filter((item) => !item.ready).length;

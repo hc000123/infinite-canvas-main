@@ -113,6 +113,62 @@ func TestArchiveProjectCacheFileWritesMediaAndManifest(t *testing.T) {
 	}
 }
 
+func TestArchiveProjectCacheFileUsesSafeSemanticDiskFilenameWithoutChangingIdentity(t *testing.T) {
+	root := t.TempDir()
+	context := ProjectCacheContext{
+		ProjectID: "project-id", CanvasID: "canvas-id", NodeID: "node-id", AssetID: "asset-id", VersionID: "version-id", Source: "canvas", Category: "storyboard",
+	}
+	result, err := ArchiveProjectCacheFile(root, "user-1", ProjectCacheArchiveInput{
+		Context: context, Filename: "毕业/典礼:画布-节点007-v2.mp4", MIMEType: "video/mp4", Reader: strings.NewReader("video-bytes"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := filepath.Base(result.File.RelativePath); got != "毕业-典礼-画布-节点007-v2.mp4" {
+		t.Fatalf("disk filename=%q", got)
+	}
+	if result.File.OriginalName != "毕业/典礼:画布-节点007-v2.mp4" {
+		t.Fatalf("original name=%q", result.File.OriginalName)
+	}
+	if result.File.Context.ProjectID != context.ProjectID || result.File.Context.CanvasID != context.CanvasID || result.File.Context.NodeID != context.NodeID || result.File.Context.AssetID != context.AssetID || result.File.Context.VersionID != context.VersionID || result.File.Context.Source != context.Source {
+		t.Fatalf("identity context changed: %#v", result.File.Context)
+	}
+}
+
+func TestArchiveProjectCacheFileAddsStableCollisionSuffixWithoutReusingFileID(t *testing.T) {
+	root := t.TempDir()
+	results := make([]ProjectCacheArchiveResult, 0, 2)
+	for _, nodeID := range []string{"node-1", "node-2"} {
+		result, err := ArchiveProjectCacheFile(root, "user-1", ProjectCacheArchiveInput{
+			Context: ProjectCacheContext{ProjectID: "project-id", NodeID: nodeID}, Filename: "同名结果.mp4", MIMEType: "video/mp4", Reader: strings.NewReader(nodeID),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		results = append(results, result)
+	}
+	if results[0].File.ID == results[1].File.ID {
+		t.Fatal("distinct cache references reused one file ID")
+	}
+	if got := filepath.Base(results[0].File.RelativePath); got != "同名结果.mp4" {
+		t.Fatalf("first filename=%q", got)
+	}
+	wantSecond := "同名结果__" + results[1].File.ID[:8] + ".mp4"
+	if got := filepath.Base(results[1].File.RelativePath); got != wantSecond {
+		t.Fatalf("second filename=%q want=%q", got, wantSecond)
+	}
+}
+
+func TestSafeProjectCacheFilenameKeepsNodeVersionSuffixWithinFilesystemLimit(t *testing.T) {
+	filename := safeProjectCacheFilename(strings.Repeat("超长画布名称", 30)+"-节点007-v12.mp4", "video/mp4")
+	if len([]byte(filename)) > 240 {
+		t.Fatalf("filename uses %d bytes: %q", len([]byte(filename)), filename)
+	}
+	if !strings.HasSuffix(filename, "-节点007-v12.mp4") {
+		t.Fatalf("node/version suffix lost: %q", filename)
+	}
+}
+
 func TestArchiveProjectCacheFileDeduplicatesSameReference(t *testing.T) {
 	root := t.TempDir()
 	input := ProjectCacheArchiveInput{Context: ProjectCacheContext{ProjectID: "p1", NodeID: "n1"}, Filename: "image.png", MIMEType: "image/png"}

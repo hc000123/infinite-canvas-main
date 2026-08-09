@@ -6,6 +6,6 @@ import { navigationTools } from "./navigation-tools.ts";
 test("keeps video workflow inside projects instead of the global navigation", () => {
     assert.deepEqual(
         navigationTools.map((tool) => tool.slug),
-        ["projects", "image", "prompts", "assets", "cache"],
+        ["projects", "agent", "canvas", "image", "assets", "cache"],
     );
 });

@@ -57,6 +57,11 @@ export function AppConfigModal() {
         router.push("/admin/settings");
     };
 
+    const openPromptConfig = () => {
+        setConfigDialogOpen(false);
+        router.push("/prompts");
+    };
+
     const jimengLoginURL = jimengLogin?.verificationUriComplete || jimengLogin?.verificationUri || "";
 
     const startJimengLogin = async () => {
@@ -144,6 +149,13 @@ export function AppConfigModal() {
                                 去后台设置
                             </Button>
                         ) : null}
+                    </div>
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3">
+                        <div>
+                            <div className="font-medium text-[var(--studio-text-primary)]">提示词配置</div>
+                            <div className="mt-1 text-sm text-[var(--studio-text-secondary)]">管理公司标准、项目风格和个人习惯，在画布与分镜任务中按需生效。</div>
+                        </div>
+                        <Button onClick={openPromptConfig}>打开提示词配置</Button>
                     </div>
                     <div className="grid gap-4 md:grid-cols-3">
                         <Form.Item label="默认生图模型" className="mb-4">

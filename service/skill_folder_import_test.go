@@ -100,3 +100,16 @@ func TestParseSkillFolderRejectsUnsafeOrInvalidFolders(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildImportedSkillPackageAcceptsTextFilesWithinFolderLimits(t *testing.T) {
+	content := append([]byte("# Large Skill\n\n"), bytes.Repeat([]byte("x"), 65<<10)...)
+	snapshot, err := ParseSkillFolder("large-skill", []SkillFolderFile{{Path: "SKILL.md", Data: content}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, stageKey := range []string{WorkflowSkillStageScript, "asset-rendition-character"} {
+		if _, err := BuildImportedSkillPackage(stageKey, snapshot.TextFiles); err != nil {
+			t.Fatalf("folder parser accepted the %s Skill but runtime package rejected it: %v", stageKey, err)
+		}
+	}
+}

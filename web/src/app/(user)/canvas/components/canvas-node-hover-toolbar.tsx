@@ -175,7 +175,7 @@ function appendAssetActions(items: NodeToolbarAction[], context: NodeToolbarCont
             icon: <Download className="size-5" />,
             onClick: () => actions.onDownload(node),
         });
-    if (hasMedia || isText) items.push({ type: "button", key: "save-asset", title: "加入我的素材", label: "存素材", icon: <FolderPlus className="size-4" />, onClick: () => actions.onSaveAsset(node) });
+    if (hasMedia || isText) items.push({ type: "button", key: "save-asset", title: "加入资产", label: "存资产", icon: <FolderPlus className="size-4" />, onClick: () => actions.onSaveAsset(node) });
     if (state.hasNewAssetVersion)
         items.push({ type: "button", key: "update-asset-reference", title: "素材有新版本可用，仅更新当前节点的引用版本记录", label: "有新版本", icon: <RefreshCw className="size-4" />, onClick: () => actions.onUpdateAssetReference(node), active: true });
 }

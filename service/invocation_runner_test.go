@@ -162,6 +162,26 @@ func TestBuildInvocationPromptsRejectsTamperedFrozenSkillHash(t *testing.T) {
 	}
 }
 
+func TestFrozenInvocationSkillKeepsImportedFolderFileLimits(t *testing.T) {
+	content := append([]byte("# Large Skill\n\n"), []byte(strings.Repeat("x", 65<<10))...)
+	packageValue, err := BuildImportedSkillPackage(WorkflowSkillStageScript, map[string]string{"SKILL.md": string(content)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	version := skillVersionFromPackage("version-large", "skill-large", "1.0.0", "user-1", "created", packageValue)
+	version.SourceKind = "folder_import"
+	snapshot, _ := json.Marshal(invocationSkillSnapshot{
+		Skill: model.SkillDefinition{ID: "skill-large"}, Version: version, Package: packageValue,
+	})
+	revision := model.InvocationPreflightRevision{
+		SkillID: "skill-large", SkillVersionID: version.ID, SkillVersion: version.Version,
+		SkillContentHash: packageValue.ContentHash, SkillSnapshotJSON: string(snapshot),
+	}
+	if _, err := frozenInvocationSkill(revision); err != nil {
+		t.Fatalf("frozen imported Skill rejected after snapshot round trip: %v", err)
+	}
+}
+
 func TestInvocationQueueBindsSingleBuiltAgentRunAtomically(t *testing.T) {
 	setupInvocationServiceTest(t)
 	input := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "source_text", `{"text":"原稿"}`)

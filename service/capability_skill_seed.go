@@ -139,6 +139,10 @@ func ensureCapabilitySkillSeed(seed capabilitySkillSeed) error {
 }
 
 func buildCapabilitySkillPackage(seed capabilitySkillSeed, files map[string]string) (SkillPackage, error) {
+	return buildCapabilitySkillPackageForSource(seed, files, "")
+}
+
+func buildCapabilitySkillPackageForSource(seed capabilitySkillSeed, files map[string]string, sourceKind string) (SkillPackage, error) {
 	if seed.ExecutorKind == "" {
 		seed.ExecutorKind = "text_model"
 	}
@@ -166,6 +170,7 @@ func buildCapabilitySkillPackage(seed capabilitySkillSeed, files map[string]stri
 		InputContract:      SkillInputContract{RequiredInputs: []string{"artifacts"}, ArtifactInputs: seed.Inputs, ImagePolicy: SkillImagePolicy{AllowTextFallback: true}},
 		OutputContract:     SkillOutputContract{SchemaVersion: coreSchema.Version, Schema: coreSchema.Schema, ArtifactOutputs: []ArtifactOutputSpec{seed.Output}},
 		QualityGateProfile: capabilitySeedGates(seed.Output.ArtifactType),
+		sourceKind:         sourceKind,
 	})
 }
 

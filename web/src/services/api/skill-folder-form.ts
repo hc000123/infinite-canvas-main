@@ -15,9 +15,9 @@ export function skillFolderLayout(files: File[]) {
 }
 
 export function buildSkillFolderFormData(files: File[], fields: SkillFolderImportFields) {
-    if (!files.length) throw new Error("请选择完整 Skill 文件夹");
+    if (!files.length) throw new Error("请选择单个 SKILL.md 或完整 Skill 文件夹");
     const { paths, relativePaths, folderName } = skillFolderLayout(files);
-    if (!relativePaths.includes("SKILL.md")) throw new Error("文件夹根目录必须包含 SKILL.md");
+    if (!relativePaths.includes("SKILL.md")) throw new Error("请选择单个 SKILL.md，或根目录包含 SKILL.md 的文件夹");
     const form = new FormData();
     form.set("folderName", folderName || "Skill");
     for (const [key, value] of Object.entries(fields)) if (value !== undefined) form.set(key, value);

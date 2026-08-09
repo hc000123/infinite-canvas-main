@@ -48,6 +48,39 @@ test("the canvas download action uses the version-aware filename", () => {
     assert.match(hook, /canvasMediaDownloadFilename\(node, canvasTitle, getNodes\(\)\)/);
 });
 
+test("generated canvas media cache owns the semantic filename instead of accepting internal IDs", () => {
+    const cacheHook = readFileSync(new URL("../hooks/use-canvas-media-cache.ts", import.meta.url), "utf8");
+    const actionFiles = [
+        "../hooks/use-canvas-video-generation-actions.ts",
+        "../hooks/use-canvas-video-task-refresh.ts",
+        "../hooks/use-canvas-video-task-recovery.ts",
+        "../hooks/use-canvas-generation-retry-actions.ts",
+    ];
+
+    assert.equal((cacheHook.match(/canvasMediaDownloadFilename\(node, canvasTitle, getNodes\(\)\)/g) || []).length, 2);
+    assert.doesNotMatch(cacheHook, /cacheUploadedCanvasMedia: \(file: UploadedFile, filename: string,/);
+    for (const file of actionFiles) {
+        const source = readFileSync(new URL(file, import.meta.url), "utf8");
+        assert.doesNotMatch(source, /cacheUploadedCanvasMedia\(video, `\$\{(?:videoId|node\.id)\}\.mp4`,/);
+    }
+});
+
+test("semantic filename calculation does not mutate asset identity or reference metadata", () => {
+    const node = versionedNode("video", "version-2");
+    node.metadata = {
+        ...node.metadata,
+        storageKey: "media:stable-storage-key",
+        sourceAssetId: "asset-stable-id",
+        referenceAssets: [{ assetId: "reference-asset", assetVersionId: "reference-version" }],
+        volcengineAsset: { assetId: "volcengine-asset", groupId: "volcengine-group", status: "Active", publicUrl: "https://example.com/reference.png" },
+        projectCache: { fileId: "cache-file-id", relativePath: "videos/original.mp4", status: "ready" },
+    };
+    const before = structuredClone(node);
+
+    assert.equal(mediaDownload.canvasMediaDownloadFilename(node, "毕业典礼画布", [node]), "毕业典礼画布-节点007-v2.mp4");
+    assert.deepEqual(node, before);
+});
+
 test("generated canvas media always requires its source node for cache classification", () => {
     const hook = readFileSync(new URL("../hooks/use-canvas-media-cache.ts", import.meta.url), "utf8");
     assert.doesNotMatch(hook, /node\?: CanvasNodeData/);

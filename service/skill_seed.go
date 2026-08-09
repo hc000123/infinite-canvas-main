@@ -235,6 +235,10 @@ func loadSkillSeedFiles(stageKey string) (map[string]string, error) {
 }
 
 func buildWorkflowSkillSeedPackage(stageKey string, files map[string]string) (SkillPackage, error) {
+	return buildWorkflowSkillSeedPackageForSource(stageKey, files, "")
+}
+
+func buildWorkflowSkillSeedPackageForSource(stageKey string, files map[string]string, sourceKind string) (SkillPackage, error) {
 	legacy := workflowSkillSeedContract(stageKey)
 	artifacts := workflowSkillSeedArtifacts[stageKey]
 	gate := map[string]string{
@@ -265,11 +269,16 @@ func buildWorkflowSkillSeedPackage(stageKey string, files map[string]string) (Sk
 		},
 		OutputContract:     SkillOutputContract{SchemaVersion: legacy.OutputSchemaVersion, Schema: legacy.OutputSchema},
 		QualityGateProfile: []string{"schema", gate},
+		sourceKind:         sourceKind,
 	})
 }
 
 func buildInvocationWorkflowSkillSeedPackage(stageKey string, files map[string]string) (SkillPackage, error) {
-	packageValue, err := buildWorkflowSkillSeedPackage(stageKey, files)
+	return buildInvocationWorkflowSkillSeedPackageForSource(stageKey, files, "")
+}
+
+func buildInvocationWorkflowSkillSeedPackageForSource(stageKey string, files map[string]string, sourceKind string) (SkillPackage, error) {
+	packageValue, err := buildWorkflowSkillSeedPackageForSource(stageKey, files, sourceKind)
 	if err != nil {
 		return SkillPackage{}, err
 	}

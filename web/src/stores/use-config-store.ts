@@ -114,6 +114,7 @@ type ConfigStore = {
     isConfigOpen: boolean;
     shouldPromptContinue: boolean;
     updateConfig: <K extends keyof AiConfig>(key: K, value: AiConfig[K]) => void;
+    setPublicSettings: (publicSettings: AdminPublicSettings) => void;
     loadPublicSettings: (options?: { force?: boolean }) => Promise<void>;
     isAiConfigReady: (config: AiConfig, model: string) => boolean;
     openConfigDialog: (shouldPromptContinue?: boolean) => void;
@@ -206,6 +207,7 @@ export const useConfigStore = create<ConfigStore>()(
                         [key]: value,
                     },
                 })),
+            setPublicSettings: (publicSettings) => set({ publicSettings, hasLoadedPublicSettings: true }),
             loadPublicSettings: async (options = {}) => {
                 if (get().isPublicSettingsLoading && !options.force) return;
                 set({ isPublicSettingsLoading: true });

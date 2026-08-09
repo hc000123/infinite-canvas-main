@@ -215,7 +215,7 @@ export function useWorkflowVideoActions(packages: ProductionPackage[]) {
             const prompt = config.videoProtocol === "volcengine-ark" ? alignWorkflowPromptReferencesForSeedance(item.prompt, images) : item.prompt;
             const { completedTask, video } = await runCanvasVideoGeneration(config, prompt, images, (task) => updatePackage(item, { generation: generationFromTask(task) }));
             await archiveResult(item, config, video, completedTask);
-            message.success(`${item.id} 已生成并保存到我的素材`);
+            message.success(`${item.id} 已生成并保存到资产`);
             return true;
         } catch (error) {
             const errorMessage = formatVideoGenerationError(error);

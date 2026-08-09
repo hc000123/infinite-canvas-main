@@ -3,7 +3,8 @@ import fs from "node:fs";
 import test from "node:test";
 
 import type { SkillAdminItem, SkillOwnerType } from "@/services/api/admin-skills.ts";
-import { canPublishSkill, filterSkillItems, groupSkillItemsByStage, nextDraftVersion, nextPatchVersion, resolveOpenSkillStageKeys, skillLifecycleLabel } from "./skill-view.ts";
+import { groupSkillItemsByStage, resolveOpenSkillStageKeys } from "../../../../components/skills/skill-stage-groups.ts";
+import { canPublishSkill, filterSkillItems, nextDraftVersion, nextPatchVersion, skillLifecycleLabel } from "./skill-view.ts";
 
 function skillItem(id: string, ownerType: SkillOwnerType, capabilities: string[], inputArtifactTypes: string[], outputArtifactTypes: string[], projectTags: string[], stageKey = ""): SkillAdminItem {
     return {
@@ -65,7 +66,7 @@ test("skill center is generic and exposes manifest filters", () => {
     }
     assert.equal(page.includes("workflowSkillStageNumbers"), false);
     assert.equal(page.includes('disabled={!detailQuery.data}'), false);
-    for (const text of ["导入 Skill 文件夹", "导入新版本", "独立试运行", "设为可用", "技术详情与底层契约"]) assert.ok(page.includes(text), `missing folder-first action ${text}`);
+    for (const text of ["导入外部 Skill", "导入新版本", "独立试运行", "设为可用", "技术详情与底层契约"]) assert.ok(page.includes(text), `missing Skill action ${text}`);
     assert.equal(page.includes("工作流 Run ID"), false);
 });
 
@@ -127,4 +128,9 @@ test("admin registry renders production-stage collapse groups", () => {
         assert.ok(page.includes(text), `missing stage group wiring ${text}`);
     }
     assert.equal(page.includes("visibleItems.map((item) => <SkillCard"), false);
+});
+
+test("admin independent trial receives the selected Skill executor", () => {
+    const page = fs.readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
+    assert.match(page, /executorKind=\{detailQuery\.data\?\.package\.manifest\.executorKind\}/);
 });

@@ -23,6 +23,7 @@ import {
     type AdminSettings,
 } from "@/services/api/admin";
 import { VOLCENGINE_ASSET_CONFIG_NOTICE } from "@/services/volcengine-asset-config";
+import { useConfigStore } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
 const CodeMirror = dynamic(() => import("@uiw/react-codemirror"), { ssr: false });
@@ -91,6 +92,7 @@ type ChannelTableItem = AdminModelChannel & { _index: number; _rowKey: string };
 
 export default function AdminSettingsPage() {
     const token = useUserStore((state) => state.token);
+    const setPublicSettings = useConfigStore((state) => state.setPublicSettings);
     const { message } = App.useApp();
     const [form] = Form.useForm<AdminSettings>();
     const [activeTab, setActiveTab] = useState<SettingsTabKey>("public");
@@ -195,6 +197,7 @@ export default function AdminSettingsPage() {
                 form.setFieldsValue(merged);
                 setChannels(merged.private.channels);
                 setModelCosts(merged.public.modelChannel.modelCosts);
+                setPublicSettings(merged.public);
                 setJsonText({
                     public: JSON.stringify(merged.public, null, 2),
                     private: JSON.stringify(merged.private, null, 2),
@@ -217,6 +220,7 @@ export default function AdminSettingsPage() {
                 form.setFieldsValue(merged);
                 setChannels(merged.private.channels);
                 setModelCosts(merged.public.modelChannel.modelCosts);
+                setPublicSettings(merged.public);
                 setJsonText({ public: JSON.stringify(merged.public, null, 2), private: JSON.stringify(merged.private, null, 2) });
                 setIsProviderPresetOpen(false);
                 message.success("厂商预设已一次配置完成");
@@ -405,6 +409,7 @@ export default function AdminSettingsPage() {
                 setConfiguredModels(models);
                 setChannels(merged.private.channels);
                 setModelCosts(merged.public.modelChannel.modelCosts);
+                setPublicSettings(merged.public);
                 form.setFieldsValue(merged);
                 setJsonText({ public: JSON.stringify(merged.public, null, 2), private: JSON.stringify(merged.private, null, 2) });
                 message.success("已保存");
@@ -431,6 +436,7 @@ export default function AdminSettingsPage() {
             setConfiguredModels(models);
             setChannels(merged.private.channels);
             setModelCosts(merged.public.modelChannel.modelCosts);
+            setPublicSettings(merged.public);
             form.setFieldsValue(merged);
             setJsonText({
                 public: JSON.stringify(merged.public, null, 2),

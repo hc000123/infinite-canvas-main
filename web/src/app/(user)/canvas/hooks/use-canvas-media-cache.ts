@@ -121,9 +121,10 @@ export function useCanvasMediaCache({
     );
 
     const cacheUploadedCanvasMedia = useCallback(
-        async (file: UploadedFile, filename: string, node: CanvasNodeData): Promise<Partial<CanvasNodeMetadata>> => {
+        async (file: UploadedFile, node: CanvasNodeData): Promise<Partial<CanvasNodeMetadata>> => {
             if (!token) return {};
             const kind = file.mimeType.startsWith("audio/") ? "audio" : "video";
+            const filename = canvasMediaDownloadFilename(node, canvasTitle, getNodes());
             const context = nodeProjectCacheContext(node, { canvasId, canvasTitle, projectId, projectTitle, episodeContext });
             try {
                 const cached = await archiveLocalMediaToProjectCache({ id: `canvas:${file.storageKey}`, storageKey: file.storageKey, kind, filename, context, token });
@@ -132,7 +133,7 @@ export function useCanvasMediaCache({
                 return { cacheFilename: filename, projectCache: { status: "pending" as const, error: error instanceof Error ? error.message : "缓存失败" } };
             }
         },
-        [canvasId, canvasTitle, episodeContext, projectId, projectTitle, token],
+        [canvasId, canvasTitle, episodeContext, getNodes, projectId, projectTitle, token],
     );
 
     return { downloadNodeMedia, cacheUploadedCanvasMedia };

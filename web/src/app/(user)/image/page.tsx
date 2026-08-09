@@ -17,11 +17,11 @@ import { createUserScopedLocalForage } from "@/lib/user-scoped-localforage";
 import { useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { nanoid } from "nanoid";
-import { formatBytes, formatDuration, getDataUrlByteSize, readImageMeta } from "@/lib/image-utils";
+import { formatBytes, formatDuration } from "@/lib/image-utils";
 import { requestEdit, requestGeneration } from "@/services/api/image";
 import { archiveLocalMediaToProjectCache } from "@/services/project-cache-archive";
 import { projectCacheContextFromGeneration } from "@/services/project-cache-context";
-import { deleteStoredImages, resolveImageUrl, uploadImage } from "@/services/image-storage";
+import { deleteStoredImages, resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
 import { useAssetStore, type Asset, type ImageAsset } from "@/stores/use-asset-store";
 import { useLocalAiTaskLogStore } from "@/stores/use-local-ai-task-log-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -34,6 +34,7 @@ import { useProductionBibleStore } from "../canvas/stores/use-production-bible-s
 import type { ArtifactEnvelope } from "@/services/api/invocations";
 import type { CapabilityConsumeTrace } from "@/components/capability-runtime/use-capability-run";
 import { buildImageCapabilityTrace, imagePromptFromArtifacts, imageRenditionsFromArtifacts, type ImageCapabilityTrace } from "./image-capability-context";
+import { imageWorkbenchResultFilename } from "./image-workbench-media-name";
 import { StoryboardImageWorkbench } from "./storyboard-image-workbench";
 import { isAssetImageWorkbenchContext } from "./storyboard-workbench";
 
@@ -304,6 +305,7 @@ export function AssetImageWorkbench() {
             setCapabilityTrace(nextTrace);
             setPreviewLog(null);
             setResults(images.map((image) => ({ id: image.id, status: "success", image })));
+            await autoSaveAssetRevisionResults(images);
             saveLog(buildLog({
                 prompt: logPrompt,
                 model: runtimeModel,
@@ -360,12 +362,7 @@ export function AssetImageWorkbench() {
         const failed = result.find((item): item is PromiseRejectedResult => item.status === "rejected");
 
         try {
-            const logImages = await Promise.all(
-                successImages.map(async (image) => {
-                    const stored = await uploadImage(image.dataUrl);
-                    return { ...image, dataUrl: stored.url, storageKey: stored.storageKey, width: stored.width, height: stored.height, bytes: stored.bytes, mimeType: stored.mimeType };
-                }),
-            );
+            const logImages = successImages;
             if (token) {
                 logImages.forEach((image, index) => {
                     if (!image.storageKey) return;
@@ -380,9 +377,10 @@ export function AssetImageWorkbench() {
                         source: "image-page",
                         metadata: {},
                     });
-                    void archiveLocalMediaToProjectCache({ id: `image-page:${image.id}`, storageKey: image.storageKey, kind: "image", filename: `image-${index + 1}.png`, context, token }).catch(() => undefined);
+                    void archiveLocalMediaToProjectCache({ id: `image-page:${image.id}`, storageKey: image.storageKey, kind: "image", filename: imageWorkbenchResultFilename(sourceContext, index, image.mimeType), context, token }).catch(() => undefined);
                 });
             }
+            await autoSaveAssetRevisionResults(logImages);
             saveLog(
                 buildLog({
                     prompt: text,
@@ -405,7 +403,7 @@ export function AssetImageWorkbench() {
     };
 
     const downloadImage = (image: GeneratedImage, index: number) => {
-        saveAs(image.dataUrl, `image-${index + 1}.png`);
+        saveAs(image.dataUrl, imageWorkbenchResultFilename(sourceContext, index, image.mimeType));
     };
 
     const addResultToReferences = async (image: GeneratedImage, index: number) => {
@@ -414,9 +412,7 @@ export function AssetImageWorkbench() {
         message.success("已加入参考图");
     };
 
-    const saveResultToAssets = async (image: GeneratedImage, index: number) => {
-        const stored = await uploadImage(image.dataUrl);
-        const resultTrace = image.capabilityTrace || capabilityTrace;
+    const saveStoredResultToAssets = async (stored: UploadedImage, index: number, resultTrace?: ImageCapabilityTrace, notify = true) => {
         const sourceAsset = sourceContext.libraryAssetId ? useAssetStore.getState().assets.find((asset) => asset.id === sourceContext.libraryAssetId) : undefined;
         let assetId = "";
         let savedAsset: Pick<Asset, "id" | "metadata" | "updatedAt"> | undefined;
@@ -469,19 +465,47 @@ export function AssetImageWorkbench() {
             updateProductionBibleItem(linkedBibleItem.id, { assetRefs: nextRefs });
         }
         if (sourceAsset && workflowAssetInfo(sourceAsset)) {
-            message.success(linkedBibleItem ? "已回写到视频工作流素材卡，并绑定到设定库" : "已回写到视频工作流素材卡");
+            if (notify) message.success(linkedBibleItem ? "已回写到视频工作流素材卡，并绑定到设定库" : "已回写到视频工作流素材卡");
             return;
         }
         if (sourceAsset?.kind === "image" && sourceContext.source === "asset-revision") {
-            message.success(sourceAsset.assetBinding ? "已保存为新的正式版本并设为当前主图" : "已保存为新的图片资产，原图已保留");
+            if (notify) message.success(sourceAsset.assetBinding ? "已保存为新的正式版本并设为当前主图" : "已保存为新的图片资产，原图已保留");
             return;
         }
         if (sourceContext.briefId) {
             addBriefResultAsset(sourceContext.briefId, assetId);
-            message.success(linkedBibleItem ? "已加入我的素材，并回写到当前 Brief 和设定库" : "已加入我的素材，并回写到当前 Brief");
+            if (notify) message.success(linkedBibleItem ? "已加入资产，并回写到当前 Brief 和设定库" : "已加入资产，并回写到当前 Brief");
             return;
         }
-        message.success(linkedBibleItem ? "已加入我的素材，并绑定到当前设定库资产" : "已加入我的素材");
+        if (notify) message.success(linkedBibleItem ? "已加入资产，并绑定到当前设定库资产" : "已加入资产");
+    };
+
+    const saveResultToAssets = async (image: GeneratedImage, index: number) => {
+        const stored = await uploadImage(image.dataUrl);
+        await saveStoredResultToAssets(stored, index, image.capabilityTrace || capabilityTrace);
+    };
+
+    const autoSaveAssetRevisionResults = async (images: GeneratedImage[]) => {
+        if (sourceContext.source !== "asset-revision" || !sourceContext.libraryAssetId || !images.length) return;
+        let savedCount = 0;
+        for (let index = 0; index < images.length; index += 1) {
+            const image = images[index];
+            try {
+                if (!image.storageKey) throw new Error("生成图片缺少本地存储键");
+                await saveStoredResultToAssets(
+                    { url: image.dataUrl, storageKey: image.storageKey, width: image.width, height: image.height, bytes: image.bytes, mimeType: image.mimeType || "image/png" },
+                    index,
+                    image.capabilityTrace || capabilityTrace,
+                    false,
+                );
+                savedCount += 1;
+            } catch {
+                // 缓存结果仍可从结果卡片手动重试回写。
+            }
+        }
+        const failedCount = images.length - savedCount;
+        if (savedCount) message.success(`已自动保存 ${savedCount} 个资产版本${savedCount > 1 ? "，最后一个已设为当前主图" : "并设为当前主图"}`);
+        if (failedCount) message.warning(`${failedCount} 个结果已缓存，但回写资产失败，可点击结果卡片“保存”重试`);
     };
 
     const insertPickedAsset = async (payload: InsertAssetPayload) => {
@@ -569,9 +593,9 @@ export function AssetImageWorkbench() {
                   });
             const image = result[0];
             if (!image) throw new Error("接口没有返回图片");
-            const meta = await readImageMeta(image.dataUrl);
-            const nextImage = { id: image.id, dataUrl: image.dataUrl, durationMs: performance.now() - itemStartedAt, width: meta.width, height: meta.height, bytes: getDataUrlByteSize(image.dataUrl) };
-            if (image.localAiTaskId) updateLocalImageResultSize(image.localAiTaskId, meta.width, meta.height);
+            const stored = await uploadImage(image.dataUrl);
+            const nextImage = { id: image.id, dataUrl: stored.url, storageKey: stored.storageKey, durationMs: performance.now() - itemStartedAt, width: stored.width, height: stored.height, bytes: stored.bytes, mimeType: stored.mimeType };
+            if (image.localAiTaskId) updateLocalImageResultSize(image.localAiTaskId, stored.width, stored.height);
             setResults((value) => updateResultAt(value, index, { status: "success", image: nextImage }));
             return nextImage;
         } catch (error) {
@@ -585,7 +609,15 @@ export function AssetImageWorkbench() {
         if (!snapshot) return;
         setPreviewLog(null);
         setResults((value) => updateResultAt(value, index, { status: "pending", error: undefined, image: undefined }));
-        void runGenerationSlot(index, snapshot).catch(() => {});
+        void runGenerationSlot(index, snapshot)
+            .then(async (image) => {
+                if (token && image.storageKey) {
+                    const context = projectCacheContextFromGeneration({ assetId: sourceContext.assetId, episodeId: sourceContext.episodeId, episodeName: sourceContext.episodeTitle, kind: "image", projectId: sourceContext.projectId, projectName: sourceContext.projectTitle, prompt: snapshot.text, source: "image-page", metadata: {} });
+                    void archiveLocalMediaToProjectCache({ id: `image-page:${image.id}`, storageKey: image.storageKey, kind: "image", filename: imageWorkbenchResultFilename(sourceContext, index, image.mimeType), context, token }).catch(() => undefined);
+                }
+                await autoSaveAssetRevisionResults([image]);
+            })
+            .catch(() => {});
     };
 
     return (

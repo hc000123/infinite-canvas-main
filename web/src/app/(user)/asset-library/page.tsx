@@ -99,7 +99,7 @@ export default function AssetLibraryPage() {
                     metadata: { source: "asset-library", assetId: asset.id },
                 });
             }
-            message.success("已加入我的素材");
+            message.success("已加入资产");
         } catch {
             message.error("加入失败");
         }
@@ -122,7 +122,7 @@ export default function AssetLibraryPage() {
                             <div>
                                 <p className="text-xs font-semibold tracking-[0.16em] text-[var(--studio-accent)]">公共素材</p>
                                 <h1 className="mt-2 text-2xl font-semibold tracking-normal text-[var(--studio-text-primary)]">素材库</h1>
-                                <p className="mt-2 text-xs leading-5 text-[var(--studio-text-secondary)]">挑选团队素材，加入我的素材后继续编辑和使用。</p>
+                                <p className="mt-2 text-xs leading-5 text-[var(--studio-text-secondary)]">挑选团队素材，加入资产后继续编辑和使用。</p>
                             </div>
 
                             <ToolMetricGrid
@@ -272,7 +272,7 @@ export default function AssetLibraryPage() {
                                 </Button>
                             ) : null}
                             <Button icon={<FolderPlus className="size-4" />} onClick={() => void saveToMyAssets(selectedAsset)}>
-                                加入我的素材
+                                加入资产
                             </Button>
                         </div>
                     </div>
@@ -323,7 +323,7 @@ function LibraryCard({ asset, onOpen, onAdd }: { asset: AssetLibraryItem; onOpen
                     查看
                 </Button>
                 <Button size="small" icon={<FolderPlus className="size-3.5" />} onClick={onAdd}>
-                    加入我的素材
+                    加入资产
                 </Button>
             </div>
         </Card>

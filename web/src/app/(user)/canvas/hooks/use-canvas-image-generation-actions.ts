@@ -129,7 +129,7 @@ export function useCanvasImageGenerationActions({
                             const sourceAssetId = await archiveGeneratedAsset(asset);
                             if (sourceAssetId) setNodes((prev) => prev.map((node) => (node.id === nodeId ? patchCurrentCanvasMediaVersion(node, { sourceAssetId }) : node)));
                         } catch {
-                            showError("图片已生成，但同步到我的素材失败");
+                            showError("图片已生成并缓存，但回写资产失败");
                         }
                     }
                 } catch (error) {
@@ -199,7 +199,7 @@ export function useCanvasImageGenerationActions({
                             try {
                                 await archiveGeneratedAsset(asset);
                             } catch {
-                                showError("图片已生成，但同步到我的素材失败");
+                                showError("图片已生成并缓存，但回写资产失败");
                             }
                         }
                         hasSuccess = true;

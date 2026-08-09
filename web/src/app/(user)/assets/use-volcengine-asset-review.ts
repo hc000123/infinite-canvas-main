@@ -61,7 +61,7 @@ export function useVolcengineAssetReview({
             filename: buildVolcengineMediaFilename(asset.title, asset.id, asset.data.mimeType, asset.kind),
             assetTitle: asset.title,
             groupId: saved?.groupId,
-            groupName: asset.title || "我的素材",
+            groupName: asset.title || "项目资产",
         });
         updateVolcengineMetadata(asset, volcengineReviewMetadataFromSubmission(result));
     };

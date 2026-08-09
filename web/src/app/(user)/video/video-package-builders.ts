@@ -155,7 +155,7 @@ export function workflowVideoGenerationReadiness(item: ProductionPackage, assets
         }
     }
     if (summary.total > summary.bound) {
-        return { message: `还有 ${summary.total - summary.bound} 个 @图N 未匹配到我的素材；可以继续按文本生成，也可以先补参考图。`, status: "warning" as const };
+        return { message: `还有 ${summary.total - summary.bound} 个 @图N 未匹配到资产；可以继续按文本生成，也可以先补参考图。`, status: "warning" as const };
     }
     return { message: summary.total ? "参考资产已匹配，可提交企业视频生成。" : "当前生产包没有声明参考图，可直接按文本生成。", status: "ready" as const };
 }

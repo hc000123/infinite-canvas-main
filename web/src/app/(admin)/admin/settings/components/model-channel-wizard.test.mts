@@ -173,3 +173,8 @@ test("settings page keeps provider presets and channel table operations", () => 
     assert.match(pageSource, /deleteChannel\(item\.id\)/);
     assert.match(pageSource, /message\.error\(error instanceof Error \? error\.message : "保存失败"\)/);
 });
+
+test("successful admin saves immediately publish public settings to the app config store", () => {
+    assert.match(pageSource, /const setPublicSettings = useConfigStore\(\(state\) => state\.setPublicSettings\)/);
+    assert.ok((pageSource.match(/setPublicSettings\(merged\.public\)/g) || []).length >= 4);
+});

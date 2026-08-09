@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, Clapperboard, Database, FileText, Images, PanelsTopLeft, Route } from "lucide-react";
+import { BriefcaseBusiness, Clapperboard, Database, Images, PanelsTopLeft, Route } from "lucide-react";
 
 export const navigationTools = [
     {
@@ -24,12 +24,6 @@ export const navigationTools = [
         label: "分镜制作台",
         shortLabel: "分镜",
         icon: Clapperboard,
-    },
-    {
-        slug: "prompts",
-        label: "提示词库",
-        shortLabel: "提示词",
-        icon: FileText,
     },
     {
         slug: "assets",

@@ -70,7 +70,7 @@ function AssetSubjectWorkbench({ subject }: { subject: AssetSubject }) {
     const candidates = workbenchImages.filter((image) => image.variantId === generationVariant.id && image.role === "candidate");
     const formalAssets = assets.filter((asset) => asset.kind === "image" && asset.assetBinding?.subjectId === subject.id && (asset.assetBinding.variantId === generationVariant.id || (!asset.assetBinding.variantId && asset.assetBinding.variantName === generationVariant.name)));
     const currentAsset = formalAssets.find((asset) => asset.id === generationVariant.currentAssetId);
-    const generation = useAssetWorkbenchGeneration({ addWorkbenchImage, projectAvailable: Boolean(project), references: references.map(workbenchImageReference), subject, variant: generationVariant });
+    const generation = useAssetWorkbenchGeneration({ addWorkbenchImage, projectTitle: project ? project.title || "未命名项目" : undefined, references: references.map(workbenchImageReference), subject, variant: generationVariant });
     const savedVariantConfig = activeVariant?.config;
     const updateGenerationConfig = generation.updateConfig;
     useEffect(() => {

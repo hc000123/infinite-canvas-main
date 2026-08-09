@@ -449,7 +449,7 @@ export default function VideoPage() {
                 updatePackage(item, { generation: generationFromTask(task) });
             });
             await savePackageVideoResult(item, config, video, completedTask as NormalizedVideoTask | null);
-            message.success(`${item.id} 视频已生成，并写入我的素材`);
+            message.success(`${item.id} 视频已生成，并写入资产`);
         } catch (error) {
             const referenceImages = resolveWorkflowReferenceImages(item, libraryAssets);
             const errorMessage = appendSeedanceMediaReviewDiagnostic(formatVideoGenerationError(error), referenceImages, []);
@@ -505,7 +505,7 @@ export default function VideoPage() {
             const blob = await fetchVideoTaskContent(config, latestTask);
             const video = await uploadMediaFile(blob, "video");
             await savePackageVideoResult(item, config, { ...video, aiTask: aiTaskLedgerFromVideoTask(latestTask) }, latestTask);
-            message.success(`${item.id} 视频已同步，并写入我的素材`);
+            message.success(`${item.id} 视频已同步，并写入资产`);
         } catch (error) {
             const errorMessage = formatVideoGenerationError(error);
             updatePackage(item, {

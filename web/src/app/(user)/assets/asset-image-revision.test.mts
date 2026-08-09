@@ -58,6 +58,7 @@ test("wires image revision into the workbench and asset cards", () => {
     assert.match(imagePage, /assetImageReference/);
     assert.match(imagePage, /revisedImageAssetInput/);
     assert.match(imagePage, /setVariantCurrentAsset/);
+    assert.match(imagePage, /await autoSaveAssetRevisionResults\(logImages\)/);
     assert.match(imagePage, /buildWorkflowGeneratedImagePatch/);
     assert.match(assetPage, /buildAssetImageRevisionHref/);
     assert.match(mediaCard, /进入生图修改/);

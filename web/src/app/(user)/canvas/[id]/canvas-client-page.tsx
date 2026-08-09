@@ -47,6 +47,7 @@ import { useCanvasVideoTaskRecovery } from "../hooks/use-canvas-video-task-recov
 import { useCanvasMediaVersionActions } from "../hooks/use-canvas-media-version-actions";
 import { useCanvasViewportGeometry } from "../hooks/use-canvas-viewport-geometry";
 import { useCanvasWorkspaceStores } from "../hooks/use-canvas-workspace-stores";
+import { shouldWriteGeneratedAsset } from "../utils/canvas-generated-asset-writeback";
 import { App } from "antd";
 import { CanvasConnectionsLayer } from "../components/canvas-connections-layer";
 import { CanvasRefreshShell } from "../components/canvas-refresh-shell";
@@ -121,7 +122,7 @@ function InfiniteCanvasPage() {
         async (...args: Parameters<typeof storeAddAssetOnce>) => {
             const id = await storeAddAssetOnce(...args);
             const stored = useAssetStore.getState().assets.find((asset) => asset.id === id);
-            if (currentProject?.projectId && currentProject.episodeId && stored?.kind === "image" && !stored.assetBinding) setClassificationAssetIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
+            if (currentProject?.projectId && currentProject.episodeId && stored?.kind === "image" && !stored.assetBinding && !shouldWriteGeneratedAsset(stored)) setClassificationAssetIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
             return id;
         },
         [currentProject, storeAddAssetOnce],

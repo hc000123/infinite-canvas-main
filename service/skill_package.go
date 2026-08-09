@@ -65,6 +65,7 @@ type SkillPackage struct {
 	OutputContract     SkillOutputContract `json:"outputContract"`
 	QualityGateProfile []string            `json:"qualityGateProfile"`
 	ContentHash        string              `json:"contentHash"`
+	sourceKind         string
 }
 
 func NormalizeSkillPackage(value SkillPackage) (SkillPackage, error) {
@@ -72,7 +73,7 @@ func NormalizeSkillPackage(value SkillPackage) (SkillPackage, error) {
 	if err != nil {
 		return SkillPackage{}, err
 	}
-	files, err := normalizeSkillFiles(value.Files)
+	files, err := normalizeSkillFiles(value.Files, value.sourceKind)
 	if err != nil {
 		return SkillPackage{}, err
 	}
@@ -91,7 +92,7 @@ func NormalizeSkillPackage(value SkillPackage) (SkillPackage, error) {
 	if !containsSkillToken(gates, "schema") {
 		return SkillPackage{}, safeMessageError{message: "Skill 必须启用 schema 质量门"}
 	}
-	normalized := SkillPackage{Manifest: manifest, Files: files, InputContract: inputContract, OutputContract: outputContract, QualityGateProfile: gates}
+	normalized := SkillPackage{Manifest: manifest, Files: files, InputContract: inputContract, OutputContract: outputContract, QualityGateProfile: gates, sourceKind: value.sourceKind}
 	normalized.ContentHash = skillPackageHash(normalized)
 	return normalized, nil
 }
@@ -173,6 +174,7 @@ func DecodeSkillPackage(version model.SkillVersion) (SkillPackage, error) {
 		json.Unmarshal([]byte(version.QualityGateProfileJSON), &value.QualityGateProfile) != nil {
 		return SkillPackage{}, safeMessageError{message: "Skill 版本内容损坏"}
 	}
+	value.sourceKind = version.SourceKind
 	normalized, err := NormalizeSkillPackage(value)
 	if err != nil {
 		return SkillPackage{}, err
@@ -331,8 +333,12 @@ func appendSkillSchemaIssues(content []byte, contract SkillOutputContract, repor
 	}
 }
 
-func normalizeSkillFiles(files map[string]string) (map[string]string, error) {
+func normalizeSkillFiles(files map[string]string, sourceKind string) (map[string]string, error) {
 	normalizedFiles := make(map[string]string, len(files))
+	maxFiles, maxFileBytes, maxPackageBytes := skillMaxFiles, skillMaxFileBytes, skillMaxPackageBytes
+	if sourceKind == "folder_import" {
+		maxFiles, maxFileBytes, maxPackageBytes = skillFolderMaxFiles, skillFolderMaxFileBytes, skillFolderMaxBytes
+	}
 	totalBytes := 0
 	for logicalPath, content := range files {
 		logicalPath = strings.ReplaceAll(strings.TrimSpace(logicalPath), "\\", "/")
@@ -341,26 +347,39 @@ func normalizeSkillFiles(files map[string]string) (map[string]string, error) {
 			return nil, safeMessageError{message: "Skill 文件路径不安全"}
 		}
 		extension := strings.ToLower(path.Ext(cleaned))
-		if extension != ".md" && extension != ".json" {
+		allowedExtension := extension == ".md" || extension == ".json"
+		if sourceKind == "folder_import" {
+			allowedExtension = skillFolderTextFile(cleaned)
+		}
+		if !allowedExtension {
 			return nil, safeMessageError{message: "Skill 只允许 Markdown 或 JSON 文件"}
 		}
 		if _, exists := normalizedFiles[cleaned]; exists {
 			return nil, safeMessageError{message: "Skill 文件路径重复"}
 		}
 		normalized := normalizeSkillText(content)
-		if len(normalized) > skillMaxFileBytes {
+		if len(normalized) > maxFileBytes {
+			if sourceKind == "folder_import" {
+				return nil, safeMessageError{message: "Skill 文件夹包含过大的单个文件"}
+			}
 			return nil, safeMessageError{message: "Skill 单个文件不能超过 64 KiB"}
 		}
 		if extension == ".json" && !json.Valid([]byte(normalized)) {
 			return nil, safeMessageError{message: "Skill JSON 文件格式不正确"}
 		}
 		totalBytes += len(normalized)
-		if totalBytes > skillMaxPackageBytes {
+		if totalBytes > maxPackageBytes {
+			if sourceKind == "folder_import" {
+				return nil, safeMessageError{message: "Skill 文件夹总大小超过 32 MiB"}
+			}
 			return nil, safeMessageError{message: "Skill 文件总量不能超过 128 KiB"}
 		}
 		normalizedFiles[cleaned] = normalized
 	}
-	if len(normalizedFiles) > skillMaxFiles {
+	if len(normalizedFiles) > maxFiles {
+		if sourceKind == "folder_import" {
+			return nil, safeMessageError{message: "Skill 文件夹文件不能超过 128 个"}
+		}
 		return nil, safeMessageError{message: "Skill 文件不能超过 32 个"}
 	}
 	if strings.TrimSpace(normalizedFiles["SKILL.md"]) == "" {

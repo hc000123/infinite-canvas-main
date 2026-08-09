@@ -98,6 +98,7 @@ func frozenInvocationSkill(revision model.InvocationPreflightRevision) (invocati
 	if json.Unmarshal([]byte(revision.SkillSnapshotJSON), &skill) != nil || strings.TrimSpace(skill.Package.Files["SKILL.md"]) == "" {
 		return skill, errors.New("frozen Skill snapshot 无效")
 	}
+	skill.Package.sourceKind = skill.Version.SourceKind
 	normalized, err := NormalizeSkillPackage(skill.Package)
 	if err != nil || normalized.ContentHash != skill.Package.ContentHash || normalized.ContentHash != revision.SkillContentHash || skill.Skill.ID != revision.SkillID || skill.Version.ID != revision.SkillVersionID || skill.Version.Version != revision.SkillVersion || skill.Version.ContentHash != revision.SkillContentHash {
 		return skill, errors.New("frozen Skill snapshot/hash 无效")

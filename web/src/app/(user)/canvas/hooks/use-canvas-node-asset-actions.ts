@@ -51,7 +51,7 @@ export function useCanvasNodeAssetActions({
     const saveNodeAsset = useCallback(
         async (node: CanvasNodeData) => {
             if (!(await addCanvasNodeToAssets(node))) return message.error(`没有可保存的${canvasAssetTypeLabel(node.type)}`);
-            message.success("已加入我的素材");
+            message.success("已加入资产");
         },
         [addCanvasNodeToAssets, message],
     );

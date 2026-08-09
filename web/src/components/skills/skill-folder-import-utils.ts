@@ -72,7 +72,7 @@ export function createLatestRequestGuard() {
 export async function readSkillFolderMetadata(files: File[], defaultVersion = "1.0.0") {
     const layout = skillFolderLayout(files);
     const index = layout.relativePaths.indexOf("SKILL.md");
-    if (index < 0) throw new Error("文件夹根目录必须包含 SKILL.md");
+    if (index < 0) throw new Error("请选择单个 SKILL.md，或根目录包含 SKILL.md 的文件夹");
     return parseSkillFolderMetadata(await files[index].text(), layout.folderName || "Skill", defaultVersion);
 }
 
@@ -102,9 +102,13 @@ function skillFolderTrashPath(path: string) {
 
 export async function readDroppedSkillFolder(items: Iterable<DropItem>) {
     const entries = Array.from(items, (item) => item.webkitGetAsEntry() as DropEntry | null).filter((entry): entry is DropEntry => Boolean(entry));
-    if (entries.length !== 1 || !entries[0].isDirectory) throw new Error("请拖入一个完整文件夹，不要拖入单个文件");
+    if (entries.length !== 1) throw new Error("请一次拖入一个 SKILL.md 或一个完整文件夹");
     const root = entries[0];
     safeSegment(root.name);
+    if (root.isFile) {
+        if (root.name !== "SKILL.md") throw new Error("单文件导入请选择名为 SKILL.md 的文件");
+        return [await new Promise<File>((resolve, reject) => root.file(resolve, reject))];
+    }
     const files = await readDirectory(root, root.name);
     if (!skillFolderLayout(files).relativePaths.includes("SKILL.md")) throw new Error("拖入的文件夹根目录缺少 SKILL.md");
     return files;

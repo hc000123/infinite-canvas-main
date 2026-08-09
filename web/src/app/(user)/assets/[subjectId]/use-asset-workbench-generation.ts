@@ -6,15 +6,18 @@ import { nanoid } from "nanoid";
 
 import { requestEdit, requestGeneration } from "@/services/api/image";
 import { uploadImage } from "@/services/image-storage";
+import { archiveLocalMediaToProjectCache } from "@/services/project-cache-archive";
+import { projectCacheContextFromGeneration } from "@/services/project-cache-context";
 import { useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import type { AssetSubject, AssetVariant, AssetWorkbenchImage } from "@/stores/use-asset-store";
+import { useUserStore } from "@/stores/use-user-store";
 import type { ReferenceImage } from "@/types/image";
 import { buildCandidateImageInput, buildGenerationTrace, imageRequestMode } from "../asset-workbench-generation";
 
 export type WorkbenchGenerationSlot = { id: string; status: "pending" | "failed"; error?: string };
 type GenerationSnapshot = { config: AiConfig; model: string; prompt: string; references: ReferenceImage[] };
 
-export function useAssetWorkbenchGeneration({ addWorkbenchImage, projectAvailable, references, subject, variant }: { addWorkbenchImage: (image: Omit<AssetWorkbenchImage, "createdAt" | "id">) => string; projectAvailable: boolean; references: ReferenceImage[]; subject: AssetSubject; variant: AssetVariant }) {
+export function useAssetWorkbenchGeneration({ addWorkbenchImage, projectTitle, references, subject, variant }: { addWorkbenchImage: (image: Omit<AssetWorkbenchImage, "createdAt" | "id">) => string; projectTitle?: string; references: ReferenceImage[]; subject: AssetSubject; variant: AssetVariant }) {
     const { message } = App.useApp();
     const config = useConfigStore((state) => state.config);
     const effectiveConfig = useEffectiveConfig();
@@ -22,6 +25,7 @@ export function useAssetWorkbenchGeneration({ addWorkbenchImage, projectAvailabl
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const allowCustomModel = useConfigStore((state) => state.publicSettings?.modelChannel.allowCustomChannel !== false);
+    const token = useUserStore((state) => state.token);
     const [slots, setSlots] = useState<WorkbenchGenerationSlot[]>([]);
     const [running, setRunning] = useState(false);
     const snapshotRef = useRef<GenerationSnapshot | null>(null);
@@ -33,7 +37,7 @@ export function useAssetWorkbenchGeneration({ addWorkbenchImage, projectAvailabl
             message.warning("请先填写画面描述");
             return null;
         }
-        if (!projectAvailable) {
+        if (!projectTitle) {
             message.warning("所属项目已不存在，请先重新绑定项目");
             return null;
         }
@@ -55,6 +59,10 @@ export function useAssetWorkbenchGeneration({ addWorkbenchImage, projectAvailabl
             const stored = await uploadImage(image.dataUrl);
             const createdAt = new Date().toISOString();
             addWorkbenchImage(buildCandidateImageInput(subject, { ...variant, prompt: snapshot.prompt }, stored, { model: snapshot.model, quality: snapshot.config.quality, size: snapshot.config.size }, createdAt, index + 1));
+            if (token) {
+                const context = projectCacheContextFromGeneration({ assetId: subject.id, category: subject.category, kind: "image", projectId: subject.projectId, projectName: projectTitle, source: "asset-workbench", metadata: { generation: { model: snapshot.model, prompt: snapshot.prompt } }, versionId: variant.id });
+                void archiveLocalMediaToProjectCache({ id: `asset-workbench:${stored.storageKey}`, storageKey: stored.storageKey, kind: "image", filename: `${subject.name}-${variant.name}-候选${index + 1}.png`, context, token }).catch(() => undefined);
+            }
             setSlots((value) => value.filter((slot) => slot.id !== slotId));
         } catch (error) {
             setSlots((value) => value.map((slot) => (slot.id === slotId ? { id: slot.id, status: "failed", error: error instanceof Error ? error.message : "生成失败" } : slot)));

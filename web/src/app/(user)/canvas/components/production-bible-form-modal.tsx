@@ -106,7 +106,7 @@ export function ProductionBibleFormModal({
                     <Select mode="tags" tokenSeparators={[",", "，"]} placeholder="输入标签后回车" />
                 </Form.Item>
                 <Form.Item name="assetIds" label="绑定素材">
-                    <Select mode="multiple" showSearch options={assetOptions} optionFilterProp="label" placeholder="从我的素材中选择图片、视频、音频或文本素材" />
+                    <Select mode="multiple" showSearch options={assetOptions} optionFilterProp="label" placeholder="从资产中选择图片、视频、音频或文本素材" />
                 </Form.Item>
                 {selectedAssetIds.length ? (
                     <div className="mb-5 space-y-2 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3">

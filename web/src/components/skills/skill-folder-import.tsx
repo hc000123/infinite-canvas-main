@@ -16,7 +16,8 @@ const emptyFields: SkillFolderMetadata = { name: "", summary: "", version: "" };
 
 export function SkillFolderImport({ open, token, scope = "admin", projectId, skillId, previousVersionId, onCancel, onImported }: SkillFolderImportProps) {
     const { message } = App.useApp();
-    const inputRef = useRef<HTMLInputElement>(null);
+    const skillInputRef = useRef<HTMLInputElement>(null);
+    const folderInputRef = useRef<HTMLInputElement>(null);
     const requestGuard = useRef(createLatestRequestGuard());
     const [files, setFiles] = useState<File[]>([]);
     const [fields, setFields] = useState(emptyFields);
@@ -46,7 +47,8 @@ export function SkillFolderImport({ open, token, scope = "admin", projectId, ski
         setReading(false);
         setPreparing(false);
         setDiffing(false);
-        if (inputRef.current) inputRef.current.value = "";
+        if (skillInputRef.current) skillInputRef.current.value = "";
+        if (folderInputRef.current) folderInputRef.current.value = "";
     }, [open]);
 
     useEffect(() => {
@@ -57,7 +59,7 @@ export function SkillFolderImport({ open, token, scope = "admin", projectId, ski
         setDiffing(true);
         diffSkillFolderFiles(files, previousFiles.data)
             .then((value) => { if (active) setDiff(value); })
-            .catch(() => { if (active) setDiffError("计算文件差异失败，请重新选择文件夹"); })
+            .catch(() => { if (active) setDiffError("计算文件差异失败，请重新选择 Skill 内容"); })
             .finally(() => { if (active) setDiffing(false); });
         return () => { active = false; };
     }, [files, previousFiles.data, updating]);
@@ -68,7 +70,7 @@ export function SkillFolderImport({ open, token, scope = "admin", projectId, ski
             : scope === "admin" ? importAdminSkillFolder(token, files, { ownerType: "system", stageKey, name: fields.name.trim(), summary: fields.summary.trim(), version: fields.version.trim() }) : importProjectSkillFolder(token, files, { ownerType: "project", projectId, stageKey, name: fields.name.trim(), summary: fields.summary.trim(), version: fields.version.trim() }),
         onSuccess: (result) => {
             requestGuard.current.invalidate();
-            message.success(updating ? "新版本已载入，请先试跑" : "Skill 文件夹已载入，请先试跑");
+            message.success(updating ? "新版本已载入，请先试跑" : "Skill 已载入，请先试跑");
             setFiles([]);
             setFields(emptyFields);
             setStageKey("");
@@ -105,14 +107,15 @@ export function SkillFolderImport({ open, token, scope = "admin", projectId, ski
             setFiles(nextFiles);
             setFields(emptyFields);
             setPreparing(false);
-            message.warning(error instanceof Error ? error.message : "无法读取 Skill 文件夹");
+            message.warning(error instanceof Error ? error.message : "无法读取 Skill");
         }
     };
+    const chooseSkillFile = () => skillInputRef.current?.click();
     const chooseFolder = () => {
-        inputRef.current?.setAttribute("webkitdirectory", "");
-        inputRef.current?.click();
+        folderInputRef.current?.setAttribute("webkitdirectory", "");
+        folderInputRef.current?.click();
     };
-    const handleDrop = async (event: React.DragEvent<HTMLButtonElement>) => {
+    const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
         event.preventDefault();
         setDragging(false);
         const request = beginPreparing(true);
@@ -120,7 +123,7 @@ export function SkillFolderImport({ open, token, scope = "admin", projectId, ski
             const dropped = await readDroppedSkillFolder(Array.from(event.dataTransfer.items));
             if (request.isCurrent()) await acceptFiles(dropped, request);
         } catch (error) {
-            if (request.isCurrent()) { setPreparing(false); message.warning(error instanceof Error ? error.message : "无法读取拖入的文件夹"); }
+            if (request.isCurrent()) { setPreparing(false); message.warning(error instanceof Error ? error.message : "无法读取拖入的 Skill"); }
         } finally {
             if (request.isCurrent()) setReading(false);
         }
@@ -141,12 +144,13 @@ export function SkillFolderImport({ open, token, scope = "admin", projectId, ski
         diffUnavailable: Boolean(diffError),
     });
 
-    return <Modal width={720} title={updating ? "载入 Skill 新版本" : "载入外部 Skill 文件夹"} open={open} onCancel={onCancel} footer={<Flex justify="space-between" align="center" gap={16}><Typography.Text type="secondary" className="text-xs">系统会冻结完整文件夹，不执行其中脚本。</Typography.Text><Flex gap={8}><Button onClick={onCancel}>取消</Button><Button type="primary" loading={mutation.isPending} disabled={disabled} onClick={() => mutation.mutate()}>载入并创建草稿</Button></Flex></Flex>}>
+    return <Modal width={720} title={updating ? "载入 Skill 新版本" : "载入外部 Skill"} open={open} onCancel={onCancel} footer={<Flex justify="space-between" align="center" gap={16}><Typography.Text type="secondary" className="text-xs">系统会冻结所选 Skill 内容，不执行其中脚本。</Typography.Text><Flex gap={8}><Button onClick={onCancel}>取消</Button><Button type="primary" loading={mutation.isPending} disabled={disabled} onClick={() => mutation.mutate()}>载入并创建草稿</Button></Flex></Flex>}>
         <Flex vertical gap={16}>
             {!updating ? <div><Typography.Text strong>选择所属阶段</Typography.Text><Typography.Paragraph type="secondary" className="mt-1">只需选阶段；Capability、Artifact 和 Schema 由系统自动配置。</Typography.Paragraph><Select className="w-full" showSearch optionFilterProp="label" placeholder="例如：剧本整理" value={stageKey || undefined} loading={templates.isLoading} options={(templates.data || []).map(stageOption)} onChange={setStageKey} />{selected ? <StageSummary item={selected} /> : null}</div> : <div className="rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3"><Typography.Text strong>沿用当前 Skill 的 Definition 与所属阶段</Typography.Text><Typography.Text type="secondary" className="mt-1 block text-xs">新版本不修改 Definition 名称、说明或阶段；版本号留空时由服务端自动增加补丁版。</Typography.Text></div>}
-            <button type="button" onClick={chooseFolder} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} className={`grid min-h-40 w-full place-items-center rounded-xl border border-dashed p-6 text-center transition ${dragging ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)]" : "border-[var(--studio-border-strong)] bg-[var(--studio-panel-muted-bg)] hover:bg-[var(--studio-hover-bg)]"}`}><span>{preparing || reading ? <Spin /> : <InboxOutlined className="text-3xl text-[var(--studio-accent)]" />}<span className="mt-3 block text-base font-semibold">{preparing ? "正在读取 Skill 文件夹" : files.length ? layout.folderName || "已选文件" : "点击选择或拖入完整文件夹"}</span><span className="mt-1 block text-sm text-[var(--studio-text-muted)]">{files.length ? `${files.length} 个文件 · ${hasSkill ? "已找到根目录 SKILL.md" : "缺少根目录 SKILL.md"}` : "保留 rules、references、assets 等所有子目录"}</span></span></button>
-            <input ref={inputRef} hidden type="file" multiple onChange={(event) => { const request = beginPreparing(false); void acceptFiles(Array.from(event.target.files || []), request); event.target.value = ""; }} />
-            {files.length && !hasSkill ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择根目录包含 SKILL.md 的文件夹" /> : null}
+            <div onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={handleDrop} className={`grid min-h-44 w-full place-items-center rounded-xl border border-dashed p-6 text-center transition ${dragging ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)]" : "border-[var(--studio-border-strong)] bg-[var(--studio-panel-muted-bg)]"}`}><div>{preparing || reading ? <Spin /> : <InboxOutlined className="text-3xl text-[var(--studio-accent)]" />}<span className="mt-3 block text-base font-semibold">{preparing ? "正在读取 Skill" : files.length ? layout.folderName || "SKILL.md" : "选择或拖入外部 Skill"}</span><span className="mt-1 block text-sm text-[var(--studio-text-muted)]">{files.length ? `${files.length} 个文件 · ${hasSkill ? "已找到根目录 SKILL.md" : "缺少根目录 SKILL.md"}` : "可导入单个 SKILL.md，也可保留 rules、references、assets 等完整目录"}</span>{!preparing ? <Flex justify="center" gap={8} className="mt-4"><Button type="primary" onClick={chooseSkillFile}>选择 SKILL.md</Button><Button icon={<FolderOpenOutlined />} onClick={chooseFolder}>选择完整文件夹</Button></Flex> : null}</div></div>
+            <input ref={skillInputRef} hidden type="file" accept=".md,text/markdown" onChange={(event) => { const request = beginPreparing(false); void acceptFiles(Array.from(event.target.files || []), request); event.target.value = ""; }} />
+            <input ref={folderInputRef} hidden type="file" multiple onChange={(event) => { const request = beginPreparing(false); void acceptFiles(Array.from(event.target.files || []), request); event.target.value = ""; }} />
+            {files.length && !hasSkill ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择单个 SKILL.md，或根目录包含 SKILL.md 的文件夹" /> : null}
             {hasSkill ? updating ? <Field label="版本号"><Input value={fields.version} placeholder="留空则自动增加补丁版" onChange={(event) => setFields({ ...fields, version: event.target.value })} /></Field> : <div className="grid gap-3 sm:grid-cols-2"><Field label="Skill 名称"><Input value={fields.name} onChange={(event) => setFields({ ...fields, name: event.target.value })} /></Field><Field label="版本号"><Input value={fields.version} onChange={(event) => setFields({ ...fields, version: event.target.value })} /></Field><div className="sm:col-span-2"><Field label="用途与说明"><Input.TextArea autoSize={{ minRows: 2, maxRows: 5 }} value={fields.summary} onChange={(event) => setFields({ ...fields, summary: event.target.value })} /></Field></div></div> : null}
             {updating && files.length ? <FileDiff diff={diff} loading={previousFiles.isFetching || diffing} error={diffError ? "无法生成差异，仍可导入" : previousFiles.error || !previousVersionId ? "上一版本没有可比对的文件快照，仍可导入" : ""} /> : null}
         </Flex>

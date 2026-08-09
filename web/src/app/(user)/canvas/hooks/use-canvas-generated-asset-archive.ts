@@ -13,6 +13,7 @@ import type { CanvasNodeData } from "../types";
 import { aiTaskIdFromGeneration, buildFrontendArtifactTrace } from "../utils/canvas-ai-task-trace";
 import type { CanvasEpisodeContext } from "../utils/canvas-episode-context";
 import { buildGeneratedVideoAsset, numberCanvasAssetNode } from "../utils/canvas-generated-asset";
+import { generatedSourceAssetId, inheritGeneratedAssetBinding, shouldWriteGeneratedAsset } from "../utils/canvas-generated-asset-writeback";
 import type { CanvasProjectPreset } from "../utils/canvas-project-preset";
 import { buildImageBriefResultPatch, buildProductionBibleBriefAssetRefs } from "../utils/image-brief";
 
@@ -53,32 +54,42 @@ export function useCanvasGeneratedAssetArchive({
 
     const archiveGeneratedAsset = useCallback(
         async (asset: AssetWriteInput) => {
-            const archivedAsset = asset.kind === "video" ? { ...asset, folderId: asset.folderId || ensureProjectFolder(workspaceProjectId, workspaceProjectTitle) } : asset;
-            const assetId = await addAssetOnce(archivedAsset);
-            const generation = asset.metadata?.generation as Record<string, unknown> | undefined;
-            if (token && asset.kind === "image" && asset.data.storageKey) {
+            const sourceAsset = useAssetStore.getState().assets.find((item) => item.id === generatedSourceAssetId(asset));
+            const linkedAsset = inheritGeneratedAssetBinding(asset, sourceAsset);
+            const generation = linkedAsset.metadata?.generation as Record<string, unknown> | undefined;
+            const shouldWriteAsset = shouldWriteGeneratedAsset(linkedAsset);
+            const archivedAsset = shouldWriteAsset && linkedAsset.kind === "video" ? { ...linkedAsset, folderId: linkedAsset.folderId || ensureProjectFolder(workspaceProjectId, workspaceProjectTitle) } : linkedAsset;
+            const assetId = shouldWriteAsset ? await addAssetOnce(archivedAsset) : undefined;
+            if (assetId && linkedAsset.kind === "image" && sourceAsset?.assetBinding) {
+                const variants = useAssetStore.getState().variants;
+                const variantId = sourceAsset.assetBinding.variantId || variants.find((variant) => variant.subjectId === sourceAsset.assetBinding?.subjectId && variant.name === sourceAsset.assetBinding?.variantName)?.id;
+                if (variantId) useAssetStore.getState().setVariantCurrentAsset(variantId, assetId);
+            }
+            if (token && linkedAsset.kind === "image" && linkedAsset.data.storageKey) {
                 const context = projectCacheContextFromGeneration({
-                    assetId,
+                    assetId: assetId || "",
                     canvasId,
                     canvasName: String(generation?.canvasTitle || canvasTitle),
                     episodeId: String(generation?.episodeId || ""),
                     episodeName: String(generation?.episodeTitle || ""),
                     freeCanvas: !generation?.episodeId,
                     kind: "image",
-                    metadata: { ...asset.metadata, assetBinding: asset.assetBinding },
-                    nodeId: String(asset.metadata?.nodeId || generation?.nodeId || ""),
+                    metadata: { ...linkedAsset.metadata, assetBinding: linkedAsset.assetBinding },
+                    nodeId: String(linkedAsset.metadata?.nodeId || generation?.nodeId || ""),
                     projectId: String(generation?.projectId || workspaceProjectId),
                     projectName: String(generation?.projectTitle || workspaceProjectTitle),
                     source: "canvas",
                     versionId: String(generation?.assetVersionNumber || ""),
                 });
-                void archiveLocalMediaToProjectCache({ id: `asset:${assetId}:${context.versionId}`, storageKey: asset.data.storageKey, kind: "image", filename: `${asset.title || assetId}.png`, context, token }).catch(() => undefined);
+                const cacheId = assetId ? `asset:${assetId}:${context.versionId}` : `canvas:${canvasId}:${context.nodeId || linkedAsset.data.storageKey}:${context.versionId || "result"}`;
+                void archiveLocalMediaToProjectCache({ id: cacheId, storageKey: linkedAsset.data.storageKey, kind: "image", filename: `${linkedAsset.title || context.nodeId || "生成图片"}.png`, context, token }).catch(() => undefined);
             }
+            if (!assetId) return undefined;
             const aiTaskId = aiTaskIdFromGeneration(generation);
             if (aiTaskId) {
                 const artifact = buildFrontendArtifactTrace({
                     assetId,
-                    kind: asset.kind,
+                    kind: linkedAsset.kind,
                     createdAt: new Date().toISOString(),
                     generation,
                     canvasId,

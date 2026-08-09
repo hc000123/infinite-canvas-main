@@ -24,8 +24,9 @@ import { SkillEditor } from "./components/skill-editor";
 import { SkillEvaluationPanel } from "./components/skill-evaluation";
 import { SkillFolderImport } from "@/components/skills/skill-folder-import";
 import { SkillSourceBrowser } from "@/components/skills/skill-source-browser";
+import { groupSkillItemsByStage, resolveOpenSkillStageKeys } from "@/components/skills/skill-stage-groups";
 import { SkillTrialPanel } from "@/components/skills/skill-trial-panel";
-import { canPublishSkill, filterSkillItems, groupSkillItemsByStage, latestPassingEvaluation, resolveOpenSkillStageKeys, shortSkillHash, skillLifecycleLabel, type SkillFilter } from "./skill-view";
+import { canPublishSkill, filterSkillItems, latestPassingEvaluation, shortSkillHash, skillLifecycleLabel, type SkillFilter } from "./skill-view";
 
 const initialFilters: SkillFilter = { search: "", capability: "", inputArtifactType: "", outputArtifactType: "", projectTag: "", ownerType: "" };
 
@@ -146,7 +147,7 @@ export default function AdminSkillsPage() {
                 <Card className="studio-panel" variant="borderless">
                     <Flex justify="space-between" align="flex-start" gap={18} wrap>
                         <div><Typography.Text className="text-xs font-semibold tracking-[0.18em] text-[var(--studio-accent)]">COMPOSABLE CAPABILITY REGISTRY</Typography.Text><Typography.Title level={2} style={{ margin: "8px 0 4px" }}>Skill 中心</Typography.Title><Typography.Text type="secondary">Skill 独立发布、版本冻结、按能力检索；工作流只是其中一个调用方。</Typography.Text></div>
-                        <Space wrap><Tag icon={<SafetyCertificateOutlined />} color="success">文件夹载入 · 独立试跑 · 版本冻结</Tag><Button type="primary" icon={<PlusOutlined />} onClick={() => setFolderImportMode("new")}>导入 Skill 文件夹</Button></Space>
+                        <Space wrap><Tag icon={<SafetyCertificateOutlined />} color="success">外部载入 · 独立试跑 · 版本冻结</Tag><Button type="primary" icon={<PlusOutlined />} onClick={() => setFolderImportMode("new")}>导入外部 Skill</Button></Space>
                     </Flex>
                     <Space wrap className="mt-5">
                         <Input.Search placeholder="搜索 Skill 名称或说明" value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} style={{ width: 230 }} />
@@ -200,7 +201,7 @@ export default function AdminSkillsPage() {
             </Flex>
 
             <SkillFolderImport open={Boolean(folderImportMode)} token={token} skillId={folderImportMode === "version" ? activeItem?.skill.id : undefined} previousVersionId={folderImportMode === "version" ? activeVersionId : undefined} onCancel={() => setFolderImportMode("")} onImported={async (skillId, versionId) => { setFolderImportMode(""); await invalidateAll(); if (skillId) setActiveSkillId(skillId); if (versionId) setActiveVersionId(versionId); }} />
-            <SkillTrialPanel open={trialOpen} token={token} versionId={activeVersionId} onCancel={() => setTrialOpen(false)} onCompleted={async () => { await invalidateAll(); }} />
+            <SkillTrialPanel open={trialOpen} token={token} versionId={activeVersionId} executorKind={detailQuery.data?.package.manifest.executorKind} onCancel={() => setTrialOpen(false)} onCompleted={async () => { await invalidateAll(); }} />
 
             <Modal title="编辑 Skill 名称" open={definitionOpen} onCancel={() => setDefinitionOpen(false)} onOk={() => definitionMutation.mutate()} confirmLoading={definitionMutation.isPending} okButtonProps={{ disabled: !definitionForm.name.trim() }}>
                 <Flex vertical gap={12}><Input placeholder="Skill 名称" value={definitionForm.name} onChange={(event) => setDefinitionForm({ ...definitionForm, name: event.target.value })} /><Input.TextArea rows={4} placeholder="用途与适用范围" value={definitionForm.summary} onChange={(event) => setDefinitionForm({ ...definitionForm, summary: event.target.value })} /></Flex>

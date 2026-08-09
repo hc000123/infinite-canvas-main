@@ -276,7 +276,7 @@ function GenerationDetail({ item, loading, onGenerate, onOpenConfig, onSync }: {
                 <div className="grid place-items-center rounded-md border border-dashed border-[var(--studio-border-subtle)] bg-[var(--studio-control-bg)] px-4 py-12 text-center">
                     {loading ? <LoaderCircle className="mb-3 size-7 animate-spin text-[var(--studio-accent)]" /> : <Video className="mb-3 size-7 text-[var(--studio-text-muted)]" />}
                     <div className="text-sm font-medium text-[var(--studio-text-primary)]">{loading ? "正在生成视频" : "还没有生成视频"}</div>
-                    <div className="mt-1 text-xs leading-5 text-[var(--studio-text-muted)]">会调用真实视频接口，任务完成后自动保存到我的素材。</div>
+                    <div className="mt-1 text-xs leading-5 text-[var(--studio-text-muted)]">会调用真实视频接口，任务完成后自动保存到资产。</div>
                     <Button className="mt-4" type="primary" loading={loading} icon={<Play className="size-4" />} onClick={onGenerate}>
                         生成视频
                     </Button>
@@ -326,7 +326,7 @@ function GenerationDetail({ item, loading, onGenerate, onOpenConfig, onSync }: {
             {generation?.assetId ? (
                 <div className={cn("rounded-lg border p-3 text-sm", studioSemanticNoticeClass("success"))}>
                     <div className="font-medium">素材已归档</div>
-                    <div className="mt-1 leading-6 opacity-80">本次视频已写入“我的素材”，同编号再次生成会保留旧视频版本。</div>
+                    <div className="mt-1 leading-6 opacity-80">本次视频已写入“资产”，同编号再次生成会保留旧视频版本。</div>
                     <Button className="mt-3" size="small" href={`/assets?kind=video&assetId=${encodeURIComponent(generation.assetId)}`}>
                         打开素材
                     </Button>

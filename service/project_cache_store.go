@@ -84,9 +84,18 @@ func ArchiveProjectCacheFile(root, userID string, input ProjectCacheArchiveInput
 		}
 	}
 	createdAt := time.Now().UTC().Format(time.RFC3339)
-	filename := createdAt[:10] + "_" + id + projectCacheExtension(input.MIMEType, input.Filename)
+	filename := safeProjectCacheFilename(input.Filename, input.MIMEType)
 	relativePath := filepath.Join(directory, filename)
 	finalPath := filepath.Join(projectPath, relativePath)
+	if _, err := os.Stat(finalPath); err == nil {
+		extension := filepath.Ext(filename)
+		filename = strings.TrimSuffix(filename, extension) + "__" + id[:8] + extension
+		relativePath = filepath.Join(directory, filename)
+		finalPath = filepath.Join(projectPath, relativePath)
+	} else if !os.IsNotExist(err) {
+		_ = os.Remove(temporaryPath)
+		return ProjectCacheArchiveResult{}, err
+	}
 	if err := os.Rename(temporaryPath, finalPath); err != nil {
 		_ = os.Remove(temporaryPath)
 		return ProjectCacheArchiveResult{}, err

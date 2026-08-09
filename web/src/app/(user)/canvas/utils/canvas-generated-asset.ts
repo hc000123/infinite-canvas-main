@@ -140,6 +140,7 @@ function buildGeneratedAssetMetadata(node: CanvasNodeData, context: CanvasGenera
         referenceAssets: node.metadata?.referenceAssets || [],
         sourceType: node.metadata?.sourceType,
         sourceId: node.metadata?.sourceId,
+        sourceAssetId: node.metadata?.sourceAssetId,
         productionBibleItemId: node.metadata?.productionBibleItemId,
         shotGroupId: node.metadata?.shotGroupId,
         shotIds: node.metadata?.shotIds || [],

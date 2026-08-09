@@ -35,5 +35,6 @@ test("wires the generation hook to generation, edit, retry and persistent candid
     assert.match(source, /requestEdit/);
     assert.match(source, /retrySlot/);
     assert.match(source, /addWorkbenchImage/);
+    assert.match(source, /archiveLocalMediaToProjectCache/);
     assert.match(source, /Promise\.allSettled/);
 });

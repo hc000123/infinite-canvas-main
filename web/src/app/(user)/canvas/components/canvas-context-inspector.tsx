@@ -340,7 +340,7 @@ function CanvasOverview({
                     <div className="min-w-0">
                         <div className="text-sm font-semibold">{hasEpisode ? "画布内容" : "自由画布"}</div>
                         <div className="mt-1 text-xs leading-5" style={{ color: theme.node.muted }}>
-                            {hasEpisode ? "素材、设定和参考图统一在“我的素材”管理；画布负责节点、连线和生成配置。" : "未绑定集数，可自由编排文本、图片、视频、音频和配置节点。"}
+                            {hasEpisode ? "正式素材、设定和参考图统一在“资产”管理；生成结果先进入缓存。" : "未绑定集数，可自由编排文本、图片、视频、音频和配置节点。"}
                         </div>
                     </div>
                     <div className="shrink-0 rounded-md px-2 py-1 text-xs tabular-nums" style={{ background: theme.toolbar.panel, color: theme.node.muted }}>
