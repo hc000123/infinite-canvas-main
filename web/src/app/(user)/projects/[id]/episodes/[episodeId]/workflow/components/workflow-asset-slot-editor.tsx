@@ -28,13 +28,15 @@ export function WorkflowAssetSlotEditor({ projectId, state }: { projectId: strin
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const stage = state.stage;
+    const stageId = stage?.id;
+    const outputArtifactId = stage?.outputArtifactId;
     const readable = Boolean(stage && ["needs_review", "approved", "applied"].includes(stage.status));
 
     const load = useCallback(async () => {
-        if (!stage?.id || !readable) return;
+        if (!stageId || !readable) return;
         setLoading(true);
         try {
-            const result = await getWorkflowAssetSlots(stage.id);
+            const result = await getWorkflowAssetSlots(stageId);
             setData(result);
             setDraft(result.slots);
         } catch (error) {
@@ -42,11 +44,11 @@ export function WorkflowAssetSlotEditor({ projectId, state }: { projectId: strin
         } finally {
             setLoading(false);
         }
-    }, [message, readable, stage?.id]);
+    }, [message, readable, stageId]);
 
     useEffect(() => {
         void load();
-    }, [load, stage?.outputArtifactId]);
+    }, [load, outputArtifactId]);
 
     const summary = useMemo(() => agentAssetSlotSummary(draft), [draft]);
     const dirty = Boolean(data && JSON.stringify(draft) !== JSON.stringify(data.slots));
