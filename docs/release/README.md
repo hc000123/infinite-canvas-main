@@ -8,7 +8,7 @@
 ```text
 提交前全量冒烟 → 修复并复测 → 整理版本和文档 → 提交全部改动
 → 对提交后的 HEAD 复测 → 创建 tag → 推送 main 和 tag
-→ GitHub 镜像构建通过 → Render 手工部署同一提交 → 云端冒烟与持久化复验
+→ GitHub 镜像构建通过 → 阿里云手工拉取并构建同一提交 → 云端冒烟与持久化复验
 ```
 
 ## 历史流程核对结果
@@ -248,20 +248,32 @@ gh run list \
 
 记录 release commit、两个 Actions URL 和镜像 digest。
 
-GitHub Actions 当前只构建并推送 linux/amd64 Docker 镜像，不运行测试，也不会部署 Render。因此本地全量冒烟不能省略，Actions 成功也不能视为线上已经更新。
+GitHub Actions 当前只构建并推送 linux/amd64 Docker 镜像，不运行测试，也不会部署阿里云。因此本地全量冒烟不能省略，Actions 成功也不能视为线上已经更新。
 
-## 7. Render 手工部署
+## 7. 阿里云手工部署
 
-当前 `render.yaml` 使用仓库 Dockerfile，且 `autoDeployTrigger: off`：
+当前固定方式是在阿里云服务器从 Git 仓库拉取已发布的 `main`，核对 release commit 和 tag 后，使用仓库 Dockerfile 在服务器无缓存重建并重启 Compose 服务。GitHub Actions 的 GHCR 镜像用于发布产物与构建校验，当前阿里云流程不直接拉取 GHCR 镜像。
 
-- Render 不会自动部署。
-- Render 不直接使用 GHCR 镜像，而是从所连接的 GitHub 仓库重新构建。
-- 必须选择与 tag、Actions 完全相同的 release commit SHA。
+在阿里云项目目录执行：
+
+```bash
+release_tag="vX.Y.Z"
+release_commit="填入本次发布的完整提交 SHA"
+
+git fetch origin --tags
+git switch main
+git pull --ff-only origin main
+
+test "$(git rev-parse HEAD)" = "$release_commit"
+git tag --points-at HEAD
+```
+
+最后一条必须包含当前 `release_tag`。如果 SHA 或 tag 不一致，停止部署。
 
 部署前先确认：
 
-1. 数据库和 `/app/data` 已做备份或快照。服务启动会执行 AutoMigrate，回滚旧镜像不会自动回滚数据库结构。
-2. Render Dashboard 已配置 Persistent Disk 并挂载到 `/app/data`。仓库当前 `render.yaml` 是 free plan 且没有磁盘声明，仅凭仓库配置不能保证持久化。
+1. 数据库和 `data` 已做备份或云盘快照。服务启动会执行 AutoMigrate，回滚旧镜像不会自动回滚数据库结构。
+2. Compose 必须继续把服务器项目目录的 `./data` 挂载到容器 `/app/data`。
 3. 即使数据库改用 PostgreSQL，公开素材、项目缓存、工作流媒体和 Dreamina 登录态仍需要持久磁盘或对应的外部存储。
 4. 生产环境至少明确配置：
 
@@ -286,15 +298,25 @@ DREAMINA_HOME=/app/data/dreamina-home
 DREAMINA_OUTPUT_DIR=/app/data/jimeng-cli
 ```
 
-如使用登录 IP 绑定或客户端 IP 审计，还要按 Render 实际代理网段配置 `TRUSTED_PROXIES`。
+如使用登录 IP 绑定或客户端 IP 审计，还要按阿里云反向代理的实际网段配置 `TRUSTED_PROXIES`。
 
-在 Render Dashboard 执行：
+先备份服务器数据：
 
-```text
-Manual Deploy → Deploy a specific commit → 选择 release_commit
+```bash
+mkdir -p ../deploy-backups
+tar -C data -czf "../deploy-backups/data-before-${release_tag}-$(date +%Y%m%d-%H%M%S).tgz" .
 ```
 
-等待构建和健康检查完成，并确认部署详情显示的 SHA 与 tag、GitHub Actions SHA 一致。外部端口是 Next `3000`，Go 只在容器内部监听 `8080`。
+确认 `.env` 中的 `ADMIN_PASSWORD`、`JWT_SECRET` 不是示例值，然后构建并启动：
+
+```bash
+docker compose config >/dev/null
+docker compose build --no-cache app
+docker compose up -d app
+docker compose ps
+```
+
+服务器构建必须基于已核对的 `release_commit`。外部端口是 Next `3000`，Go 只在容器内部监听 `8080`。
 
 ## 8. 云端冒烟和持久化复验
 
@@ -314,23 +336,23 @@ curl -fsS -o /dev/null "$release_url/login"
 - `/api/settings` 使用标准成功结构，且没有泄露后台渠道密钥。
 - 管理员和普通用户均能登录。
 - Workflow Worker 健康、没有异常积压或过期租约。
-- 上传或生成一份小型服务端素材，从 Render 之外访问真实的 `https://域名/api/uploaded-assets/...`，确认返回 200。
+- 上传或生成一份小型服务端素材，从阿里云服务器之外访问真实的 `https://域名/api/uploaded-assets/...`，确认返回 200。
 - 不要只测试 `/uploaded-assets/...`，单端口部署应使用带 `/api` 的路径。
 
 持久化必须同时验证数据库和文件：
 
 1. 注册一个唯一测试用户并记录测试素材 URL/hash。
-2. 执行一次 Restart Service，重新登录并读取同一素材。
-3. 对同一 release commit 再执行一次 Manual Deploy，重复登录和素材读取。
+2. 执行一次 `docker compose restart app`，重新登录并读取同一素材。
+3. 对同一 release commit 再执行一次 `docker compose build --no-cache app && docker compose up -d app`，重复登录和素材读取。
 4. 使用 Dreamina 时，重新运行渠道预检，确认登录态仍存在。
 
-项目、画布和“我的素材”主要保存在当前浏览器本地。浏览器刷新后仍能看到项目，不能证明 Render 数据盘有效，也不能证明已支持跨浏览器云同步；服务端持久化必须使用注册用户、数据库记录和 `/api/uploaded-assets/...` 文件单独验证。
+项目、画布和“我的素材”主要保存在当前浏览器本地。浏览器刷新后仍能看到项目，不能证明阿里云服务器数据卷有效，也不能证明已支持跨浏览器云同步；服务端持久化必须使用注册用户、数据库记录和 `/api/uploaded-assets/...` 文件单独验证。
 
 ## 9. 回滚
 
 发现 P0/P1 问题时：
 
-1. 在 Render 手工选择上一个已知正常的 commit 重新部署。
+1. 在阿里云服务器检出上一个已知正常的 tag 或 commit，重新执行 `docker compose build --no-cache app && docker compose up -d app`。
 2. 如果新版本已经执行数据库结构调整，只回滚镜像不够；根据上线前备份恢复数据库或执行经过审核的前向修复。
 3. 已推送的版本 tag 不删除、不改指向、不强推；修复后发布新的补丁版本。
 4. 在 `docs/pending-test.md` 记录失败现象、回滚 commit、数据处理和后续补验结果。
@@ -343,9 +365,9 @@ curl -fsS -o /dev/null "$release_url/login"
 - 提交前、提交后测试结果。
 - 两个 GitHub Actions URL。
 - GHCR 镜像 tag 和 digest。
-- Render 实际部署 SHA。
+- 阿里云实际部署 SHA 与本地 Docker 镜像 ID。
 - 正式域名、健康检查和公开素材检查结果。
-- Restart Service 与 Manual Deploy 后的数据库/文件持久化结果。
+- `docker compose restart app` 与同提交重新构建后的数据库/文件持久化结果。
 - 是否执行真实付费请求；如执行，记录模型、任务 ID、费用和结果。
 - 已知非阻断项、放行结论和回滚 commit。
 

@@ -1,15 +1,17 @@
-# Render 部署
+# 阿里云 Docker 部署
 
-正式发版本、推送、GitHub 镜像检查、Render 手工部署、云端冒烟和回滚统一按照 [发布与上线操作手册](release/README.md) 执行。本文档只补充部署环境和桌面安装包细节。
+正式发版本、推送、GitHub 镜像检查、阿里云手工部署、云端冒烟和回滚统一按照 [发布与上线操作手册](release/README.md) 执行。本文档只补充部署环境和桌面安装包细节。
 
 ## 部署步骤
 
-1. 将当前项目推送到你自己的 GitHub 仓库。
-2. 在 Render 新建 Web Service，并选择你的仓库。
-3. 构建方式选择 Docker，或按当前仓库内的 Dockerfile 构建。
-4. 填写 `ADMIN_PASSWORD`、`JWT_SECRET` 等环境变量，然后点击确认部署。
+1. 本地完成测试、版本提交、tag 和 `main` / tag 推送，并等待两条 GitHub 镜像构建成功。
+2. 在阿里云服务器项目目录拉取 `main` 和 tags，核对 HEAD 与 release commit 一致。
+3. 备份服务器 `data`，并确认 Compose 继续挂载 `./data:/app/data`。
+4. 确认 `.env` 中 `ADMIN_PASSWORD`、`JWT_SECRET` 等生产变量正确。
+5. 执行 `docker compose build --no-cache app` 和 `docker compose up -d app`。
+6. 完成服务器本机、公网、登录、素材访问和重启持久化复验。
 
-部署完成后，打开 Render 分配的 `.onrender.com` 域名即可访问。
+阿里云不自动部署，也不直接使用当前 GHCR 镜像；固定流程是从仓库同一 release commit 在服务器重建 Docker 镜像。
 
 ## Workflow 执行边界
 
@@ -109,15 +111,11 @@ https://你的域名/api/uploaded-assets/...
 - `DREAMINA_OUTPUT_DIR=/app/data/jimeng-cli`
 - 如改用 MySQL / PostgreSQL，还需要修改 `STORAGE_DRIVER` 和 `DATABASE_DSN`
 
-## 免费版说明
+## 阿里云持久化说明
 
-默认使用 Render 免费 Web Service：
-
-- 空闲约 15 分钟后会休眠，下次访问会自动唤醒。
-- 免费版本地文件不是持久化存储，SQLite 数据可能在重启、重新部署后丢失。
-- 适合体验和演示，不适合长期保存正式数据。
-
-如果要长期使用，建议升级 Render 付费实例并挂载 Persistent Disk，或改用 PostgreSQL。
+- Docker Compose 必须持续挂载服务器 `./data:/app/data`，不要在升级时删除数据目录或执行 `docker compose down -v`。
+- 上线前备份 `data` 或创建云盘快照；SQLite、公开素材、项目缓存、Workflow 媒体和 Dreamina 登录态都依赖该目录。
+- 反向代理、域名和 HTTPS 由阿里云现有环境维护；升级后必须从公网复验 `/api/health` 和 `/api/uploaded-assets/...`。
 
 ## 管理员账号
 

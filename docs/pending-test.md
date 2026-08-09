@@ -262,7 +262,7 @@
 
 ### 上线前前后端冒烟回归
 
-- 已根据 `v0.2.90` 至 `v0.2.97` 的 tag、远端引用和 GitHub Actions 记录，把提交前后冒烟、版本整理、lightweight tag、main/tag 推送、镜像检查、Render 手工部署、云端持久化复验和回滚固化到 `docs/release/README.md`；README 与 `AGENTS.md` 已增加固定入口。
+- 已根据 `v0.2.90` 至 `v0.3.0` 的实际发布记录，把提交前后冒烟、版本整理、lightweight tag、main/tag 推送、镜像检查、阿里云服务器拉取同一提交、备份数据、无缓存 Docker 重建、云端持久化复验和回滚固化到 `docs/release/README.md`；README 与 `AGENTS.md` 已增加固定入口。
 - 自动验收已通过 Go 1.25 全包测试、vet、Linux amd64 交叉编译、前端 810 项测试、TypeScript、ESLint、Next.js 生产构建和 Docker 生产镜像构建。
 - Docker 独立容器已验证 `/api/health`、登录页、Next 到 Go API 代理、`/api/uploaded-assets/...` 公开素材路径、Dreamina CLI、生产镜像无 Codex CLI、SQLite 数据卷重启持久化和容器健康状态。
 - 隔离浏览器已完成登录、项目创建与刷新恢复、普通用户 Workflow 入口隐藏与直接 URL 拦截、缓存入口，以及素材、提示词、生图、视频和后台页面共 11 项关键检查；控制台与同源请求无异常，旧 `/api/original-workflow*` 接口均返回 404。
