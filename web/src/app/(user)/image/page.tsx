@@ -144,7 +144,7 @@ export default function ImagePage() {
     return isAssetImageWorkbenchContext(searchParams) ? <AssetImageWorkbench /> : <StoryboardImageWorkbench />;
 }
 
-export function AssetImageWorkbench() {
+function AssetImageWorkbench() {
     const { message } = App.useApp();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const promptInputRef = useRef<TextAreaRef>(null);
@@ -356,7 +356,7 @@ export function AssetImageWorkbench() {
         const tasks = Array.from({ length: generationCount }, (_, index) => runGenerationSlot(index, snapshot));
 
         const result = await Promise.allSettled(tasks);
-        const successImages = result.filter((item): item is PromiseFulfilledResult<GeneratedImage> => item.status === "fulfilled").map((item) => item.value);
+        const successImages: GeneratedImage[] = result.flatMap((item) => (item.status === "fulfilled" ? [item.value] : []));
         const successCount = successImages.length;
         const failCount = generationCount - successCount;
         const failed = result.find((item): item is PromiseRejectedResult => item.status === "rejected");

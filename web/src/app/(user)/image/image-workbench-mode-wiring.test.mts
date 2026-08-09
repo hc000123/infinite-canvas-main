@@ -7,7 +7,8 @@ test("routes bare image entry to storyboard mode and keeps asset mode", async ()
     assert.match(page, /isAssetImageWorkbenchContext\(searchParams\)/);
     assert.match(page, /<AssetImageWorkbench\s*\/>/);
     assert.match(page, /<StoryboardImageWorkbench\s*\/>/);
-    assert.match(page, /export function AssetImageWorkbench/);
+    assert.match(page, /function AssetImageWorkbench/);
+    assert.doesNotMatch(page, /export function AssetImageWorkbench/);
 });
 
 test("preserves asset result writeback coordinates", async () => {

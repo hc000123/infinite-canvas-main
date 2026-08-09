@@ -46,7 +46,7 @@ export async function fetchProjectCacheFileBlob(fileId: string, token: string, s
             responseType: "blob",
             signal,
         });
-        const mimeType = response.headers["content-type"] || response.data.type || "application/octet-stream";
+        const mimeType = headerString(response.headers["content-type"]) || response.data.type || "application/octet-stream";
         if (mimeType.includes("application/json")) {
             let message = "缓存文件不存在或已被移除";
             try {
@@ -60,7 +60,7 @@ export async function fetchProjectCacheFileBlob(fileId: string, token: string, s
         return {
             blob: response.data,
             mimeType,
-            filename: cacheFileName(response.headers["content-disposition"], fileId),
+            filename: cacheFileName(headerString(response.headers["content-disposition"]) || undefined, fileId),
         };
     } catch (error) {
         if (axios.isCancel(error)) throw error;
@@ -112,4 +112,9 @@ function cacheFileName(disposition: string | undefined, fallback: string) {
         }
     }
     return disposition?.match(/filename="([^"]+)"/i)?.[1] || disposition?.match(/filename=([^;]+)/i)?.[1]?.trim() || fallback;
+}
+
+function headerString(value: unknown) {
+    if (Array.isArray(value)) return value.join(", ");
+    return typeof value === "string" ? value : "";
 }

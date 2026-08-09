@@ -61,7 +61,7 @@ export function useStoryboardImageGeneration({ shot, references, addWorkbenchIma
         try {
             const trace = {
                 projectId: snapshot.shot.projectId,
-                sourceType: "image_generation",
+                sourceType: "image_generation" as const,
                 sourceId: snapshot.shot.id,
                 inputSummary: `${snapshot.shot.title}；参考图 ${snapshot.references.length} 张`,
             };
