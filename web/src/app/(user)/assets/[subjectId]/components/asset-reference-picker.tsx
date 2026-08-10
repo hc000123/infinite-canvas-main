@@ -21,7 +21,7 @@ export function AssetReferencePicker({ assets, currentProjectId, open, projectTi
     }, [assets, currentProjectId, keyword, scope]);
 
     return (
-        <Modal open={open} title="从正式资产添加参考图" footer={null} width={820} onCancel={onCancel} destroyOnHidden>
+        <Modal open={open} title="从资产版本添加参考图" footer={null} width={820} onCancel={onCancel} destroyOnHidden>
             <div className="mb-4 mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <Segmented value={scope} options={[{ label: "当前项目", value: "project" }, { label: "全部项目", value: "all" }]} onChange={(value) => setScope(value as AssetReferenceScope)} />
                 <Input allowClear className="sm:w-64" prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />} value={keyword} placeholder="搜索主体、形态或资产" onChange={(event) => setKeyword(event.target.value)} />

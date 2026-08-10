@@ -61,7 +61,7 @@ export function useAssetWorkbenchGeneration({ addWorkbenchImage, projectTitle, r
             addWorkbenchImage(buildCandidateImageInput(subject, { ...variant, prompt: snapshot.prompt }, stored, { model: snapshot.model, quality: snapshot.config.quality, size: snapshot.config.size }, createdAt, index + 1));
             if (token) {
                 const context = projectCacheContextFromGeneration({ assetId: subject.id, category: subject.category, kind: "image", projectId: subject.projectId, projectName: projectTitle, source: "asset-workbench", metadata: { generation: { model: snapshot.model, prompt: snapshot.prompt } }, versionId: variant.id });
-                void archiveLocalMediaToProjectCache({ id: `asset-workbench:${stored.storageKey}`, storageKey: stored.storageKey, kind: "image", filename: `${subject.name}-${variant.name}-候选${index + 1}.png`, context, token }).catch(() => undefined);
+                void archiveLocalMediaToProjectCache({ id: `asset-workbench:${stored.storageKey}`, storageKey: stored.storageKey, kind: "image", filename: `${subject.name}-${variant.name}-待选${index + 1}.png`, context, token }).catch(() => undefined);
             }
             setSlots((value) => value.filter((slot) => slot.id !== slotId));
         } catch (error) {
@@ -83,7 +83,7 @@ export function useAssetWorkbenchGeneration({ addWorkbenchImage, projectTitle, r
         const successCount = result.filter((item) => item.status === "fulfilled").length;
         const failed = result.length - successCount;
         setRunning(false);
-        if (successCount) message.success(`已生成 ${successCount} 张候选图`);
+        if (successCount) message.success(`已生成 ${successCount} 张待选结果`);
         if (failed) message.warning(`${failed} 张生成失败，可在失败卡片重试`);
     };
 

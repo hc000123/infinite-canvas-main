@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import type { AssetVariant } from "@/stores/use-asset-store";
 import { validateVariantName } from "../../asset-workbench";
 
-export function AssetVariantNav({ activeId, variants, onCreate, onDelete, onDuplicate, onRename, onSelect }: { activeId: string; variants: AssetVariant[]; onCreate: (name: string) => void; onDelete: (id: string) => void; onDuplicate: (id: string) => void; onRename: (id: string, name: string) => void; onSelect: (id: string) => void }) {
+export function AssetVariantNav({ activeId, compact = false, variants, onCreate, onDelete, onDuplicate, onRename, onSelect }: { activeId: string; compact?: boolean; variants: AssetVariant[]; onCreate: (name: string) => void; onDelete: (id: string) => void; onDuplicate: (id: string) => void; onRename: (id: string, name: string) => void; onSelect: (id: string) => void }) {
     const [dialog, setDialog] = useState<{ mode: "create" | "rename"; id?: string } | null>(null);
     const [name, setName] = useState("");
     const error = dialog ? validateVariantName(name, variants, dialog.id) : "";
@@ -33,7 +33,7 @@ export function AssetVariantNav({ activeId, variants, onCreate, onDelete, onDupl
                 <h2 className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--studio-text-muted)]">形态</h2>
                 <Button type="text" size="small" icon={<Plus className="size-3.5" />} onClick={openCreate}>新增</Button>
             </div>
-            <div className="grid gap-1.5">
+            {compact ? <div className="flex items-center justify-between rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-3 py-2"><div><div className="text-[11px] text-[var(--studio-text-muted)]">基础形态</div><div className="mt-0.5 text-sm font-medium">{variants[0]?.name}</div></div><Button type="text" size="small" icon={<Plus className="size-3.5" />} onClick={openCreate}>添加形态</Button></div> : <div className="grid gap-1.5">
                 {variants.map((variant) => {
                     const active = variant.id === activeId;
                     const menu: MenuProps = {
@@ -60,7 +60,7 @@ export function AssetVariantNav({ activeId, variants, onCreate, onDelete, onDupl
                         </button>
                     );
                 })}
-            </div>
+            </div>}
             <Modal open={Boolean(dialog)} title={dialog?.mode === "create" ? "新建形态" : "重命名形态"} okText="保存" cancelText="取消" okButtonProps={{ disabled: Boolean(error) }} onCancel={() => setDialog(null)} onOk={submit} destroyOnHidden>
                 <Input className="mt-3" autoFocus value={name} maxLength={40} placeholder="例如：少年形态、战损形态" status={error ? "error" : undefined} onChange={(event) => setName(event.target.value)} onPressEnter={submit} />
                 <div className="mt-1 min-h-5 text-xs text-[var(--studio-danger)]">{error}</div>

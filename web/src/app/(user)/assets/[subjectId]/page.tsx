@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { App, Button, Empty, Input, Modal, Select, Tag } from "antd";
+import { App, Button, Collapse, Empty, Input, Modal, Select, Tag } from "antd";
 import { ArrowLeft, ImageIcon, Sparkles } from "lucide-react";
 
 import { uploadImage } from "@/services/image-storage";
@@ -39,7 +39,6 @@ function AssetSubjectWorkbench({ subject }: { subject: AssetSubject }) {
     const candidateInputRef = useRef<HTMLInputElement>(null);
     const referenceInputRef = useRef<HTMLInputElement>(null);
     const assets = useAssetStore((state) => state.assets);
-    const addAssetOnce = useAssetStore((state) => state.addAssetOnce);
     const variants = useAssetStore((state) => state.variants);
     const workbenchImages = useAssetStore((state) => state.workbenchImages);
     const ensureVariant = useAssetStore((state) => state.ensureVariant);
@@ -48,7 +47,7 @@ function AssetSubjectWorkbench({ subject }: { subject: AssetSubject }) {
     const removeVariant = useAssetStore((state) => state.removeVariant);
     const removeWorkbenchImage = useAssetStore((state) => state.removeWorkbenchImage);
     const addWorkbenchImage = useAssetStore((state) => state.addWorkbenchImage);
-    const updateWorkbenchImage = useAssetStore((state) => state.updateWorkbenchImage);
+    const promoteWorkbenchImage = useAssetStore((state) => state.promoteWorkbenchImage);
     const setVariantCurrentAsset = useAssetStore((state) => state.setVariantCurrentAsset);
     const projects = useCreativeProjectStore((state) => state.projects);
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
@@ -97,7 +96,7 @@ function AssetSubjectWorkbench({ subject }: { subject: AssetSubject }) {
         setActiveVariantId(duplicateVariant(id, name));
         message.success("已复制形态配置");
     };
-    const deleteVariant = (id: string) => modal.confirm({ title: "删除这个形态？", content: "参考资料和未转正候选会一起移除，正式资产不会删除。", okText: "删除", okButtonProps: { danger: true }, cancelText: "取消", onOk: () => { if (!removeVariant(id)) return message.warning("至少保留一个形态"); setActiveVariantId(""); } });
+    const deleteVariant = (id: string) => modal.confirm({ title: "删除这个形态？", content: "参考资料和未转正的待选结果会一起移除，历史版本不会删除。", okText: "删除", okButtonProps: { danger: true }, cancelText: "取消", onOk: () => { if (!removeVariant(id)) return message.warning("至少保留一个形态"); setActiveVariantId(""); } });
     const importImages = async (files: FileList | null, role: "candidate" | "reference") => {
         if (!files?.length) return;
         const imageIds: string[] = [];
@@ -111,7 +110,7 @@ function AssetSubjectWorkbench({ subject }: { subject: AssetSubject }) {
             }
         }
         if (role === "reference" && imageIds.length) updateVariant(activeVariant.id, { referenceImageIds: [...activeVariant.referenceImageIds, ...imageIds] });
-        if (imageIds.length) message.success(`已添加 ${imageIds.length} 张${role === "reference" ? "参考图" : "候选图"}`);
+        if (imageIds.length) message.success(`已添加 ${imageIds.length} 张${role === "reference" ? "参考图" : "待选结果"}`);
         if (failed) message.warning(`${failed} 张图片导入失败`);
     };
     const addAssetReference = async (asset: Asset) => {
@@ -129,12 +128,10 @@ function AssetSubjectWorkbench({ subject }: { subject: AssetSubject }) {
     const promoteCandidate = async (candidate: AssetWorkbenchImage) => {
         if (candidate.selectedAssetId) return;
         try {
-            const assetId = await addAssetOnce(candidateAssetInput(subject, activeVariant, candidate));
-            updateWorkbenchImage(candidate.id, { selectedAssetId: assetId });
-            setVariantCurrentAsset(activeVariant.id, assetId);
-            message.success("已选为正式资产并设为当前主图");
+            await promoteWorkbenchImage({ candidateId: candidate.id, asset: candidateAssetInput(subject, activeVariant, candidate) });
+            message.success("已设为当前版本");
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "保存正式资产失败");
+            message.error(error instanceof Error ? error.message : "保存当前版本失败");
         }
     };
     const useCandidateAsReference = (candidate: AssetWorkbenchImage) => {
@@ -152,7 +149,7 @@ function AssetSubjectWorkbench({ subject }: { subject: AssetSubject }) {
         if (!copyCandidate || !copyTargetVariantId) return;
         addWorkbenchImage(copyWorkbenchImageInput(copyCandidate, copyTargetVariantId));
         setCopyCandidate(null);
-        message.success("已复制到目标形态候选池");
+        message.success("已复制到目标形态的待选结果");
     };
 
     return (
@@ -167,15 +164,12 @@ function AssetSubjectWorkbench({ subject }: { subject: AssetSubject }) {
 
             <main className="studio-shell grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto p-3 lg:grid-cols-[320px_minmax(0,1fr)] lg:overflow-hidden">
                 <aside className="studio-rail thin-scrollbar grid content-start gap-4 overflow-y-auto p-3">
-                    <AssetVariantNav activeId={activeVariant.id} variants={subjectVariants} onCreate={createVariant} onDelete={deleteVariant} onDuplicate={copyVariant} onRename={(id, name) => updateVariant(id, { name })} onSelect={setActiveVariantId} />
+                    <AssetVariantNav compact={subjectVariants.length === 1} activeId={activeVariant.id} variants={subjectVariants} onCreate={createVariant} onDelete={deleteVariant} onDuplicate={copyVariant} onRename={(id, name) => updateVariant(id, { name })} onSelect={setActiveVariantId} />
                     <section className="rounded-xl border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-3">
                         <div className="mb-2 flex items-center justify-between"><h2 className="text-sm font-semibold">画面描述</h2><Sparkles className="size-4 text-[var(--studio-accent)]" /></div>
                         <Input.TextArea value={activeVariant.prompt} autoSize={{ minRows: 7, maxRows: 14 }} placeholder="描述主体外观、环境、构图和需要保持的一致性…" onChange={(event) => updateVariant(activeVariant.id, { prompt: event.target.value })} />
-                        <div className="mt-3 grid gap-3">
-                            <ModelPicker config={generation.effectiveConfig} modelType="image" value={generation.model} onChange={(value) => { generation.updateConfig("imageModel", value); updateVariant(activeVariant.id, { config: { ...activeVariant.config, imageModel: value } }); }} fullWidth allowCustomModel={generation.allowCustomModel} onMissingConfig={() => generation.openConfigDialog(false)} />
-                            <ImageSettingsPanel config={generation.effectiveConfig} onConfigChange={(key, value) => { generation.updateConfig(key, value); updateVariant(activeVariant.id, { config: { ...activeVariant.config, [key]: String(value) } }); }} theme={theme} showTitle={false} className="space-y-3" maxCount={10} quickCount={4} compact />
-                        </div>
-                        <Button type="primary" block size="large" className="!mt-3" icon={<Sparkles className="size-4" />} loading={generation.running} disabled={!activeVariant.prompt.trim()} onClick={() => void generation.generate()}>生成候选</Button>
+                        <Collapse ghost size="small" className="!mt-2" items={[{ key: "settings", label: "生成设置", children: <div className="grid gap-3"><ModelPicker config={generation.effectiveConfig} modelType="image" value={generation.model} onChange={(value) => { generation.updateConfig("imageModel", value); updateVariant(activeVariant.id, { config: { ...activeVariant.config, imageModel: value } }); }} fullWidth allowCustomModel={generation.allowCustomModel} onMissingConfig={() => generation.openConfigDialog(false)} /><ImageSettingsPanel config={generation.effectiveConfig} onConfigChange={(key, value) => { generation.updateConfig(key, value); updateVariant(activeVariant.id, { config: { ...activeVariant.config, [key]: String(value) } }); }} theme={theme} showTitle={false} className="space-y-3" maxCount={10} quickCount={4} compact /></div> }]} />
+                        <Button type="primary" block size="large" className="!mt-2" icon={<Sparkles className="size-4" />} loading={generation.running} disabled={!activeVariant.prompt.trim()} onClick={() => void generation.generate()}>生成待选结果</Button>
                     </section>
                     <AssetReferencePanel references={references} sourceMissing={(image) => Boolean(image.sourceAssetId && !assets.some((asset) => asset.id === image.sourceAssetId))} onOpenPicker={() => setReferencePickerOpen(true)} onRemove={removeWorkbenchImage} onUpload={() => referenceInputRef.current?.click()} />
                 </aside>
@@ -183,8 +177,8 @@ function AssetSubjectWorkbench({ subject }: { subject: AssetSubject }) {
                 <div className="thin-scrollbar min-h-0 overflow-y-auto">
                     <div className="grid gap-3 pb-3">
                         <section className="relative min-h-72 overflow-hidden rounded-xl border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)]">
-                            {currentAsset ? <img src={currentAsset.coverUrl || (currentAsset.kind === "image" ? currentAsset.data.dataUrl : "")} alt={currentAsset.title} className="h-full max-h-[520px] w-full object-contain" /> : <div className="flex min-h-72 flex-col items-center justify-center text-[var(--studio-text-muted)]"><ImageIcon className="mb-3 size-10" /><div className="text-sm font-medium">当前形态还没有主图</div><div className="mt-1 text-xs">从候选池选中一张后，它会出现在这里</div></div>}
-                            <div className="absolute left-3 top-3 rounded-lg bg-[var(--studio-media-overlay)] px-2.5 py-1 text-xs text-[var(--studio-on-media)]">{activeVariant.name}</div>
+                            <div className="absolute left-3 top-3 z-10 rounded-lg bg-[var(--studio-media-overlay)] px-2.5 py-1 text-xs text-[var(--studio-on-media)]">当前版本 · {activeVariant.name}</div>
+                            {currentAsset ? <img src={currentAsset.coverUrl || (currentAsset.kind === "image" ? currentAsset.data.dataUrl : "")} alt={currentAsset.title} className="h-full max-h-[520px] w-full object-contain" /> : <div className="flex min-h-72 flex-col items-center justify-center text-[var(--studio-text-muted)]"><ImageIcon className="mb-3 size-10" /><div className="text-sm font-medium">当前形态还没有版本</div><div className="mt-1 text-xs">从待选结果中设定一张后，它会出现在这里</div></div>}
                         </section>
                         <AssetCandidateGrid candidates={candidates} running={generation.running} slots={generation.slots} onCopy={openCopyCandidate} onDelete={(image) => removeWorkbenchImage(image.id)} onGenerate={() => void generation.generate()} onPromote={(candidate) => void promoteCandidate(candidate)} onRetry={(slotId) => void generation.retrySlot(slotId)} onUpload={() => candidateInputRef.current?.click()} onUseAsReference={useCandidateAsReference} />
                         <AssetVersionPanel assets={formalAssets} currentAssetId={activeVariant.currentAssetId} onRevise={(asset) => { if (asset.kind === "image") router.push(buildAssetImageRevisionHref(asset, `/assets/${subject.id}`)); }} onSetCurrent={(assetId) => setVariantCurrentAsset(activeVariant.id, assetId)} />
@@ -193,7 +187,7 @@ function AssetSubjectWorkbench({ subject }: { subject: AssetSubject }) {
             </main>
             <AssetReferencePicker assets={assets} currentProjectId={subject.projectId} open={referencePickerOpen} projectTitles={Object.fromEntries(projects.map((project) => [project.id, project.title || "未命名项目"]))} onCancel={() => setReferencePickerOpen(false)} onSelect={(asset) => void addAssetReference(asset)} />
             <Modal open={Boolean(copyCandidate)} title="复制到其他形态" okText="复制" cancelText="取消" okButtonProps={{ disabled: !copyTargetVariantId }} onCancel={() => setCopyCandidate(null)} onOk={confirmCopyCandidate} destroyOnHidden>
-                <div className="mb-2 mt-3 text-sm text-[var(--studio-text-muted)]">候选图片和生成配置会复制过去，原形态保持不变。</div>
+                <div className="mb-2 mt-3 text-sm text-[var(--studio-text-muted)]">待选图片和生成配置会复制过去，原形态保持不变。</div>
                 <Select className="w-full" value={copyTargetVariantId} options={subjectVariants.filter((variant) => variant.id !== activeVariant.id).map((variant) => ({ label: variant.name, value: variant.id }))} onChange={setCopyTargetVariantId} />
             </Modal>
             <input ref={referenceInputRef} type="file" accept="image/*" multiple hidden onChange={(event) => { void importImages(event.target.files, "reference"); event.target.value = ""; }} />
