@@ -33,13 +33,13 @@ test("turns a candidate into a current-variant reference snapshot", () => {
     assert.equal(reference.variantId, variant.id);
 });
 
-test("wires one-time promotion, current main image and continuation actions", () => {
+test("wires atomic one-time promotion and continuation actions", () => {
     const page = readFileSync(new URL("./[subjectId]/page.tsx", import.meta.url), "utf8");
     const grid = readFileSync(new URL("./[subjectId]/components/asset-candidate-grid.tsx", import.meta.url), "utf8");
     assert.match(page, /if \(candidate\.selectedAssetId\) return/);
-    assert.match(page, /await addAssetOnce\(candidateAssetInput/);
-    assert.match(page, /selectedAssetId: assetId/);
-    assert.match(page, /setVariantCurrentAsset\(activeVariant\.id, assetId\)/);
+    assert.match(page, /await promoteWorkbenchImage\(\{ candidateId: candidate\.id, asset: candidateAssetInput/);
+    assert.doesNotMatch(page, /await addAssetOnce\(candidateAssetInput/);
+    assert.doesNotMatch(page, /selectedAssetId: assetId/);
     assert.match(grid, /作为参考图/);
     assert.match(grid, /复制到其他形态/);
 });

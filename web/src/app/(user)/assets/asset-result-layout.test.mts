@@ -66,13 +66,14 @@ test("uses compact media grid for non-empty image video and audio groups", () =>
     assert.equal(isCompactMediaAssetGroup([]), false);
 });
 
-test("renders a flat square gallery for subjects and media", () => {
-    const source = readFileSync(new URL("./components/asset-results-section.tsx", import.meta.url), "utf8");
+test("keeps formal subjects in the main grid and loose media in the inbox", () => {
+    const results = readFileSync(new URL("./components/asset-results-section.tsx", import.meta.url), "utf8");
+    const inbox = readFileSync(new URL("./components/asset-inbox-section.tsx", import.meta.url), "utf8");
     const mediaCard = readFileSync(new URL("./components/compact-media-asset-card.tsx", import.meta.url), "utf8");
 
-    assert.match(source, /AssetSubjectCard/);
-    assert.match(source, /CompactMediaAssetCard/);
-    assert.match(source, /visibleGallerySubjectGroups/);
-    assert.doesNotMatch(source, /AssetSubjectSection|buildAssetEpisodeGroups|buildAssetTypeGroups/);
+    assert.match(results, /AssetSubjectCard/);
+    assert.doesNotMatch(results, /CompactMediaAssetCard|visibleGallerySubjectGroups|ProductionBibleSummaryCard/);
+    assert.match(inbox, /CompactMediaAssetCard/);
+    assert.match(inbox, />整理</);
     assert.match(mediaCard, /aspect-square/);
 });
