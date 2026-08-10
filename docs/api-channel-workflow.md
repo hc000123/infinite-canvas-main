@@ -1,6 +1,6 @@
 # API 渠道与 Agent 绑定规则
 
-本文档约束后台 API 渠道、Agent 配置、工作流阶段和生成任务之间的绑定关系。目标是让火山企业 API、即梦 CLI、星链云和中转 API 都进入同一个可审计、可预检、可扣费、可隔离的执行体系，避免前端散落 Key、避免一个全局模型覆盖所有 Agent。
+本文档约束后台 API 渠道、Agent 配置、工作流阶段和生成任务之间的绑定关系。目标是让火山企业 API、即梦 CLI、星链云、GeekNow 和中转 API 都进入同一个可审计、可预检、可扣费、可隔离的执行体系，避免前端散落 Key、避免一个全局模型覆盖所有 Agent。
 
 ## 总原则
 
@@ -99,6 +99,14 @@
 前端不可见信息：
 
 - 完整 Key、代理内部域名、供应商私有错误细节。
+
+### GeekNow 整包渠道
+
+GeekNow 使用官方 Base URL `https://www.geeknow.top/v1`。一键预设以同一个 API Key 创建 `geeknow-text`、`geeknow-image`、`geeknow-video` 三个稳定私有渠道；文本与图片沿用 OpenAI 兼容接口，视频仅在 `geeknow-video` 上使用厂商专用映射：创建请求发往 `/v1/videos`，查询请求发往 `/v1/videos/{id}`。模型目录可覆盖文本 GPT、Claude、Gemini、DeepSeek、Qwen，图片 GPT Image、Seedream、Grok，以及视频 Grok、Sora、Veo、Seedance、MiniMax、manxue、Omni；预设新增模型不会自动公开。
+
+GeekNow 视频创建后，本地 `aiTaskId` 与实际 `channelId` 一起写入任务账本。后续查询和下载先用本地 `aiTaskId` 找回创建渠道，再携带上游任务 ID 请求该渠道，不能按同名模型 fallback，也不能让不同渠道返回的相同上游 ID 串到一起。
+
+下载 GeekNow 视频时，结果 URL 与 GeekNow 渠道 Base URL 同源就携带 `Authorization: Bearer <API Key>`；结果 URL 跨源或重定向到跨源地址时立即剥离 Bearer，并按公网地址安全限制、重定向次数和文件大小限制下载。火山 Ark、星链云、即梦 CLI、Comfly 继续使用各自已有协议和适配器，不受 GeekNow 专用映射影响。
 
 ## 后台渠道资源池
 

@@ -144,9 +144,12 @@
 - 星链云：填写一次 API Key，自动开放全部九个 SD2 模型。
 - 即梦 CLI：无需 Base URL 或 API Key，自动配置六个模型（含 `seedance2.5`）；普通用户随后在个人配置中完成网页授权。
 - Comfly：填写一次 API Key，自动拆分为文本、图片和视频三个渠道，避免模型能力混用。
+- GeekNow：填写一次 API Key，使用官方 Base URL `https://www.geeknow.top/v1` 创建 `geeknow-text`、`geeknow-image`、`geeknow-video` 三个稳定私有渠道。文本覆盖 GPT、Claude、Gemini、DeepSeek、Qwen 核心族，图片覆盖 GPT Image、Seedream、Grok，视频覆盖 Grok、Sora、Veo、Seedance、MiniMax、manxue、Omni。
 - 通用中转：填写名称、Base URL、API Key、能力和模型，预设不会根据模型名称猜测能力。
 
 预设按稳定渠道 ID 更新，重复应用不会创建重复渠道。密钥输入留空时继续使用后台已保存值；协议、标准地址、模型和能力会更新到当前预设，默认模型与已有 `modelCosts` 不会被覆盖。旧 Comfly 混合渠道会停用但不会删除，公开模型目录只保留仍属于启用渠道的模型。
+
+GeekNow 预设默认只写入三个私有渠道，不自动公开任何新模型，也不覆盖已有默认模型、费用或其他渠道。连接检测只请求 `GET https://www.geeknow.top/v1/models`，不会创建视频任务；实际视频运行由稳定渠道 ID `geeknow-video` 命中厂商专用参数映射，文本、图片和其他厂商渠道继续沿用各自原有逻辑。
 
 ### 星链云 SD2 视频渠道
 
