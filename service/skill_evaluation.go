@@ -32,6 +32,9 @@ func EvaluateSkill(adminID, versionID string, input SkillEvaluationInput) (Skill
 	if err != nil || !ok {
 		return SkillEvaluationResult{}, safeMessageError{message: "Skill 版本不存在"}
 	}
+	if !skillEvaluationTargetAvailable(skill, version) {
+		return SkillEvaluationResult{}, safeMessageError{message: "Skill 版本不可评测"}
+	}
 	packageValue, err := DecodeSkillPackage(version)
 	if err != nil {
 		return SkillEvaluationResult{}, err
@@ -47,6 +50,10 @@ func EvaluateSkill(adminID, versionID string, input SkillEvaluationInput) (Skill
 	stageID := workflowSkillRunStage(stageKey)
 	if stageID == "" {
 		return evaluateDeterministicSkill(adminID, workflow, skill, version, packageValue, stageKey)
+	}
+	baselineVersion, baselinePackage, err := skillEvaluationBaseline(stageKey, workflow.ProjectID, input.BaselineVersionID, version.ID)
+	if err != nil {
+		return SkillEvaluationResult{}, err
 	}
 	executor, err := skillEvaluationExecutorFactory()
 	if err != nil {
@@ -87,10 +94,6 @@ func EvaluateSkill(adminID, versionID string, input SkillEvaluationInput) (Skill
 	})
 	inputHash := workflowContentHash(append(append([]byte{}, inputSnapshot...), []byte(imageManifest)...))
 	candidate, candidateDuration := callSkillEvaluation(executor, skill, version, packageValue, stageKey, systemPrompt, userPrompt, imageManifest)
-	baselineVersion, baselinePackage, err := skillEvaluationBaseline(stageKey, workflow.ProjectID, input.BaselineVersionID, version.ID)
-	if err != nil {
-		return SkillEvaluationResult{}, err
-	}
 	baseline := map[string]any{}
 	baselineDuration := int64(0)
 	if baselineVersion.ID != "" {
@@ -207,6 +210,10 @@ func skillEvaluationBaseline(stageKey, projectID, requestedVersionID, candidateV
 	if err != nil || !ok {
 		return version, SkillPackage{}, safeMessageError{message: "基线 Skill 版本不存在"}
 	}
+	skill, ok, err := repository.GetSkillDefinition(version.SkillID)
+	if err != nil || !ok || !skillEvaluationTargetAvailable(skill, version) {
+		return version, SkillPackage{}, safeMessageError{message: "基线 Skill 版本不可用"}
+	}
 	packageValue, err := DecodeSkillPackage(version)
 	if err != nil {
 		return version, packageValue, err
@@ -215,6 +222,11 @@ func skillEvaluationBaseline(stageKey, projectID, requestedVersionID, candidateV
 		return version, SkillPackage{}, safeMessageError{message: "基线 Skill 不支持当前阶段"}
 	}
 	return version, packageValue, nil
+}
+
+func skillEvaluationTargetAvailable(skill model.SkillDefinition, version model.SkillVersion) bool {
+	return skill.ID == version.SkillID && skill.OwnerType == model.SkillOwnerSystem && skill.Enabled &&
+		(version.Status == model.SkillVersionDraft || version.Status == model.SkillVersionPublished)
 }
 
 func evaluateDeterministicSkill(adminID string, workflow model.WorkflowRun, skill model.SkillDefinition, version model.SkillVersion, packageValue SkillPackage, stageKey string) (SkillEvaluationResult, error) {

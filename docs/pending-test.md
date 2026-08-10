@@ -13,6 +13,7 @@
 - 后台新增 Definition 删除接口，只允许管理员删除没有发布 / 归档历史、种子保护和真实引用的普通 System Definition；仅包含空草稿时会连同草稿安全删除。
 - Workflow / Agent JSON 引用按 `skillId`、`skillVersionId`、`candidateSkillIds` 和 `allowedSkillIds` 结构化字段判断，条件值、parameters 内容及相似 ID 不再误阻止删除。
 - Skill 版本创建 / 保存 / 发布 / 推荐、Workflow / Agent 草稿创建 / 保存 / 发布、阶段绑定、Skill Evaluation 和 Skill 生命周期变更在同一数据库事务内按 `SkillDefinition → SkillVersion` 顺序锁定并复验 System owner、启用状态和版本状态；目标在预检后被删除、归档或改为不可用时，不写入版本、绑定、审计、草稿包、发布状态、评测或摘要等部分数据。
+- Skill Evaluation 在模型调用前校验候选与基线版本可用性，缺失、Project owner、停用或归档目标不会产生模型调用；已发布 Agent 通过 `skillId` 使用当前推荐版本时，该推荐版本不可归档，切换推荐后旧版本可正常归档。
 - 后台系统设置的“火山素材审核（唯一配置入口）”默认收起，可手动展开；折叠只收口展示层级，已有表单值、密钥保留、验证和保存逻辑不变。
 - 人工验收：1）管理员打开 `/admin/skills`，确认可管理全部 System Skill，并验证空草稿可删除、种子 / 已发布 / 真实引用均有明确阻断；2）用两个不同账号分别打开不同项目，确认都能选到同一已发布契约匹配版本；3）确认项目详情无 Skill 管理入口，直访旧 `/projects/:id/skills` 会回到该项目；4）在后台查看“全家穿越-剧本优化”，核对原 Skill / Version ID、评测和引用可追溯；5）打开系统设置，展开加白配置、保存后刷新，确认数据保留且初始仍为收起。
 

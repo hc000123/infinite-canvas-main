@@ -446,7 +446,11 @@ func ArchiveSkillVersionWithAudit(versionID, skillID, updatedAt string, audit mo
 		if version.SkillID != skill.ID || version.Status != model.SkillVersionPublished {
 			return ErrSkillVersionMustBePublished
 		}
-		referenced, err := activeSkillVersionReferenced(tx, strings.TrimSpace(versionID))
+		recommendedSkillID := ""
+		if skill.RecommendedVersionID == version.ID {
+			recommendedSkillID = skill.ID
+		}
+		referenced, err := activeSkillVersionReferenced(tx, strings.TrimSpace(versionID), recommendedSkillID)
 		if err != nil {
 			return err
 		}
@@ -597,7 +601,7 @@ func skillVersionReferenced(tx *gorm.DB, versionID string) (bool, error) {
 	return false, nil
 }
 
-func activeSkillVersionReferenced(tx *gorm.DB, versionID string) (bool, error) {
+func activeSkillVersionReferenced(tx *gorm.DB, versionID, recommendedSkillID string) (bool, error) {
 	var bindingCount int64
 	if err := tx.Model(&model.WorkflowStageSkillBinding{}).Where("skill_version_id = ?", versionID).Count(&bindingCount).Error; err != nil {
 		return false, err
@@ -631,6 +635,9 @@ func activeSkillVersionReferenced(tx *gorm.DB, versionID string) (bool, error) {
 		}
 		for _, ref := range refs {
 			if strings.TrimSpace(ref.SkillVersionID) == versionID {
+				return true, nil
+			}
+			if recommendedSkillID != "" && strings.TrimSpace(ref.SkillVersionID) == "" && strings.TrimSpace(ref.SkillID) == recommendedSkillID {
 				return true, nil
 			}
 		}

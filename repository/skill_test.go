@@ -268,6 +268,40 @@ func TestArchiveSkillVersionRejectsPublishedAgentReference(t *testing.T) {
 	}
 }
 
+func TestArchiveRecommendedSkillVersionRejectsPublishedAgentSkillIDReference(t *testing.T) {
+	setupRepositoryTestDB(t)
+	skill := model.SkillDefinition{ID: "agent-default-skill", Name: "Default", OwnerType: model.SkillOwnerSystem, Enabled: true, RecommendedVersionID: "agent-default-v1"}
+	oldVersion := model.SkillVersion{ID: skill.RecommendedVersionID, SkillID: skill.ID, Version: "1.0.0", Status: model.SkillVersionPublished}
+	if err := CreateSkillAggregate(skill, oldVersion); err != nil {
+		t.Fatal(err)
+	}
+	nextVersion := model.SkillVersion{ID: "agent-default-v2", SkillID: skill.ID, Version: "2.0.0", Status: model.SkillVersionPublished}
+	if err := CreateSkillVersion(nextVersion); err != nil {
+		t.Fatal(err)
+	}
+	agentVersion := model.AgentVersion{ID: "skill-id-only-agent-version", AgentID: "skill-id-only-agent", Version: "1.0.0", Status: model.AgentVersionPublished, DefaultSkillRefsJSON: `[{"skillId":"agent-default-skill"}]`}
+	if err := CreateAgentAggregate(model.AgentDefinition{ID: agentVersion.AgentID, Name: "Agent", OwnerType: model.AgentOwnerSystem, Enabled: true}, agentVersion); err != nil {
+		t.Fatal(err)
+	}
+	if err := ArchiveSkillVersionWithAudit(oldVersion.ID, skill.ID, "blocked", model.SkillAuditLog{ID: "skill-id-only-blocked-audit"}); !errors.Is(err, ErrSkillVersionActiveReference) {
+		t.Fatalf("err=%v", err)
+	}
+	if err := SetRecommendedSkillVersionWithAudit(skill.ID, nextVersion.ID, "switched", model.SkillAuditLog{ID: "skill-id-only-switch-audit"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ArchiveSkillVersionWithAudit(oldVersion.ID, skill.ID, "archived", model.SkillAuditLog{ID: "skill-id-only-archive-audit"}); err != nil {
+		t.Fatal(err)
+	}
+	storedOld, ok, err := GetSkillVersion(oldVersion.ID)
+	if err != nil || !ok || storedOld.Status != model.SkillVersionArchived {
+		t.Fatalf("old=%+v ok=%v err=%v", storedOld, ok, err)
+	}
+	storedSkill, ok, err := GetSkillDefinition(skill.ID)
+	if err != nil || !ok || storedSkill.RecommendedVersionID != nextVersion.ID {
+		t.Fatalf("skill=%+v ok=%v err=%v", storedSkill, ok, err)
+	}
+}
+
 func TestArchiveSkillVersionIgnoresNonReferenceJSONValues(t *testing.T) {
 	setupRepositoryTestDB(t)
 	skill := model.SkillDefinition{ID: "archive-value-skill", Name: "条件值", OwnerType: model.SkillOwnerSystem, Enabled: true}
