@@ -6,7 +6,7 @@ import { ImageSettingsTheme } from "@/components/image-settings-panel";
 import { resolveSeedanceTaskModeForSource, seedanceReferenceImageModeOptions, shouldShowSeedanceImageControl, visibleSeedanceReferenceImageMode, visibleSeedanceTaskModeOptions } from "@/components/video-settings-options";
 import { isArkSeedance25EditCredit } from "@/constant/credit-quantity";
 import { type CanvasTheme } from "@/lib/canvas-theme";
-import { resolveDreaminaVideoCapability } from "@/lib/dreamina-video-capabilities";
+import { normalizeDreaminaVideoSettings, resolveDreaminaVideoCapability } from "@/lib/dreamina-video-capabilities";
 import { normalizeVideoReferenceMode } from "@/services/api/video-reference";
 import type { AiConfig } from "@/stores/use-config-store";
 
@@ -78,8 +78,13 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
 
     useEffect(() => {
         if (resolutionOptions.some((item) => item.value === resolution)) return;
-        onConfigChange("vquality", "720");
-    }, [onConfigChange, resolution, resolutionOptions]);
+        onConfigChange("vquality", dreaminaCapability?.fallbackResolution || "720");
+    }, [dreaminaCapability?.fallbackResolution, onConfigChange, resolution, resolutionOptions]);
+
+    useEffect(() => {
+        if (config.videoSeconds === seconds) return;
+        onConfigChange("videoSeconds", seconds);
+    }, [config.videoSeconds, onConfigChange, seconds]);
 
     return (
         <ImageSettingsTheme theme={theme}>
@@ -155,7 +160,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                     </div>
                 </SettingGroup>
                 <SettingGroup title="秒数" color={theme.node.muted}>
-                    <SecondRangeControl value={seconds} min={secondLimits.min} max={secondLimits.max} theme={theme} onChange={(value) => onConfigChange("videoSeconds", value)} />
+                    <SecondRangeControl value={seconds} min={secondLimits.min} max={secondLimits.max} options={dreaminaCapability?.durationOptions} theme={theme} onChange={(value) => onConfigChange("videoSeconds", value)} />
                 </SettingGroup>
                 <SettingGroup title="生成参数" color={theme.node.muted}>
                     <div className="grid grid-cols-2 gap-2.5">
@@ -202,6 +207,16 @@ export type VideoSecondsConfig = Partial<Pick<AiConfig, "channelMode" | "videoPr
 
 export function normalizeVideoSecondsValue(value: string, config?: VideoSecondsConfig) {
     const limits = videoSecondsLimits(config);
+    if (typeof config === "object") {
+        const referenceMode = normalizeVideoReferenceMode(config.videoReferenceMode);
+        return normalizeDreaminaVideoSettings({
+            protocol: config.videoProtocol || "openai",
+            model: config.videoModel || "",
+            mode: referenceMode === "auto" ? "text2video" : referenceMode,
+            seconds: value,
+            resolution: "720",
+        }).seconds;
+    }
     const fallback = 6;
     const seconds = Math.floor(Number(value) || fallback);
     return String(Math.max(limits.min, Math.min(limits.max, seconds)));
@@ -280,7 +295,8 @@ function ToggleSwitch({ checked, label, theme, onChange }: { checked: boolean; l
     );
 }
 
-function SecondRangeControl({ value, min, max, theme, onChange }: { value: string; min: number; max: number; theme: CanvasTheme; onChange: (value: string) => void }) {
+function SecondRangeControl({ value, min, max, options, theme, onChange }: { value: string; min: number; max: number; options?: number[]; theme: CanvasTheme; onChange: (value: string) => void }) {
+    const step = options && options.length > 1 ? options[1] - options[0] : 1;
     return (
         <div className="space-y-2 rounded-xl border px-3 py-2.5" style={{ borderColor: theme.node.stroke, background: theme.node.fill }}>
             <div className="flex items-center justify-between text-xs tabular-nums" style={{ color: theme.node.muted }}>
@@ -295,25 +311,26 @@ function SecondRangeControl({ value, min, max, theme, onChange }: { value: strin
                     type="range"
                     min={min}
                     max={max}
-                    step={1}
+                    step={step}
                     value={value}
                     className="h-8 w-full cursor-pointer accent-[var(--studio-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
                     onChange={(event) => onChange(event.target.value)}
                     onMouseDown={(event) => event.stopPropagation()}
                 />
-                <SecondNumberInput value={value} min={min} max={max} theme={theme} onChange={onChange} />
+                <SecondNumberInput value={value} min={min} max={max} step={step} theme={theme} onChange={onChange} />
             </div>
         </div>
     );
 }
 
-function SecondNumberInput({ value, min, max, theme, onChange }: { value: string; min: number; max?: number; theme: CanvasTheme; onChange: (value: string) => void }) {
+function SecondNumberInput({ value, min, max, step, theme, onChange }: { value: string; min: number; max?: number; step?: number; theme: CanvasTheme; onChange: (value: string) => void }) {
     return (
         <label className="flex h-9 items-center rounded-full border px-3 text-sm focus-within:ring-2 focus-within:ring-inset focus-within:ring-[var(--studio-focus-ring)]" style={{ borderColor: theme.node.stroke, color: theme.node.text }}>
             <input
                 type="number"
                 min={min}
                 max={max}
+                step={step}
                 className="min-w-0 flex-1 bg-transparent text-center outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 style={{ color: theme.node.text, WebkitTextFillColor: theme.node.text }}
                 value={value}

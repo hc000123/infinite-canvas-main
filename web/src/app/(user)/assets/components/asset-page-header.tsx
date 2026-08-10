@@ -59,7 +59,7 @@ export function AssetPageHeader({ kindFilter, keyword, projectContextFilter, pro
     };
 
     return (
-        <header className="studio-toolbar flex flex-col gap-3 p-3 xl:flex-row xl:items-center xl:justify-between">
+        <header className="studio-toolbar flex flex-col gap-3 p-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
             <div className="flex min-w-0 items-center gap-3">
                 <h1 className="shrink-0 text-xl font-semibold text-[var(--studio-text-primary)]">资产</h1>
                 <span className="text-[var(--studio-text-muted)]">/</span>
@@ -74,10 +74,10 @@ export function AssetPageHeader({ kindFilter, keyword, projectContextFilter, pro
                 <span className="shrink-0 text-sm tabular-nums text-[var(--studio-text-muted)]">{projectOptions.length}</span>
             </div>
 
-            <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:flex xl:flex-wrap xl:items-center xl:justify-end">
-                <Select className="min-w-0 xl:w-40 xl:shrink-0" value={kindFilter} options={kindOptions} onChange={(value) => onKindFilterChange(value as AssetKind | "all")} />
-                <Input className="min-w-0 xl:!w-56 xl:shrink-0" allowClear prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />} value={keyword} placeholder="模糊搜索" onChange={(event) => onKeywordChange(event.target.value)} />
-                <Select className="min-w-0 xl:w-36 xl:shrink-0" value={sortMode} options={sortOptions} onChange={(value) => onSortModeChange(value as AssetSortMode)} />
+            <div className="grid min-w-0 gap-2 sm:grid-cols-3 2xl:flex 2xl:flex-wrap 2xl:items-center 2xl:justify-end">
+                <Select className="min-w-0 2xl:w-40 2xl:shrink-0" value={kindFilter} options={kindOptions} onChange={(value) => onKindFilterChange(value as AssetKind | "all")} />
+                <Input className="min-w-0 2xl:!w-56 2xl:shrink-0" allowClear prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />} value={keyword} placeholder="模糊搜索" onChange={(event) => onKeywordChange(event.target.value)} />
+                <Select className="min-w-0 2xl:w-36 2xl:shrink-0" value={sortMode} options={sortOptions} onChange={(value) => onSortModeChange(value as AssetSortMode)} />
                 <Button className="studio-toolbar-button shrink-0" icon={<Download className="size-4" />} onClick={onExportAll}>
                     导出全部
                 </Button>

@@ -44,7 +44,7 @@ export function AppTopNav() {
                     <div className="mx-auto flex h-full w-full max-w-7xl items-stretch justify-between gap-3 px-4 sm:px-5">
                         <div className="flex min-w-0 flex-1 items-center">
                             <Link href="/" className="workspace-top-button whitespace-nowrap !px-3 text-base !font-semibold tracking-tight">
-                                AI · 画布
+                                眨眼之间工作台
                             </Link>
 
                             <nav className="ml-4 flex h-10 min-w-0 flex-1 items-center gap-1 overflow-x-auto thin-scrollbar">

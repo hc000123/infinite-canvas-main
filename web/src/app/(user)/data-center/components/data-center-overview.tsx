@@ -30,9 +30,6 @@ export function DataCenterOverview({ balance, periods, period, loading, error, o
                     </Typography.Title>
                     <Typography.Text type="secondary">快速了解余额与近期实际消耗</Typography.Text>
                 </div>
-                <Card size="small" variant="borderless" style={{ minWidth: 180, background: token.colorPrimaryBg }}>
-                    <Statistic title="当前算力余额" value={balance} suffix="点" valueStyle={{ color: token.colorPrimary }} />
-                </Card>
             </Flex>
             {error ? (
                 <Alert
@@ -49,10 +46,16 @@ export function DataCenterOverview({ balance, periods, period, loading, error, o
                 />
             ) : null}
             <Row gutter={[12, 12]}>
+                <Col xs={24} sm={12} xl={6}>
+                    <Card variant="borderless" style={{ height: "100%", background: token.colorPrimaryBg, outline: `1px solid ${token.colorPrimaryBorder}` }}>
+                        <Statistic title="当前算力余额" value={balance} suffix="点" valueStyle={{ color: token.colorPrimary }} />
+                        <Typography.Text type="secondary" className="mt-3 block">账户当前可用额度</Typography.Text>
+                    </Card>
+                </Col>
                 {(periods || emptyPeriods).map((item) => {
                     const selected = item.key === period;
                     return (
-                        <Col xs={24} md={8} key={item.key}>
+                        <Col xs={24} sm={12} xl={6} key={item.key}>
                             <Card
                                 hoverable
                                 variant="borderless"

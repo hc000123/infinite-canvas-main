@@ -160,8 +160,8 @@ export default function AdminSkillsPage() {
                 </Card>
 
                 {!activeItem ? <Card className="studio-panel" variant="borderless"><Empty description="没有匹配的 Skill" /></Card> : (
-                    <div className="grid grid-cols-[290px_minmax(540px,1fr)_290px] gap-4 max-2xl:grid-cols-[260px_minmax(500px,1fr)] max-xl:grid-cols-1">
-                        <Flex vertical gap={12}>
+                    <div className="grid grid-cols-[240px_minmax(440px,1fr)_240px] gap-3 xl:overflow-hidden max-[1180px]:grid-cols-[230px_minmax(420px,1fr)] max-[900px]:grid-cols-1">
+                        <Flex vertical gap={12} className="min-h-0 xl:max-h-[calc(100dvh-250px)] xl:overflow-y-auto xl:pr-1">
                             <Card className="studio-panel" variant="borderless" title={`注册表 · ${visibleItems.length}`} extra={<Button type="text" icon={<ReloadOutlined />} onClick={() => skillsQuery.refetch()} />}>
                                 <Collapse
                                     ghost
@@ -179,7 +179,7 @@ export default function AdminSkillsPage() {
                             </Card>
                         </Flex>
 
-                        <Flex vertical gap={12} style={{ minWidth: 0 }}>
+                        <Flex vertical gap={12} className="min-h-0 xl:max-h-[calc(100dvh-250px)] xl:overflow-y-auto xl:pr-1" style={{ minWidth: 0 }}>
                             <Card className="studio-panel" variant="borderless" styles={{ body: { padding: 14 } }}>
                                 <Flex justify="space-between" align="center" gap={12} wrap><div><Flex gap={8} align="center" wrap><Typography.Title level={4} style={{ margin: 0 }}>{activeItem.skill.name} · v{activeVersion?.version || "-"}</Typography.Title><Button type="text" size="small" icon={<EditOutlined />} onClick={openDefinitionEdit}>编辑名称</Button><Tag color={activeVersion?.status === "draft" ? "warning" : activeVersion?.status === "published" ? "success" : "default"}>{activeVersion ? skillLifecycleLabel(activeVersion, Boolean(passingEvaluation), activeVersion.id === activeItem.skill.recommendedVersionId) : "未选择版本"}</Tag></Flex><Typography.Text type="secondary">{activeItem.skill.summary}</Typography.Text></div><Space wrap><Button icon={<ExperimentOutlined />} disabled={!activeVersion || activeVersion.status === "archived"} onClick={() => setTrialOpen(true)}>独立试运行</Button>{activeVersion?.status === "draft" ? <Button type="primary" icon={<CloudUploadOutlined />} disabled={!publishReady} loading={publishMutation.isPending} onClick={() => publishMutation.mutate()}>设为可用</Button> : null}{recommendationAction ? <Button type="primary" onClick={() => recommendMutation.mutate()} loading={recommendMutation.isPending}>{recommendationAction}</Button> : null}{activeVersion?.status === "draft" ? <Button danger icon={<DeleteOutlined />} loading={deleteVersionMutation.isPending} onClick={confirmVersionLifecycle}>删除草稿</Button> : null}{activeVersion?.status === "published" ? <Button danger icon={<StopOutlined />} loading={archiveVersionMutation.isPending} onClick={confirmVersionLifecycle}>停用版本</Button> : null}</Space></Flex>
                             </Card>
@@ -187,7 +187,7 @@ export default function AdminSkillsPage() {
                             {detailQuery.isLoading ? <Skeleton active paragraph={{ rows: 12 }} /> : detailQuery.data ? <Collapse items={[{ key: "technical", label: "技术详情与底层契约", children: <><SkillEditor value={editorValue} readOnly={activeVersion?.status !== "draft" || importedFolderVersion} onChange={setEditorValue} />{activeVersion?.status === "draft" && !importedFolderVersion ? <Flex justify="flex-end" gap={8} className="mt-3"><Button icon={<CheckCircleOutlined />} loading={validateMutation.isPending} onClick={() => validateMutation.mutate()}>校验契约</Button><Button icon={<SaveOutlined />} disabled={!isDirty} loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>保存底层修改</Button></Flex> : null}</> }]} /> : <Empty description="请选择版本" />}
                         </Flex>
 
-                        <Flex vertical gap={12} className="max-2xl:col-span-2 max-xl:col-span-1">
+                        <Flex vertical gap={12} className="min-h-0 xl:max-h-[calc(100dvh-250px)] xl:overflow-y-auto xl:pr-1 max-[1180px]:col-span-2 max-[900px]:col-span-1">
                             <Card className="studio-panel" variant="borderless" title="运行状态">
                                 <Flex vertical gap={10}><Flex justify="space-between"><Typography.Text type="secondary">启用</Typography.Text><Switch checked={activeItem.skill.enabled} loading={enabledMutation.isPending} onChange={(enabled) => enabledMutation.mutate(enabled)} /></Flex><Status label="内容哈希" value={shortSkillHash(activeVersion?.contentHash || "")} /><Status label="评测" value={passingEvaluation ? "同哈希已通过" : "暂无通过记录"} /><Status label="推荐版" value={recommendedVersion ? `v${recommendedVersion.version}` : "未设置"} /></Flex>
                             </Card>

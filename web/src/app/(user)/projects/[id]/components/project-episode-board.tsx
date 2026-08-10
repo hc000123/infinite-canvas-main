@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Button, Empty, Input, Select, Tag } from "antd";
-import { Archive, ArrowRight, BarChart3, Bot, Clapperboard, Database, Edit3, FileText, Image, Library, ListChecks, Maximize2, Plus, Sparkles, Trash2, TriangleAlert, Video, Wand2, type LucideIcon } from "lucide-react";
+import { Button, Dropdown, Empty, Input, Select, Tag } from "antd";
+import { Archive, ArrowRight, BarChart3, Bot, Clapperboard, Database, Edit3, FileText, Image, Library, ListChecks, Maximize2, MoreHorizontal, Plus, Sparkles, Trash2, TriangleAlert, Video, Wand2, type LucideIcon } from "lucide-react";
 import { canvasEpisodeLabel } from "../../../canvas/utils/canvas-episode-context";
 import { canvasProjectPresetSummary } from "../../../canvas/utils/canvas-project-preset";
 import type { CanvasProject } from "../../../canvas/stores/use-canvas-store";
@@ -112,33 +112,9 @@ export function ProjectEpisodeBoard({
     return (
         <div className="mx-auto min-h-full max-w-[1680px] rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] shadow-[var(--studio-shadow)]">
             <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--studio-border-subtle)] px-4 py-4 sm:px-8">
-                <nav aria-label="项目详情视图" className="order-1 flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-4">
+                <nav aria-label="项目详情视图" className="order-1 flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-4 lg:order-none">
                     <ProjectDetailNavButton active={activeTab === "episodes"} icon={ListChecks} label="分集" onClick={() => onTabChange("episodes")} />
                     <ProjectDetailNavButton active={activeTab === "canvas"} icon={Maximize2} label="项目画布" onClick={() => onTabChange("canvas")} />
-                    <button
-                        type="button"
-                        className="inline-flex h-10 items-center gap-2 rounded-md border border-transparent px-3 text-base font-semibold text-[var(--studio-text-muted)] transition hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-text-primary)]"
-                        onClick={onOpenAgentWorkspace}
-                    >
-                        <Bot className="size-4" />
-                        生产总控
-                    </button>
-                    <button
-                        type="button"
-                        className="inline-flex h-10 items-center gap-2 rounded-md border border-transparent px-3 text-base font-semibold text-[var(--studio-text-muted)] transition hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-text-primary)]"
-                        onClick={onOpenSkillManagement}
-                    >
-                        <Library className="size-4" />
-                        Skill 管理
-                    </button>
-                    <button
-                        type="button"
-                        className="inline-flex h-10 items-center gap-2 rounded-md border border-transparent px-3 text-base font-semibold text-[var(--studio-text-muted)] transition hover:border-[var(--studio-border-strong)] hover:text-[var(--studio-text-primary)]"
-                        onClick={onOpenProjectCache}
-                    >
-                        <Database className="size-4" />
-                        查看项目缓存
-                    </button>
                 </nav>
 
                 <div className="order-2 flex w-full min-w-0 justify-start lg:order-none lg:w-auto lg:flex-1 lg:justify-center">
@@ -148,10 +124,26 @@ export function ProjectEpisodeBoard({
                     </div>
                 </div>
 
-                <div className="order-3 flex w-full shrink-0 items-center gap-3 sm:w-auto lg:order-none">
-                    <Button className="h-11 flex-1 px-5 sm:flex-none" onClick={onEditProject}>
+                <div className="order-3 flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap lg:order-none">
+                    <Button className="h-10 flex-1 px-4 sm:flex-none" icon={<Bot className="size-4" />} onClick={onOpenAgentWorkspace}>
+                        生产总控
+                    </Button>
+                    <Button className="h-10 flex-1 px-4 sm:flex-none" onClick={onEditProject}>
                         编辑项目
                     </Button>
+                    <Dropdown
+                        placement="bottomRight"
+                        menu={{
+                            items: [
+                                { key: "skills", icon: <Library className="size-4" />, label: "Skill 管理", onClick: onOpenSkillManagement },
+                                { key: "cache", icon: <Database className="size-4" />, label: "查看项目缓存", onClick: onOpenProjectCache },
+                            ],
+                        }}
+                    >
+                        <Button className="h-10" icon={<MoreHorizontal className="size-4" />} aria-label="更多项目操作">
+                            更多
+                        </Button>
+                    </Dropdown>
                 </div>
             </header>
 
@@ -675,16 +667,16 @@ function ProjectCanvasList({
                     <h2 className="text-2xl font-semibold tracking-normal text-[var(--studio-text-primary)]">画布列表</h2>
                     <p className="mt-1 text-sm text-[var(--studio-text-secondary)]">查看当前项目下所有画布，包括未绑定分集的旧画布和本集子画布。</p>
                 </div>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex min-w-0 flex-1 flex-wrap justify-end gap-3 max-lg:w-full max-lg:justify-start">
                     {unboundCanvases.length ? (
-                        <div className="flex min-w-[320px] gap-2">
+                        <div className="flex w-full min-w-0 gap-2 sm:w-auto sm:min-w-[320px]">
                             <Select className="min-w-0 flex-1" value={bindingCanvasId || undefined} placeholder="绑定旧画布" options={unboundCanvases.map((canvas) => ({ value: canvas.id, label: canvas.title }))} onChange={onBindingCanvasChange} />
                             <Button disabled={!bindingCanvasId} onClick={onBindCanvas}>
                                 绑定
                             </Button>
                         </div>
                     ) : null}
-                    <Button type="primary" icon={<Plus className="size-4" />} onClick={onCreateCanvas}>
+                    <Button className="shrink-0" type="primary" icon={<Plus className="size-4" />} onClick={onCreateCanvas}>
                         新建画布
                     </Button>
                 </div>
@@ -697,13 +689,10 @@ function ProjectCanvasList({
                     ))}
                 </div>
             ) : (
-                <section className="grid min-h-80 place-items-center rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-6 py-16 text-center">
+                <section className="grid min-h-64 place-items-center rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-6 py-12 text-center">
                     <div>
                         <h3 className="text-2xl font-semibold text-[var(--studio-text-primary)]">这个项目还没有画布</h3>
-                        <p className="mt-3 max-w-xl text-base leading-7 text-[var(--studio-text-secondary)]">新建画布后，它会显示在这里；从本集生产流程创建的承接画布也会自动归到当前项目。</p>
-                        <Button className="mt-6" type="primary" icon={<Plus className="size-4" />} onClick={onCreateCanvas}>
-                            新建画布
-                        </Button>
+                        <p className="mt-3 max-w-xl text-base leading-7 text-[var(--studio-text-secondary)]">使用右上角“新建画布”开始；从本集生产流程创建的承接画布也会自动归到当前项目。</p>
                     </div>
                 </section>
             )}

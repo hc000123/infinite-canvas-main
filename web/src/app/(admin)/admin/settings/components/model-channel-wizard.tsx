@@ -9,7 +9,7 @@ import type { AiModelKind } from "@/lib/ai-model-kind";
 import type { AdminModelChannel, AdminModelTextEndpoint, AdminPublicModelChannelSettings } from "@/services/api/admin";
 
 import { isRoutableModelChannel, modelChannelHasCapability } from "../model-channel-publication";
-import { applyWizardPublication, buildWizardChannel, buildWizardProspectiveChannel, createModelDiscoveryCoordinator, dedicatedVideoProtocol, modelDiscoveryCandidates, normalizeWizardModels, runModelDiscoveryRequest, switchWizardProtocolCapabilities, type WizardChannelDraft, type WizardProtocolCapabilityDrafts, type WizardPublicSelection } from "../model-channel-wizard-model";
+import { applyWizardPublication, buildWizardChannel, buildWizardProspectiveChannel, createModelDiscoveryCoordinator, dedicatedVideoProtocol, modelDiscoveryCandidates, normalizeWizardModels, runModelDiscoveryRequest, switchWizardProtocolCapabilities, wizardInitialStep, wizardStepForField, type WizardChannelDraft, type WizardProtocolCapabilityDrafts, type WizardPublicSelection } from "../model-channel-wizard-model";
 
 type ModelChannelWizardProps = {
     open: boolean;
@@ -17,7 +17,6 @@ type ModelChannelWizardProps = {
     existingChannel?: AdminModelChannel;
     siblingChannels: AdminModelChannel[];
     publicModelChannel: AdminPublicModelChannelSettings;
-    configuredModels: string[];
     saving: boolean;
     onCancel: () => void;
     onDiscoverModels: (draft: AdminModelChannel) => Promise<string[]>;
@@ -31,7 +30,7 @@ const protocolOptions: { value: AdminModelChannel["protocol"]; title: string; de
     { value: "openai", title: "OpenAI 兼容", description: "适用于标准 /v1 接口及兼容中转服务。", tag: "通用" },
     { value: "volcengine-ark", title: "火山方舟 Ark", description: "使用本地模型名映射企业 Ark Endpoint。", tag: "企业视频" },
     { value: "jimeng-cli", title: "即梦 CLI", description: "由后台调用 dreamina CLI 执行即梦生成任务。", tag: "本地 CLI" },
-    { value: "xinglian-cloud", title: "星链云 SD2", description: "对接星链云 Seedance 2.0 提交与查询接口。", tag: "SD2" },
+    { value: "xinglian-cloud", title: "星链云 SD2", description: "对接星链云 SD2 / SD2.5 提交、查询与余额预检。", tag: "SD2" },
 ];
 const capabilityOptions = [
     { label: "文本 Agent", value: "text" },
@@ -50,7 +49,6 @@ export function ModelChannelWizard({
     existingChannel,
     siblingChannels,
     publicModelChannel,
-    configuredModels,
     saving,
     onCancel,
     onDiscoverModels,
@@ -87,7 +85,7 @@ export function ModelChannelWizard({
     const capabilities = Form.useWatch("capabilities", form) || [];
     const publishedModels = Form.useWatch("publishedModels", form) || [];
     const enabled = Form.useWatch("enabled", form) ?? baseChannel.enabled;
-    const candidateModels = useMemo(() => modelDiscoveryCandidates(configuredModels, discoveredModels), [configuredModels, discoveredModels]);
+    const candidateModels = useMemo(() => modelDiscoveryCandidates(baseChannel.models, discoveredModels), [baseChannel.models, discoveredModels]);
     const channelModels = useMemo(
         () => (protocol === "volcengine-ark" ? normalizeWizardModels(endpointMappings.map((item) => item?.model || "")) : normalizeWizardModels(selectedModels)),
         [endpointMappings, protocol, selectedModels],
@@ -158,7 +156,7 @@ export function ModelChannelWizard({
             modelTextEndpoints: textEndpointsFor(models, initialPublication.modelTextEndpoints),
         });
         setInitializedKey(initializationKey);
-        setStep(0);
+        setStep(wizardInitialStep(Boolean(initializationInput.existingChannel)));
         setDiscoveredModels([]);
     }, [form, initializationKey, invalidateDiscovery, open]);
 
@@ -266,6 +264,7 @@ export function ModelChannelWizard({
         submittingRef.current = true;
         setSubmitting(true);
         try {
+            preparePublication();
             const values = await form.validateFields();
             const channel = buildWizardChannel(existingChannel, scopeDraftToProtocol(values));
             const selection: WizardPublicSelection = {
@@ -278,7 +277,11 @@ export function ModelChannelWizard({
             const publication = applyWizardPublication(publicModelChannel, existingChannel, channel, siblingChannels, selection);
             await onFinish(channel, publication);
         } catch (error) {
-            if (error && typeof error === "object" && "errorFields" in error) return;
+            if (error && typeof error === "object" && "errorFields" in error) {
+                const errorFields = (error as { errorFields?: Array<{ name?: Array<string | number> }> }).errorFields;
+                setStep(wizardStepForField(errorFields?.[0]?.name));
+                return;
+            }
             message.error(safeErrorMessage(error, [existingChannel?.apiKey || "", form.getFieldValue("apiKey") || ""]));
         } finally {
             submittingRef.current = false;
@@ -303,12 +306,13 @@ export function ModelChannelWizard({
                     <Button onClick={() => { invalidateDiscovery(); onCancel(); }} disabled={busy}>取消</Button>
                     <Space>
                         {step > 0 ? <Button onClick={() => { invalidateDiscovery(); setStep((current) => current - 1); }} disabled={busy}>上一步</Button> : null}
-                        {step < 3 ? <Button type="primary" disabled={busy} onClick={() => void nextStep()}>下一步</Button> : <Button type="primary" loading={busy} disabled={busy} onClick={() => void finish()}>保存渠道</Button>}
+                        {step < 3 ? <Button type={existingChannel ? "default" : "primary"} disabled={busy} onClick={() => void nextStep()}>下一步</Button> : null}
+                        {existingChannel || step === 3 ? <Button type="primary" loading={busy} disabled={busy} onClick={() => void finish()}>保存渠道</Button> : null}
                     </Space>
                 </Flex>
             }
         >
-            <Steps current={step} size="small" responsive items={wizardSteps.map((title) => ({ title }))} style={{ marginBottom: 24 }} />
+            <Steps current={step} size="small" responsive items={wizardSteps.map((title) => ({ title }))} onChange={existingChannel && !busy ? (nextStep) => setStep(nextStep) : undefined} style={{ marginBottom: 24 }} />
             <Form
                 form={form}
                 layout="vertical"

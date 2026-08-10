@@ -23,6 +23,35 @@ test("describes Ark Seedance 2.5 generation capabilities", () => {
     assert.equal(capability?.fixedModel, false);
 });
 
+test("describes Xinglian SD2.5 duration, resolution, and reference limits", () => {
+    const capability = resolveDreaminaVideoCapability({ protocol: "xinglian-cloud", model: "sd2.5-480p-ax2", mode: "multimodal2video" });
+
+    assert.deepEqual(capability?.duration, { min: 4, max: 30 });
+    assert.deepEqual(capability?.resolutions, ["480"]);
+    assert.deepEqual(capability?.references, { images: 30, videos: 9, audios: 9, total: 48, allowAudioOnly: false });
+    assert.equal(capability?.label, "SD2.5 · 4–30s · 多模态");
+});
+
+test("locks Xinglian fixed-duration models to 20 seconds", () => {
+    const capability = resolveDreaminaVideoCapability({ protocol: "xinglian-cloud", model: "sd2.5-720p-ax2-20s", mode: "text2video" });
+
+    assert.deepEqual(capability?.duration, { min: 20, max: 20 });
+    assert.deepEqual(capability?.resolutions, ["720"]);
+    assert.equal(capability?.label, "SD2.5 · 固定 20s");
+    assert.deepEqual(
+        normalizeDreaminaVideoSettings({ protocol: "xinglian-cloud", model: "sd2.5-720p-ax2-20s", mode: "text2video", seconds: "4", resolution: "1080" }),
+        { seconds: "20", resolution: "720" },
+    );
+});
+
+test("describes Xinglian DS models as 10 or 15 second generation", () => {
+    const capability = resolveDreaminaVideoCapability({ protocol: "xinglian-cloud", model: "sd2-720p-ds-fast", mode: "multimodal2video" });
+
+    assert.deepEqual(capability?.duration, { min: 10, max: 15 });
+    assert.deepEqual(capability?.durationOptions, [10, 15]);
+    assert.deepEqual(capability?.references, { images: 9, videos: 3, audios: 3, total: 12, allowAudioOnly: false });
+});
+
 test("does not treat longer Seedance version names as 2.5", () => {
     const ark = resolveDreaminaVideoCapability({ protocol: "volcengine-ark", model: "doubao-seedance-2-50", mode: "multimodal2video" });
     const jimeng = resolveDreaminaVideoCapability({ protocol: "jimeng-cli", model: "seedance2.50", mode: "multimodal2video" });
@@ -71,6 +100,10 @@ test("normalizes Dreamina settings for the selected model", () => {
     assert.deepEqual(
         normalizeDreaminaVideoSettings({ protocol: "jimeng-cli", model: "seedance2.5", mode: "multimodal2video", seconds: "24", resolution: "480" }),
         { seconds: "24", resolution: "480" },
+    );
+    assert.deepEqual(
+        normalizeDreaminaVideoSettings({ protocol: "xinglian-cloud", model: "sd2.5-720p-ax2", mode: "multimodal2video", seconds: "30", resolution: "1080" }),
+        { seconds: "30", resolution: "720" },
     );
     assert.deepEqual(
         normalizeDreaminaVideoSettings({ protocol: "openai", model: "video-model", mode: "text2video", seconds: "20", resolution: "1080" }),

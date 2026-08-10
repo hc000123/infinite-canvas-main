@@ -11,6 +11,7 @@ import { modelMatchesAiCapability, type AiModelKind } from "@/lib/ai-model-kind"
 import { ModelChannelWizard } from "./components/model-channel-wizard";
 import { ProviderPresetModal } from "./components/provider-preset-modal";
 import { sanitizeModelChannelPublication } from "./model-channel-publication";
+import { buildChannelModelSourceGroups, type ChannelModelSourceOption } from "./model-channel-source-options";
 import { channelVerificationCopy, createAuthoritativeSettingsCoordinator, createChannelVerificationCoordinator, filterWizardPublicationSnapshot, finishAuthoritativeSettingsOperation, persistAuthoritativeSettingsMutation, runChannelVerification, syncConfiguredModelsFromAuthoritativeSettings } from "./model-channel-wizard-model";
 import type { ModelChannelPresetResult } from "./model-channel-presets";
 import {
@@ -118,7 +119,6 @@ export default function AdminSettingsPage() {
     const [isDeletingChannel, setIsDeletingChannel] = useState(false);
     const [isEnterpriseVideoFocus, setIsEnterpriseVideoFocus] = useState(false);
     const [modelCosts, setModelCosts] = useState<AdminModelCost[]>([]);
-    const [configuredModels, setConfiguredModels] = useState<string[]>([]);
     const watchedPublicModels = Form.useWatch(["public", "modelChannel", "availableModels"], { form, preserve: true });
     const watchedModelTextEndpoints = Form.useWatch(["public", "modelChannel", "modelTextEndpoints"], { form, preserve: true });
     const publicModels = useMemo(() => watchedPublicModels || [], [watchedPublicModels]);
@@ -129,7 +129,7 @@ export default function AdminSettingsPage() {
     const publicTextModels = useMemo(() => filterModelsByCapability(publicModels, channels, "text"), [channels, publicModels]);
     const modelTextEndpoints = useMemo(() => normalizeModelTextEndpoints(watchedModelTextEndpoints || [], publicTextModels), [watchedModelTextEndpoints, publicTextModels]);
     const publicTextModelOptions = useMemo(() => publicTextModels.map((item) => ({ label: item, value: item })), [publicTextModels]);
-    const channelModels = useMemo(() => collectChannelModels(channels), [channels]);
+    const channelModelSourceGroups = useMemo(() => buildChannelModelSourceGroups(channels), [channels]);
     const channelTableData = useMemo(() => channels.map((channel, index) => ({ ...channel, _index: index, _rowKey: `${index}-${channel.name}-${channel.baseUrl}` })), [channels]);
     const activeMode = editorMode[activeTab];
     const activeJsonText = jsonText[activeTab];
@@ -145,8 +145,7 @@ export default function AdminSettingsPage() {
             await syncConfiguredModelsFromAuthoritativeSettings(
                 authoritativeSettingsCoordinatorRef.current,
                 async () => normalizeSettings(await fetchAdminSettings(token)),
-                (models, data) => {
-                    setConfiguredModels(models);
+                (_models, data) => {
                     form.setFieldsValue(data);
                     setChannels(data.private.channels);
                     setModelCosts(data.public.modelChannel.modelCosts);
@@ -192,8 +191,7 @@ export default function AdminSettingsPage() {
             await syncConfiguredModelsFromAuthoritativeSettings(authoritativeSettingsCoordinatorRef.current, async () => {
                 const saved = normalizeSettings(await saveAdminSettings(token, values));
                 return mergePrivateSecrets(values, saved);
-            }, (models, merged) => {
-                setConfiguredModels(models);
+            }, (_models, merged) => {
                 form.setFieldsValue(merged);
                 setChannels(merged.private.channels);
                 setModelCosts(merged.public.modelChannel.modelCosts);
@@ -215,8 +213,7 @@ export default function AdminSettingsPage() {
             await syncConfiguredModelsFromAuthoritativeSettings(authoritativeSettingsCoordinatorRef.current, async () => {
                 const saved = normalizeSettings(await saveAdminSettings(token, result.settings));
                 return mergePrivateSecrets(result.settings, saved);
-            }, (models, merged) => {
-                setConfiguredModels(models);
+            }, (_models, merged) => {
                 form.setFieldsValue(merged);
                 setChannels(merged.private.channels);
                 setModelCosts(merged.public.modelChannel.modelCosts);
@@ -405,8 +402,7 @@ export default function AdminSettingsPage() {
                         private: { ...latest.private, channels: nextChannels },
                     });
                 },
-            ), (models, merged) => {
-                setConfiguredModels(models);
+            ), (_models, merged) => {
                 setChannels(merged.private.channels);
                 setModelCosts(merged.public.modelChannel.modelCosts);
                 setPublicSettings(merged.public);
@@ -432,8 +428,7 @@ export default function AdminSettingsPage() {
         return syncConfiguredModelsFromAuthoritativeSettings(authoritativeSettingsCoordinatorRef.current, async () => {
             const saved = normalizeSettings(await saveAdminSettings(token, nextSettings));
             return mergePrivateSecrets(nextSettings, saved);
-        }, (models, merged) => {
-            setConfiguredModels(models);
+        }, (_models, merged) => {
             setChannels(merged.private.channels);
             setModelCosts(merged.public.modelChannel.modelCosts);
             setPublicSettings(merged.public);
@@ -449,7 +444,7 @@ export default function AdminSettingsPage() {
     return (
         <main style={{ padding: 24 }}>
             <Flex vertical gap={16}>
-                <Card variant="borderless">
+                <Card variant="borderless" className="shadow-[var(--studio-shadow)]" style={{ position: "sticky", top: 0, zIndex: 20 }}>
                     <Flex justify="space-between" align="center" gap={16} wrap>
                         <Tabs
                             activeKey={activeTab}
@@ -526,7 +521,22 @@ export default function AdminSettingsPage() {
                                 <Row gutter={16}>
                                     <Col span={24}>
                                         <Form.Item name={["public", "modelChannel", "availableModels"]} label="系统可用模型(请先在私有配置里配置渠道)" extra="可选项来自已启用渠道中选择的模型，最终开放哪些模型由这里勾选决定">
-                                            <Select mode="multiple" placeholder="请选择系统可用模型" options={channelModels.map((item) => ({ label: item, value: item }))} />
+                                            <Select
+                                                mode="multiple"
+                                                showSearch
+                                                placeholder="请选择系统可用模型"
+                                                options={channelModelSourceGroups}
+                                                filterOption={(input, option) => String((option as ChannelModelSourceOption | undefined)?.searchText || "").includes(input.trim().toLowerCase())}
+                                                optionRender={(option) => {
+                                                    const item = option.data as ChannelModelSourceOption;
+                                                    return (
+                                                        <Flex justify="space-between" align="center" gap={12}>
+                                                            <Typography.Text>{item.label}</Typography.Text>
+                                                            <Typography.Text type="secondary" className="text-xs" ellipsis>来源：{item.sources.join(" / ")}</Typography.Text>
+                                                        </Flex>
+                                                    );
+                                                }}
+                                            />
                                         </Form.Item>
                                     </Col>
                                     <Col xs={24} md={8}>
@@ -836,7 +846,6 @@ export default function AdminSettingsPage() {
                     existingChannel={editingChannelIndex === null ? undefined : channels[editingChannelIndex]}
                     siblingChannels={channels.filter((_, index) => index !== editingChannelIndex)}
                     publicModelChannel={publicModelChannel}
-                    configuredModels={configuredModels}
                     saving={isSavingChannelWizard}
                     onCancel={closeChannelWizard}
                     onDiscoverModels={discoverChannelModels}

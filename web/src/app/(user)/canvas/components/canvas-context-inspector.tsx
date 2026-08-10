@@ -141,7 +141,7 @@ export function CanvasContextInspector({
 
     return (
         <aside
-            className="fixed inset-y-0 right-0 z-[80] flex h-full w-[calc(100vw-16px)] max-w-[420px] shrink-0 flex-col border-l shadow-[var(--studio-shadow)] md:relative md:z-auto md:w-[420px] md:shadow-none"
+            className="fixed inset-y-0 right-0 z-[80] flex h-full w-[calc(100vw-16px)] max-w-[420px] shrink-0 flex-col border-l shadow-[var(--studio-shadow)] md:relative md:z-auto md:w-[clamp(320px,30vw,420px)] md:shadow-none"
             style={{ background: theme.node.panel, borderColor: theme.node.stroke, color: theme.node.text }}
         >
             <div className="border-b px-4 py-3" style={{ borderColor: theme.node.stroke }}>
