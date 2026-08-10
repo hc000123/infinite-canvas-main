@@ -2,7 +2,7 @@
 
 ## 背景
 
-GeekNow 提供文本、图片和异步视频接口，公共 API 根地址为 `https://www.geeknow.top/v1`，主要使用 `Authorization: Bearer <API_KEY>` 鉴权。文本的 Chat Completions / Responses、图片的 Images 接口可沿用项目现有 OpenAI 兼容代理；视频虽然统一提交到 `POST /v1/videos`，不同模型家族的比例、清晰度和参考素材字段仍有差异，不能只把模型名加入普通 OpenAI 渠道。
+GeekNow 提供文本、图片和异步视频接口，当前验证通过的 API 根地址为 `https://geeknow.ai/v1`，主要使用 `Authorization: Bearer <API_KEY>` 鉴权。文本的 Chat Completions / Responses、图片的 Images 接口可沿用项目现有 OpenAI 兼容代理；视频虽然统一提交到 `POST /v1/videos`，不同模型家族的比例、清晰度和参考素材字段仍有差异，不能只把模型名加入普通 OpenAI 渠道。
 
 本次新增独立 GeekNow 厂商预设，保持火山 Ark、星链云、即梦 CLI、Comfly 和通用中转原有行为不变。
 
@@ -28,13 +28,13 @@ GeekNow 提供文本、图片和异步视频接口，公共 API 根地址为 `ht
 
 | 渠道 ID | 名称 | Base URL | 能力 |
 | --- | --- | --- | --- |
-| `geeknow-text` | GeekNow 文本 | `https://www.geeknow.top/v1` | `text` |
-| `geeknow-image` | GeekNow 图片 | `https://www.geeknow.top/v1` | `image` |
-| `geeknow-video` | GeekNow 视频 | `https://www.geeknow.top/v1` | `video`、`video_query` |
+| `geeknow-text` | GeekNow 文本 | `https://geeknow.ai/v1` | `text` |
+| `geeknow-image` | GeekNow 图片 | `https://geeknow.ai/v1` | `image` |
+| `geeknow-video` | GeekNow 视频 | `https://geeknow.ai/v1` | `video`、`video_query` |
 
 三个渠道继续使用项目的 `openai` 公共协议标识，使同名模型可以与其他 OpenAI 兼容渠道共同作为 fallback，并避免改动现有公开模型协议结构。GeekNow 视频的差异由后端根据稳定渠道 ID 和官方 Base URL 识别，只有 `geeknow-video` 命中专用适配器。
 
-重复应用时按稳定渠道 ID 更新，不新增重复渠道；API Key 留空时继续使用已保存密钥。预设只修改这三个 GeekNow 渠道，现有渠道数组中的其他项目保持原值和顺序。
+重复应用时按稳定渠道 ID 更新，不新增重复渠道；API Key 留空时继续使用已保存密钥。预设补齐核心模型但保留管理员手动模型、权重、并发数和启停状态，现有公开/default 与费用保持不变；预设只修改这三个 GeekNow 渠道，现有渠道数组中的其他项目保持原值和顺序。
 
 ## 核心模型目录
 
@@ -95,7 +95,7 @@ GeekNow 提供文本、图片和异步视频接口，公共 API 根地址为 `ht
 
 ### 查询和下载
 
-- 任务查询使用 `GET https://www.geeknow.top/v1/videos/{task_id}`。
+- 任务查询使用 `GET https://geeknow.ai/v1/videos/{task_id}`。
 - 将 GeekNow 的 `queued`、`processing`、`completed`、`failed`、`cancelled` 等状态归一为项目现有任务状态。
 - 查询响应中的视频 URL 归一到项目现有 `video_url` 字段。
 - `/api/v1/videos/{task_id}/content` 不直接假设上游存在 `/content` 路由；后端先查询任务、提取结果 URL，再使用现有受限下载代理返回视频。

@@ -407,16 +407,17 @@ Workflow Adapter 不新增数据库表，也不调用模型。Adapter 定义保�
 | `kind`                 | string | 任务大类：`image`、`chat`、`video`                                           |
 | `task_type`            | string | 任务类型：`image_generation`、`image_edit`、`chat`、`video_create`           |
 | `action_type`          | string | 任务动作：`generate`、`edit`、`extend`、`chat` 等                            |
+| `channel_id`           | string | 创建任务实际命中的渠道稳定 ID，用于异步查询和下载时精确路由                   |
 | `provider`             | string | 命中的后台渠道名称                                                           |
-| `protocol`             | string | 渠道协议：`openai`、`volcengine-ark`、`jimeng-cli`                           |
+| `protocol`             | string | 渠道协议：`openai`、`volcengine-ark`、`jimeng-cli`、`xinglian-cloud`         |
 | `model`                | string | 请求模型                                                                     |
 | `path`                 | string | 前端调用的 AI 代理路径                                                       |
 | `status`               | string | 任务状态：`created`、`queued`、`running`、`succeeded`、`failed`、`cancelled` |
 | `credits`              | number | 本次预扣算力点                                                               |
 | `credits_refunded`     | number | 已返还算力点数量                                                             |
-| `upstream_task_id`     | string | 上游任务 ID，当前主要用于 Ark / 即梦视频任务                                 |
-| `raw_status`           | string | 上游原始状态，当前主要用于 Ark / 即梦视频任务                                |
-| `video_url`            | text   | 上游返回的视频地址，当前主要用于 Ark / 即梦视频任务                          |
+| `upstream_task_id`     | string | 上游任务 ID，用于 Ark / 星链 / 即梦 / GeekNow / 普通异步视频任务             |
+| `raw_status`           | string | 上游原始状态，用于 Ark / 即梦 / 星链 / GeekNow / 普通 OpenAI 兼容异步视频任务 |
+| `video_url`            | text   | 上游返回的视频地址，用于 Ark / 即梦 / 星链 / GeekNow / 普通 OpenAI 兼容异步视频任务 |
 | `video_url_expires_at` | number | 视频地址过期时间戳                                                           |
 | `error_code`           | string | 上游失败错误码                                                               |
 | `request_json`         | text   | 脱敏后的请求 JSON；不会保存 API Key、base64、blob URL 或文件内容             |

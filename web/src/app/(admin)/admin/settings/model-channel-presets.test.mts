@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyModelChannelPreset, JIMENG_MODELS, MODEL_CHANNEL_PRESETS, VOLCENGINE_ARK_MODELS, XINGLIAN_MODELS } from "./model-channel-presets.ts";
+import { applyModelChannelPreset, GEEKNOW_IMAGE_MODELS, GEEKNOW_TEXT_MODELS, GEEKNOW_VIDEO_MODELS, JIMENG_MODELS, MODEL_CHANNEL_PRESETS, VOLCENGINE_ARK_MODELS, XINGLIAN_MODELS } from "./model-channel-presets.ts";
 
 function emptySettings() {
     return {
@@ -69,6 +69,65 @@ test("applies all Xinglian models idempotently without changing billing or defau
     assert.equal(channels[0].apiKey, "new-key");
     assert.equal(second.settings.public.modelChannel.defaultVideoModel, "existing-video");
     assert.deepEqual(second.settings.public.modelChannel.modelCosts, [{ model: "sd2-720p-mini", credits: 18 }]);
+});
+
+test("creates three isolated GeekNow channels without publishing models", () => {
+    const result = applyModelChannelPreset(emptySettings(), "geeknow", { apiKey: "geek-key" });
+    const channels = result.settings.private.channels.filter((item) => item.id.startsWith("geeknow-"));
+
+    assert.deepEqual(channels.map((item) => item.id), ["geeknow-text", "geeknow-image", "geeknow-video"]);
+    assert.deepEqual(channels.map((item) => item.baseUrl), Array(3).fill("https://geeknow.ai/v1"));
+    assert.deepEqual(channels.find((item) => item.id === "geeknow-text")?.models, GEEKNOW_TEXT_MODELS);
+    assert.deepEqual(channels.find((item) => item.id === "geeknow-image")?.models, GEEKNOW_IMAGE_MODELS);
+    assert.deepEqual(channels.find((item) => item.id === "geeknow-video")?.models, GEEKNOW_VIDEO_MODELS);
+    assert.deepEqual(channels.find((item) => item.id === "geeknow-video")?.capabilities, ["video", "video_query"]);
+    assert.deepEqual(result.settings.public.modelChannel.availableModels, []);
+});
+
+test("reapplies GeekNow idempotently and keeps saved data", () => {
+    const initial = emptySettings();
+    initial.private.channels = [channel({ id: "existing", apiKey: "existing-key", models: ["existing-model"] })];
+    initial.public.modelChannel.availableModels = ["existing-model"];
+
+    const first = applyModelChannelPreset(initial, "geeknow", { apiKey: "geek-key" });
+    const second = applyModelChannelPreset(first.settings, "geeknow", { apiKey: "" });
+
+    assert.equal(second.settings.private.channels.filter((item) => item.id.startsWith("geeknow-")).length, 3);
+    assert.equal(second.settings.private.channels.find((item) => item.id === "geeknow-text")?.apiKey, "geek-key");
+    assert.equal(second.settings.private.channels.find((item) => item.id === "existing")?.apiKey, "existing-key");
+    assert.deepEqual(second.settings.public.modelChannel.availableModels, ["existing-model"]);
+});
+
+test("reapplies GeekNow without removing custom models or runtime and publication settings", () => {
+    const settings = emptySettings();
+    settings.private.channels = [
+        channel({
+            id: "geeknow-video",
+            name: "自定义 GeekNow 视频",
+            apiKey: "saved-geek-key",
+            models: ["custom-geek-video"],
+            capabilities: ["video", "video_query"],
+            concurrencyLimit: 4,
+            weight: 7,
+            enabled: true,
+        }),
+    ];
+    settings.public.modelChannel.availableModels = ["custom-geek-video"];
+    settings.public.modelChannel.defaultVideoModel = "custom-geek-video";
+    settings.public.modelChannel.modelCosts = [{ model: "custom-geek-video", credits: 36 }];
+
+    const result = applyModelChannelPreset(settings, "geeknow", { apiKey: "" });
+    const saved = result.settings.private.channels.find((item) => item.id === "geeknow-video");
+
+    assert.equal(saved?.apiKey, "saved-geek-key");
+    assert.equal(saved?.concurrencyLimit, 4);
+    assert.equal(saved?.weight, 7);
+    assert.equal(saved?.enabled, true);
+    assert.equal(saved?.models.includes("custom-geek-video"), true);
+    assert.equal(GEEKNOW_VIDEO_MODELS.every((model) => saved?.models.includes(model)), true);
+    assert.deepEqual(result.settings.public.modelChannel.availableModels, ["custom-geek-video"]);
+    assert.equal(result.settings.public.modelChannel.defaultVideoModel, "custom-geek-video");
+    assert.deepEqual(result.settings.public.modelChannel.modelCosts, [{ model: "custom-geek-video", credits: 36 }]);
 });
 
 test("migrates an existing Ark provider channel and preserves its key and EP", () => {

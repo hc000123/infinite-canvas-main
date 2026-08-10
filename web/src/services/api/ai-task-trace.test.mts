@@ -1,7 +1,44 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { aiTaskLedgerFromGeneration, aiTaskTraceHeaders, buildGenerationTaskLedger, generationTaskSummary, readAiTaskLedgerFromHeaders } from "./ai-task-trace-utils.ts";
+import { aiTaskLedgerFromGeneration, aiTaskRequestHeaders, aiTaskTraceHeaders, buildGenerationTaskLedger, generationTaskSummary, preserveVideoTaskLedger, readAiTaskLedgerFromHeaders } from "./ai-task-trace-utils.ts";
+
+test("preserves missing video ledger fields while preferring fields from the latest task", () => {
+    const previous = {
+        id: "upstream-old",
+        status: "queued",
+        aiTaskId: "aitask-old",
+        upstreamTaskId: "upstream-old",
+        aiTaskStatus: "queued",
+        aiTaskCredits: 8,
+        creditLogId: "credit-old",
+        creditsRefunded: 3,
+        refundedAt: "refund-old",
+        finishedAt: "finish-old",
+    };
+    const partial = preserveVideoTaskLedger({ id: "upstream-old", status: "running", aiTaskId: "aitask-old" }, previous);
+    assert.deepEqual(partial, { ...previous, status: "running", aiTaskStatus: "running" });
+
+    const latest = {
+        id: "upstream-new",
+        status: "succeeded",
+        aiTaskId: "aitask-new",
+        upstreamTaskId: "upstream-new",
+        aiTaskStatus: "succeeded",
+        aiTaskCredits: 0,
+        creditLogId: "credit-new",
+        creditsRefunded: 0,
+        refundedAt: "refund-new",
+        finishedAt: "finish-new",
+    };
+    assert.deepEqual(preserveVideoTaskLedger(latest, previous), latest);
+});
+
+test("attaches owned ai task id to video lifecycle requests", () => {
+    assert.deepEqual(aiTaskRequestHeaders("  aitask-video-1  "), { "X-AI-Task-ID": "aitask-video-1" });
+    assert.deepEqual(aiTaskRequestHeaders("  "), {});
+    assert.deepEqual(aiTaskRequestHeaders(undefined), {});
+});
 
 test("attaches ai task trace header through the unified backend channel", () => {
     const trace = { projectId: "project-1", canvasId: "canvas-1", nodeId: "node-1", shotIds: ["shot-1"] };

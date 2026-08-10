@@ -581,6 +581,693 @@ func TestXinglianVideoProxySubmitsAndFetchesSD2Task(t *testing.T) {
 	}
 }
 
+func TestGeekNowVideoProxyCreatesNormalizedTask(t *testing.T) {
+	setupAIHandlerTestDB(t)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/videos" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
+		}
+		if authorization := r.Header.Get("Authorization"); authorization != "Bearer geeknow-key" {
+			t.Fatalf("authorization = %q", authorization)
+		}
+		payload := readJSONMap(t, mustReadAll(t, r.Body))
+		if payload["model"] != "grok-imagine-video" || payload["prompt"] != "一只猫在草地奔跑" || payload["seconds"] != "6" || payload["aspect_ratio"] != "9:16" || payload["resolution"] != "1080P" {
+			t.Fatalf("create payload = %#v", payload)
+		}
+		if _, exists := payload["duration"]; exists {
+			t.Fatalf("unadapted duration leaked upstream: %#v", payload)
+		}
+		_, _ = w.Write([]byte(`{"data":{"task_id":"task-1","status":"pending","model":"grok-imagine-video"}}`))
+	}))
+	defer upstream.Close()
+	saveGeekNowHandlerSettings(t, upstream.URL+"/v1")
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/videos", strings.NewReader(`{"model":"grok-imagine-video","prompt":"一只猫在草地奔跑","duration":6,"ratio":"9:16","resolution":"1080p"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request = request.WithContext(service.WithUser(request.Context(), model.AuthUser{ID: "user-geeknow", Username: "geeknow", Role: model.UserRoleUser}))
+	response := httptest.NewRecorder()
+
+	proxyAIRequest(response, request, "/videos")
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
+	}
+	if payload := readJSONMap(t, response.Body.Bytes()); payload["id"] != "task-1" || payload["status"] != "queued" {
+		t.Fatalf("response = %#v", payload)
+	}
+	if response.Header().Get("X-AI-Task-Status") != string(model.AITaskStatusQueued) || response.Header().Get("X-AI-Upstream-Task-ID") != "task-1" {
+		t.Fatalf("task headers = %#v", response.Header())
+	}
+	task, ok, err := repository.GetAITask(response.Header().Get("X-AI-Task-ID"))
+	if err != nil || !ok || task.Status != model.AITaskStatusQueued || task.UpstreamTaskID != "task-1" {
+		t.Fatalf("saved task = %#v ok=%v err=%v", task, ok, err)
+	}
+}
+
+func TestGeekNowVideoProxyRefundsTerminalCreateResultOnce(t *testing.T) {
+	for _, status := range []model.AITaskStatus{model.AITaskStatusFailed, model.AITaskStatusCancelled} {
+		t.Run(string(status), func(t *testing.T) {
+			setupAIHandlerTestDB(t)
+			taskID := "task-" + string(status)
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte(`{"data":{"task_id":"` + taskID + `","status":"` + string(status) + `","error":{"code":"Rejected","message":"创建失败"}}}`))
+			}))
+			defer upstream.Close()
+			saveGeekNowHandlerSettingsWithCredits(t, upstream.URL+"/v1", 4)
+			now := time.Now().Format(time.RFC3339)
+			if _, err := repository.SaveUser(model.User{ID: "user-geeknow-terminal", Username: "geeknow-terminal", Role: model.UserRoleUser, Status: model.UserStatusActive, Credits: 10, AffCode: "GKNOWEND", CreatedAt: now, UpdatedAt: now}); err != nil {
+				t.Fatal(err)
+			}
+
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/videos", strings.NewReader(`{"model":"grok-imagine-video","prompt":"创建终止状态测试"}`))
+			request.Header.Set("Content-Type", "application/json")
+			request = request.WithContext(service.WithUser(request.Context(), model.AuthUser{ID: "user-geeknow-terminal", Username: "geeknow-terminal", Role: model.UserRoleUser}))
+			response := httptest.NewRecorder()
+			proxyAIRequest(response, request, "/videos")
+
+			if response.Code != http.StatusOK {
+				t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
+			}
+			if got := response.Header().Get("X-AI-Task-Status"); got != string(status) {
+				t.Fatalf("task status header = %q, want %q", got, status)
+			}
+			task, ok, err := repository.GetAITask(response.Header().Get("X-AI-Task-ID"))
+			if err != nil || !ok || task.Status != status || task.CreditsRefunded != 4 || task.RefundedAt == "" {
+				t.Fatalf("task = %#v ok=%v err=%v", task, ok, err)
+			}
+			user, ok, err := repository.GetUserByID("user-geeknow-terminal")
+			if err != nil || !ok || user.Credits != 10 {
+				t.Fatalf("user = %#v ok=%v err=%v", user, ok, err)
+			}
+			if refunds, err := repository.CountCreditLogsByRelatedIDAndType(task.ID, model.CreditLogTypeAIRefund); err != nil || refunds != 1 {
+				t.Fatalf("refund logs = %d err=%v", refunds, err)
+			}
+			if err := service.SyncArkVideoAITaskStatus(taskID, response.Body.Bytes()); err != nil {
+				t.Fatalf("repeat SyncArkVideoAITaskStatus returned error: %v", err)
+			}
+			if refunds, err := repository.CountCreditLogsByRelatedIDAndType(task.ID, model.CreditLogTypeAIRefund); err != nil || refunds != 1 {
+				t.Fatalf("refund logs after repeat = %d err=%v", refunds, err)
+			}
+			user, _, _ = repository.GetUserByID("user-geeknow-terminal")
+			if user.Credits != 10 {
+				t.Fatalf("credits after repeat = %d", user.Credits)
+			}
+		})
+	}
+}
+
+func TestGeekNowVideoProxyQueriesTask(t *testing.T) {
+	setupAIHandlerTestDB(t)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/videos/task-1" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
+		}
+		if authorization := r.Header.Get("Authorization"); authorization != "Bearer geeknow-key" {
+			t.Fatalf("authorization = %q", authorization)
+		}
+		_, _ = w.Write([]byte(`{"data":{"task_id":"task-1","status":"completed","output":{"url":"https://cdn.example.com/task-1.mp4"}}}`))
+	}))
+	defer upstream.Close()
+	saveGeekNowHandlerSettings(t, upstream.URL+"/v1")
+	seedGeekNowAITask(t)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/videos/task-1?model=grok-imagine-video", nil)
+	request = request.WithContext(service.WithUser(request.Context(), model.AuthUser{ID: "user-geeknow", Username: "geeknow", Role: model.UserRoleUser}))
+	response := httptest.NewRecorder()
+
+	proxyAIGetRequest(response, request, "/videos/task-1")
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
+	}
+	if payload := readJSONMap(t, response.Body.Bytes()); payload["id"] != "task-1" || payload["status"] != "succeeded" || payload["video_url"] != "https://cdn.example.com/task-1.mp4" {
+		t.Fatalf("response = %#v", payload)
+	}
+	task, ok, err := repository.GetAITaskByUpstreamTaskID("task-1")
+	if err != nil || !ok || task.Status != model.AITaskStatusSucceeded {
+		t.Fatalf("synced task = %#v ok=%v err=%v", task, ok, err)
+	}
+}
+
+func TestGeekNowVideoProxyQueriesTaskThroughPersistedChannel(t *testing.T) {
+	setupAIHandlerTestDB(t)
+	geekNowQueries := 0
+	geekNow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/videos":
+			_, _ = w.Write([]byte(`{"data":{"task_id":"task-bound","status":"pending"}}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/videos/task-bound":
+			geekNowQueries++
+			_, _ = w.Write([]byte(`{"data":{"task_id":"task-bound","status":"completed","output":{"url":"https://cdn.example.com/task-bound.mp4"}}}`))
+		default:
+			t.Fatalf("unexpected GeekNow request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer geekNow.Close()
+	saveGeekNowHandlerSettings(t, geekNow.URL+"/v1")
+
+	createRequest := httptest.NewRequest(http.MethodPost, "/api/v1/videos", strings.NewReader(`{"model":"grok-imagine-video","prompt":"渠道绑定测试"}`))
+	createRequest.Header.Set("Content-Type", "application/json")
+	createRequest = createRequest.WithContext(service.WithUser(createRequest.Context(), model.AuthUser{ID: "user-geeknow", Username: "geeknow", Role: model.UserRoleUser}))
+	createResponse := httptest.NewRecorder()
+	proxyAIRequest(createResponse, createRequest, "/videos")
+	if createResponse.Code != http.StatusOK {
+		t.Fatalf("create status = %d body=%s", createResponse.Code, createResponse.Body.String())
+	}
+	task, ok, err := repository.GetAITask(createResponse.Header().Get("X-AI-Task-ID"))
+	if err != nil || !ok {
+		t.Fatalf("created task ok=%v err=%v", ok, err)
+	}
+	taskJSON, _ := json.Marshal(task)
+	if channelID := readJSONMap(t, taskJSON)["channelId"]; channelID != "geeknow-video" {
+		t.Fatalf("task channelId = %#v, want geeknow-video", channelID)
+	}
+
+	ordinaryQueries := 0
+	ordinary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ordinaryQueries++
+		_, _ = w.Write([]byte(`{"id":"task-bound","status":"ordinary-openai"}`))
+	}))
+	defer ordinary.Close()
+	saveCompetingGeekNowHandlerSettings(t, geekNow.URL+"/v1", ordinary.URL)
+
+	queryRequest := httptest.NewRequest(http.MethodGet, "/api/v1/videos/task-bound?model=grok-imagine-video", nil)
+	queryRequest = queryRequest.WithContext(createRequest.Context())
+	queryResponse := httptest.NewRecorder()
+	proxyAIGetRequest(queryResponse, queryRequest, "/videos/task-bound")
+	if queryResponse.Code != http.StatusOK {
+		t.Fatalf("query status = %d body=%s", queryResponse.Code, queryResponse.Body.String())
+	}
+	if payload := readJSONMap(t, queryResponse.Body.Bytes()); payload["status"] != "succeeded" {
+		t.Fatalf("query response = %#v", payload)
+	}
+	if geekNowQueries != 1 || ordinaryQueries != 0 {
+		t.Fatalf("GeekNow queries=%d ordinary queries=%d", geekNowQueries, ordinaryQueries)
+	}
+}
+
+func TestOpenAIVideoProxyPersistsLifecycleChannelWithoutChangingBody(t *testing.T) {
+	setupAIHandlerTestDB(t)
+	const responseBody = `{"id":"task-openai-bound","status":"queued","vendor_field":"keep-me"}`
+	ordinaryQueries := 0
+	ordinary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/videos":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(responseBody))
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/videos/task-openai-bound":
+			ordinaryQueries++
+			_, _ = w.Write([]byte(`{"id":"task-openai-bound","status":"completed"}`))
+		default:
+			t.Fatalf("unexpected ordinary request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer ordinary.Close()
+	saveOpenAIVideoHandlerSettings(t, ordinary.URL, "")
+
+	createRequest := httptest.NewRequest(http.MethodPost, "/api/v1/videos", strings.NewReader(`{"model":"shared-openai-video","prompt":"普通 OpenAI 视频"}`))
+	createRequest.Header.Set("Content-Type", "application/json")
+	createRequest = createRequest.WithContext(service.WithUser(createRequest.Context(), model.AuthUser{ID: "user-openai-video", Username: "openai-video", Role: model.UserRoleUser}))
+	createResponse := httptest.NewRecorder()
+	proxyAIRequest(createResponse, createRequest, "/videos")
+	if createResponse.Code != http.StatusOK || createResponse.Body.String() != responseBody {
+		t.Fatalf("create status=%d body=%q", createResponse.Code, createResponse.Body.String())
+	}
+	if createResponse.Header().Get("X-AI-Upstream-Task-ID") != "task-openai-bound" || createResponse.Header().Get("X-AI-Task-Status") != "queued" {
+		t.Fatalf("create headers = %#v", createResponse.Header())
+	}
+	task, ok, err := repository.GetAITask(createResponse.Header().Get("X-AI-Task-ID"))
+	if err != nil || !ok || task.ChannelID != "ordinary-openai-video" || task.UpstreamTaskID != "task-openai-bound" || task.Status != model.AITaskStatusQueued {
+		t.Fatalf("task = %#v ok=%v err=%v", task, ok, err)
+	}
+
+	geekNowQueries := 0
+	geekNow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		geekNowQueries++
+		_, _ = w.Write([]byte(`{"data":{"task_id":"task-openai-bound","status":"completed"}}`))
+	}))
+	defer geekNow.Close()
+	saveOpenAIVideoHandlerSettings(t, ordinary.URL, geekNow.URL+"/v1")
+	queryRequest := httptest.NewRequest(http.MethodGet, "/api/v1/videos/task-openai-bound?model=shared-openai-video", nil)
+	queryRequest = queryRequest.WithContext(createRequest.Context())
+	queryResponse := httptest.NewRecorder()
+	proxyAIGetRequest(queryResponse, queryRequest, "/videos/task-openai-bound")
+	if queryResponse.Code != http.StatusOK || !strings.Contains(queryResponse.Body.String(), `"status":"completed"`) {
+		t.Fatalf("query status=%d body=%s", queryResponse.Code, queryResponse.Body.String())
+	}
+	if ordinaryQueries != 1 || geekNowQueries != 0 {
+		t.Fatalf("ordinary queries=%d GeekNow queries=%d", ordinaryQueries, geekNowQueries)
+	}
+}
+
+func TestGeekNowVideoProxyAddsOpenAIVersionPathForCreateAndQuery(t *testing.T) {
+	setupAIHandlerTestDB(t)
+	paths := []string{}
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/videos":
+			_, _ = w.Write([]byte(`{"data":{"task_id":"task-no-v1","status":"pending"}}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/videos/task-no-v1":
+			_, _ = w.Write([]byte(`{"data":{"task_id":"task-no-v1","status":"completed"}}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer upstream.Close()
+	saveGeekNowHandlerSettings(t, upstream.URL)
+
+	createRequest := httptest.NewRequest(http.MethodPost, "/api/v1/videos", strings.NewReader(`{"model":"grok-imagine-video","prompt":"URL 版本路径测试"}`))
+	createRequest.Header.Set("Content-Type", "application/json")
+	createRequest = createRequest.WithContext(service.WithUser(createRequest.Context(), model.AuthUser{ID: "user-geeknow", Username: "geeknow", Role: model.UserRoleUser}))
+	createResponse := httptest.NewRecorder()
+	proxyAIRequest(createResponse, createRequest, "/videos")
+	if createResponse.Code != http.StatusOK {
+		t.Fatalf("create status = %d body=%s", createResponse.Code, createResponse.Body.String())
+	}
+
+	queryRequest := httptest.NewRequest(http.MethodGet, "/api/v1/videos/task-no-v1?model=grok-imagine-video", nil)
+	queryRequest = queryRequest.WithContext(createRequest.Context())
+	queryResponse := httptest.NewRecorder()
+	proxyAIGetRequest(queryResponse, queryRequest, "/videos/task-no-v1")
+	if queryResponse.Code != http.StatusOK || !strings.Contains(queryResponse.Body.String(), `"status":"succeeded"`) {
+		t.Fatalf("query status = %d body=%s", queryResponse.Code, queryResponse.Body.String())
+	}
+	if len(paths) != 2 || paths[0] != "/v1/videos" || paths[1] != "/v1/videos/task-no-v1" {
+		t.Fatalf("paths = %#v", paths)
+	}
+}
+
+func TestGeekNowVideoProxyDownloadsContentFromQueriedURL(t *testing.T) {
+	setupAIHandlerTestDB(t)
+	paths := []string{}
+	var upstream *httptest.Server
+	upstream = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		if authorization := r.Header.Get("Authorization"); authorization != "Bearer geeknow-key" {
+			t.Fatalf("authorization = %q for %s", authorization, r.URL.Path)
+		}
+		switch r.URL.Path {
+		case "/v1/videos/task-1":
+			_, _ = w.Write([]byte(`{"data":{"task_id":"task-1","status":"completed","output":{"url":"` + upstream.URL + `/v1/media/task-1.mp4"}}}`))
+		case "/v1/media/task-1.mp4":
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write([]byte("fake-geeknow-video"))
+		case "/v1/videos/task-1/content":
+			t.Fatal("content proxy guessed the OpenAI /content endpoint instead of querying the task")
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer upstream.Close()
+	saveGeekNowHandlerSettings(t, upstream.URL+"/v1")
+	seedGeekNowAITask(t)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/videos/task-1/content?model=grok-imagine-video", nil)
+	request = request.WithContext(service.WithUser(request.Context(), model.AuthUser{ID: "user-geeknow", Username: "geeknow", Role: model.UserRoleUser}))
+	response := httptest.NewRecorder()
+
+	proxyAIGetRequest(response, request, "/videos/task-1/content")
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
+	}
+	if response.Body.String() != "fake-geeknow-video" || response.Header().Get("Content-Type") != "video/mp4" {
+		t.Fatalf("content type=%q body=%q", response.Header().Get("Content-Type"), response.Body.String())
+	}
+	if len(paths) != 2 || paths[0] != "/v1/videos/task-1" || paths[1] != "/v1/media/task-1.mp4" {
+		t.Fatalf("request paths = %#v", paths)
+	}
+}
+
+func TestGeekNowVideoProxyUsesOwnedLocalTaskForCollidingUpstreamID(t *testing.T) {
+	setupAIHandlerTestDB(t)
+	ordinaryQueries := 0
+	ordinary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ordinaryQueries++
+		_, _ = w.Write([]byte(`{"id":"shared-upstream-task","status":"completed"}`))
+	}))
+	defer ordinary.Close()
+	geekNowQueries := 0
+	var geekNow *httptest.Server
+	geekNow = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/videos/shared-upstream-task":
+			geekNowQueries++
+			_, _ = w.Write([]byte(`{"data":{"task_id":"shared-upstream-task","status":"completed","output":{"url":"` + geekNow.URL + `/v1/media/shared.mp4"}}}`))
+		case "/v1/media/shared.mp4":
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write([]byte("owned-video"))
+		default:
+			t.Fatalf("unexpected GeekNow path: %s", r.URL.Path)
+		}
+	}))
+	defer geekNow.Close()
+	saveCollidingVideoHandlerSettings(t, ordinary.URL, geekNow.URL+"/v1")
+
+	ordinaryTask := seedBoundVideoAITask(t, "user-ordinary-owner", "ordinary-openai-video", "shared-upstream-task")
+	geekNowTask := seedBoundVideoAITask(t, "user-geeknow-owner", "geeknow-video", "shared-upstream-task")
+	ordinaryTask.CreatedAt = "2099-01-01T00:00:00Z"
+	geekNowTask.CreatedAt = "2020-01-01T00:00:00Z"
+	_, _ = repository.SaveAITask(ordinaryTask)
+	_, _ = repository.SaveAITask(geekNowTask)
+
+	forgedRequest := httptest.NewRequest(http.MethodGet, "/api/v1/videos/shared-upstream-task?model=shared-collision-video", nil)
+	forgedRequest.Header.Set("X-AI-Task-ID", geekNowTask.ID)
+	forgedRequest = forgedRequest.WithContext(service.WithUser(forgedRequest.Context(), model.AuthUser{ID: "user-ordinary-owner", Username: "ordinary-owner", Role: model.UserRoleUser}))
+	forgedResponse := httptest.NewRecorder()
+	proxyAIGetRequest(forgedResponse, forgedRequest, "/videos/shared-upstream-task")
+	if payload := readJSONMap(t, forgedResponse.Body.Bytes()); payload["code"] != float64(1) {
+		t.Fatalf("forged response = %#v", payload)
+	}
+	if ordinaryQueries != 0 || geekNowQueries != 0 {
+		t.Fatalf("forged request reached upstream: ordinary=%d GeekNow=%d", ordinaryQueries, geekNowQueries)
+	}
+
+	queryRequest := httptest.NewRequest(http.MethodGet, "/api/v1/videos/shared-upstream-task?model=shared-collision-video", nil)
+	queryRequest.Header.Set("X-AI-Task-ID", geekNowTask.ID)
+	queryRequest = queryRequest.WithContext(service.WithUser(queryRequest.Context(), model.AuthUser{ID: "user-geeknow-owner", Username: "geeknow-owner", Role: model.UserRoleUser}))
+	queryResponse := httptest.NewRecorder()
+	proxyAIGetRequest(queryResponse, queryRequest, "/videos/shared-upstream-task")
+	if payload := readJSONMap(t, queryResponse.Body.Bytes()); payload["status"] != "succeeded" {
+		t.Fatalf("query response = %#v", payload)
+	}
+	if ordinaryQueries != 0 || geekNowQueries != 1 {
+		t.Fatalf("query upstreams: ordinary=%d GeekNow=%d", ordinaryQueries, geekNowQueries)
+	}
+
+	contentRequest := httptest.NewRequest(http.MethodGet, "/api/v1/videos/shared-upstream-task/content?model=shared-collision-video", nil)
+	contentRequest.Header.Set("X-AI-Task-ID", geekNowTask.ID)
+	contentRequest = contentRequest.WithContext(queryRequest.Context())
+	contentResponse := httptest.NewRecorder()
+	proxyAIGetRequest(contentResponse, contentRequest, "/videos/shared-upstream-task/content")
+	if contentResponse.Body.String() != "owned-video" {
+		t.Fatalf("content = %q", contentResponse.Body.String())
+	}
+
+	ordinarySaved, _, _ := repository.GetAITask(ordinaryTask.ID)
+	geekNowSaved, _, _ := repository.GetAITask(geekNowTask.ID)
+	if ordinarySaved.Status != model.AITaskStatusQueued || ordinarySaved.FinishedAt != "" {
+		t.Fatalf("ordinary task changed: %#v", ordinarySaved)
+	}
+	if geekNowSaved.Status != model.AITaskStatusSucceeded || geekNowSaved.FinishedAt == "" {
+		t.Fatalf("GeekNow task not updated: %#v", geekNowSaved)
+	}
+}
+
+func TestVideoProxyUsesOwnedLocalTaskAcrossProtocolChannels(t *testing.T) {
+	tests := []struct {
+		name       string
+		modelName  string
+		upstreamID string
+		channel    func(*testing.T, string) model.ModelChannel
+	}{
+		{
+			name: "ark", modelName: "collision-ark", upstreamID: "shared-ark-task",
+			channel: func(t *testing.T, upstreamID string) model.ModelChannel {
+				upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Path != "/contents/generations/tasks/"+upstreamID {
+						t.Fatalf("Ark path = %s", r.URL.Path)
+					}
+					_, _ = w.Write([]byte(`{"id":"` + upstreamID + `","status":"succeeded"}`))
+				}))
+				t.Cleanup(upstream.Close)
+				return model.ModelChannel{ID: "collision-ark-channel", Protocol: string(model.ModelProtocolVolcengineArk), Name: "碰撞 Ark", BaseURL: upstream.URL, APIKey: "ark-key", Models: []string{"collision-ark"}, Enabled: true}
+			},
+		},
+		{
+			name: "jimeng", modelName: "collision-jimeng", upstreamID: "jimeng-submit-1",
+			channel: func(t *testing.T, _ string) model.ModelChannel {
+				return model.ModelChannel{ID: "collision-jimeng-channel", Protocol: string(model.ModelProtocolJimengCLI), Name: "碰撞即梦", CLIPath: writeFakeJimengCLI(t), OutputDir: t.TempDir(), Models: []string{"collision-jimeng"}, Enabled: true}
+			},
+		},
+		{
+			name: "xinglian", modelName: "collision-xinglian", upstreamID: "shared-xinglian-task",
+			channel: func(t *testing.T, upstreamID string) model.ModelChannel {
+				upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Path != "/v1/video/fetch/"+upstreamID {
+						t.Fatalf("Xinglian path = %s", r.URL.Path)
+					}
+					_, _ = w.Write([]byte(`{"id":"` + upstreamID + `","status":"completed"}`))
+				}))
+				t.Cleanup(upstream.Close)
+				return model.ModelChannel{ID: "collision-xinglian-channel", Protocol: string(model.ModelProtocolXinglianCloud), Name: "碰撞星链", BaseURL: upstream.URL + "/v1", APIKey: "xinglian-key", Models: []string{"collision-xinglian"}, Enabled: true}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setupAIHandlerTestDB(t)
+			targetChannel := tt.channel(t, tt.upstreamID)
+			decoyChannel := model.ModelChannel{ID: "decoy-" + tt.name, Protocol: "openai", Name: "错误渠道", BaseURL: "https://example.invalid/v1", APIKey: "decoy", Models: []string{tt.modelName}, Enabled: true}
+			saveVideoLifecycleHandlerSettings(t, tt.modelName, 0, targetChannel, decoyChannel)
+
+			target := seedProtocolVideoAITask(t, "owner-"+tt.name, targetChannel, tt.modelName, tt.upstreamID, 0)
+			decoy := seedProtocolVideoAITask(t, "decoy-owner-"+tt.name, decoyChannel, tt.modelName, tt.upstreamID, 0)
+			target.CreatedAt = "2020-01-01T00:00:00Z"
+			decoy.CreatedAt = "2099-01-01T00:00:00Z"
+			_, _ = repository.SaveAITask(target)
+			_, _ = repository.SaveAITask(decoy)
+
+			request := httptest.NewRequest(http.MethodGet, "/api/v1/videos/"+tt.upstreamID+"?model="+tt.modelName, nil)
+			request.Header.Set("X-AI-Task-ID", target.ID)
+			request = request.WithContext(service.WithUser(request.Context(), model.AuthUser{ID: target.UserID, Username: "owner", Role: model.UserRoleUser}))
+			response := httptest.NewRecorder()
+			proxyAIGetRequest(response, request, "/videos/"+tt.upstreamID)
+			if response.Code != http.StatusOK {
+				t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
+			}
+
+			targetSaved, _, _ := repository.GetAITask(target.ID)
+			decoySaved, _, _ := repository.GetAITask(decoy.ID)
+			if targetSaved.Status != model.AITaskStatusSucceeded {
+				t.Fatalf("target status = %q, want succeeded", targetSaved.Status)
+			}
+			if decoySaved.Status != model.AITaskStatusQueued {
+				t.Fatalf("decoy status = %q, want queued", decoySaved.Status)
+			}
+		})
+	}
+}
+
+func TestOpenAIVideoProxySyncsOwnedLocalLifecycle(t *testing.T) {
+	setupAIHandlerTestDB(t)
+	requests := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		switch r.URL.Path {
+		case "/v1/videos/task-running":
+			_, _ = w.Write([]byte(`{"id":"task-running","status":"running"}`))
+		case "/v1/videos/task-succeeded":
+			_, _ = w.Write([]byte(`{"id":"task-succeeded","status":"completed","video_url":"https://example.com/video.mp4"}`))
+		case "/v1/videos/task-failed":
+			_, _ = w.Write([]byte(`{"id":"task-failed","status":"failed","error":{"code":"Rejected","message":"生成失败"}}`))
+		case "/v1/videos/task-content/content":
+			w.Header().Set("Content-Type", "video/mp4")
+			_, _ = w.Write([]byte("ordinary-video"))
+		default:
+			t.Fatalf("unexpected OpenAI path: %s", r.URL.Path)
+		}
+	}))
+	defer upstream.Close()
+	channel := model.ModelChannel{ID: "ordinary-lifecycle", Protocol: "openai", Name: "普通 OpenAI 生命周期", BaseURL: upstream.URL, APIKey: "ordinary-key", Models: []string{"ordinary-lifecycle-video"}, Enabled: true}
+	saveVideoLifecycleHandlerSettings(t, "ordinary-lifecycle-video", 4, channel)
+	saveHandlerTestUser(t, "ordinary-owner", 20)
+
+	tasks := map[string]model.AITask{}
+	for _, taskID := range []string{"task-running", "task-succeeded", "task-failed", "task-content"} {
+		tasks[taskID] = seedProtocolVideoAITask(t, "ordinary-owner", channel, "ordinary-lifecycle-video", taskID, 4)
+	}
+	if charged, err := service.ConsumeUserCreditsForTask("ordinary-owner", "ordinary-lifecycle-video", 4, "/videos", tasks["task-failed"].ID); err != nil || !charged {
+		t.Fatalf("consume charged=%v err=%v", charged, err)
+	}
+
+	for _, tt := range []struct {
+		taskID string
+		want   model.AITaskStatus
+	}{{"task-running", model.AITaskStatusRunning}, {"task-succeeded", model.AITaskStatusSucceeded}, {"task-failed", model.AITaskStatusFailed}} {
+		request := httptest.NewRequest(http.MethodGet, "/api/v1/videos/"+tt.taskID+"?model=ordinary-lifecycle-video", nil)
+		request.Header.Set("X-AI-Task-ID", tasks[tt.taskID].ID)
+		request = request.WithContext(service.WithUser(request.Context(), model.AuthUser{ID: "ordinary-owner", Username: "ordinary", Role: model.UserRoleUser}))
+		response := httptest.NewRecorder()
+		proxyAIGetRequest(response, request, "/videos/"+tt.taskID)
+		if response.Code != http.StatusOK {
+			t.Fatalf("%s status=%d body=%s", tt.taskID, response.Code, response.Body.String())
+		}
+		saved, _, _ := repository.GetAITask(tasks[tt.taskID].ID)
+		if saved.Status != tt.want {
+			t.Fatalf("%s status=%q want=%q", tt.taskID, saved.Status, tt.want)
+		}
+	}
+	failed, _, _ := repository.GetAITask(tasks["task-failed"].ID)
+	user, _, _ := repository.GetUserByID("ordinary-owner")
+	if failed.CreditsRefunded != 4 || failed.RefundedAt == "" || user.Credits != 20 {
+		t.Fatalf("failed=%#v credits=%d", failed, user.Credits)
+	}
+
+	contentRequest := httptest.NewRequest(http.MethodGet, "/api/v1/videos/task-content/content?model=ordinary-lifecycle-video", nil)
+	contentRequest.Header.Set("X-AI-Task-ID", tasks["task-content"].ID)
+	contentRequest = contentRequest.WithContext(service.WithUser(contentRequest.Context(), model.AuthUser{ID: "ordinary-owner", Username: "ordinary", Role: model.UserRoleUser}))
+	contentResponse := httptest.NewRecorder()
+	proxyAIGetRequest(contentResponse, contentRequest, "/videos/task-content/content")
+	contentTask, _, _ := repository.GetAITask(tasks["task-content"].ID)
+	if contentResponse.Body.String() != "ordinary-video" || contentTask.FinishedAt == "" {
+		t.Fatalf("content=%q task=%#v", contentResponse.Body.String(), contentTask)
+	}
+
+	beforeForged := requests
+	forged := httptest.NewRequest(http.MethodGet, "/api/v1/videos/task-running?model=ordinary-lifecycle-video", nil)
+	forged.Header.Set("X-AI-Task-ID", tasks["task-running"].ID)
+	forged = forged.WithContext(service.WithUser(forged.Context(), model.AuthUser{ID: "forged-user", Username: "forged", Role: model.UserRoleUser}))
+	forgedResponse := httptest.NewRecorder()
+	proxyAIGetRequest(forgedResponse, forged, "/videos/task-running")
+	if payload := readJSONMap(t, forgedResponse.Body.Bytes()); payload["code"] != float64(1) || requests != beforeForged {
+		t.Fatalf("forged response=%#v requests=%d want=%d", payload, requests, beforeForged)
+	}
+}
+
+func TestTerminalVideoCreateRefundUsesKnownLocalTaskDespiteCollision(t *testing.T) {
+	tests := []struct {
+		name      string
+		modelName string
+		channel   func(string) model.ModelChannel
+		response  string
+	}{
+		{name: "openai", modelName: "terminal-openai", channel: func(baseURL string) model.ModelChannel {
+			return model.ModelChannel{ID: "terminal-openai-channel", Protocol: "openai", Name: "普通 OpenAI", BaseURL: baseURL, APIKey: "openai-key", Models: []string{"terminal-openai"}, Enabled: true}
+		}, response: `{"id":"shared-terminal-task","status":"failed","error":{"message":"创建失败"}}`},
+		{name: "geeknow", modelName: "grok-imagine-video", channel: func(baseURL string) model.ModelChannel {
+			return model.ModelChannel{ID: "geeknow-video", Protocol: "openai", Name: "GeekNow 视频", BaseURL: baseURL, APIKey: "geeknow-key", Models: []string{"grok-imagine-video"}, Capabilities: []string{"video", "video_query"}, Enabled: true}
+		}, response: `{"data":{"task_id":"shared-terminal-task","status":"failed","error":{"message":"创建失败"}}}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setupAIHandlerTestDB(t)
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte(tt.response))
+			}))
+			defer upstream.Close()
+			channel := tt.channel(upstream.URL)
+			saveVideoLifecycleHandlerSettings(t, tt.modelName, 4, channel)
+			saveHandlerTestUser(t, "terminal-owner-"+tt.name, 20)
+			decoyChannel := model.ModelChannel{ID: "terminal-decoy-" + tt.name, Protocol: "openai", Name: "旧任务渠道"}
+			decoy := seedProtocolVideoAITask(t, "terminal-decoy-owner-"+tt.name, decoyChannel, tt.modelName, "shared-terminal-task", 0)
+			decoy.CreatedAt = "2099-01-01T00:00:00Z"
+			_, _ = repository.SaveAITask(decoy)
+
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/videos", strings.NewReader(`{"model":"`+tt.modelName+`","prompt":"即时失败"}`))
+			request.Header.Set("Content-Type", "application/json")
+			request = request.WithContext(service.WithUser(request.Context(), model.AuthUser{ID: "terminal-owner-" + tt.name, Username: "terminal", Role: model.UserRoleUser}))
+			response := httptest.NewRecorder()
+			proxyAIRequest(response, request, "/videos")
+			if response.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+			task, ok, err := repository.GetAITask(response.Header().Get("X-AI-Task-ID"))
+			user, _, _ := repository.GetUserByID("terminal-owner-" + tt.name)
+			if err != nil || !ok || task.Status != model.AITaskStatusFailed || task.CreditsRefunded != 4 || task.RefundedAt == "" || user.Credits != 20 {
+				t.Fatalf("task=%#v ok=%v err=%v credits=%d", task, ok, err, user.Credits)
+			}
+		})
+	}
+}
+
+func TestGeekNowVideoContentFollowsCrossOriginRedirectWithoutLeakingKey(t *testing.T) {
+	cdnRequests := 0
+	cdn := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cdnRequests++
+		if authorization := r.Header.Get("Authorization"); authorization != "" {
+			t.Fatalf("CDN authorization leaked: %q", authorization)
+		}
+		w.Header().Set("Content-Type", "video/mp4")
+		_, _ = w.Write([]byte("redirected-geeknow-video"))
+	}))
+	defer cdn.Close()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if authorization := r.Header.Get("Authorization"); authorization != "Bearer geeknow-key" {
+			t.Fatalf("GeekNow authorization = %q", authorization)
+		}
+		http.Redirect(w, r, cdn.URL+"/task-redirect.mp4", http.StatusFound)
+	}))
+	defer upstream.Close()
+
+	response := httptest.NewRecorder()
+	channel := model.ModelChannel{ID: "geeknow-video", BaseURL: upstream.URL + "/v1", APIKey: "geeknow-key"}
+	proxyGeekNowVideoContentWithRequester(response, context.Background(), channel, upstream.URL+"/v1/videos/task-redirect/content", newNoRedirectGeekNowTestRequester())
+
+	if cdnRequests != 1 || response.Body.String() != "redirected-geeknow-video" {
+		t.Fatalf("cdn requests=%d content=%q", cdnRequests, response.Body.String())
+	}
+}
+
+func TestGeekNowVideoContentDoesNotSendKeyToDirectThirdPartyURL(t *testing.T) {
+	cdnRequests := 0
+	cdn := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cdnRequests++
+		if authorization := r.Header.Get("Authorization"); authorization != "" {
+			t.Fatalf("CDN authorization leaked: %q", authorization)
+		}
+		w.Header().Set("Content-Type", "video/mp4")
+		_, _ = w.Write([]byte("direct-geeknow-video"))
+	}))
+	defer cdn.Close()
+
+	response := httptest.NewRecorder()
+	channel := model.ModelChannel{ID: "geeknow-video", BaseURL: "https://www.geeknow.top/v1", APIKey: "geeknow-key"}
+	proxyGeekNowVideoContentWithRequester(response, context.Background(), channel, cdn.URL+"/task-direct.mp4", newNoRedirectGeekNowTestRequester())
+
+	if cdnRequests != 1 || response.Body.String() != "direct-geeknow-video" {
+		t.Fatalf("cdn requests=%d content=%q", cdnRequests, response.Body.String())
+	}
+}
+
+func TestGeekNowVideoContentProductionRequesterRejectsDirectPrivateURL(t *testing.T) {
+	response, err := requestGeekNowVideoContent(context.Background(), "http://127.0.0.1/private.mp4", "")
+	if response != nil {
+		_ = response.Body.Close()
+	}
+	if err == nil {
+		t.Fatal("production requester accepted a loopback video URL")
+	}
+}
+
+func TestGeekNowVideoContentRejectsCrossOriginPrivateRedirectBeforeRequest(t *testing.T) {
+	privateRequests := 0
+	private := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		privateRequests++
+		w.Header().Set("Content-Type", "video/mp4")
+		_, _ = w.Write([]byte("private-video"))
+	}))
+	defer private.Close()
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if authorization := r.Header.Get("Authorization"); authorization != "Bearer geeknow-key" {
+			t.Fatalf("GeekNow authorization = %q", authorization)
+		}
+		http.Redirect(w, r, private.URL+"/private.mp4", http.StatusFound)
+	}))
+	defer upstream.Close()
+
+	response := httptest.NewRecorder()
+	channel := model.ModelChannel{ID: "geeknow-video", BaseURL: upstream.URL + "/v1", APIKey: "geeknow-key"}
+	proxyGeekNowVideoContent(response, context.Background(), channel, upstream.URL+"/v1/videos/task-private/content")
+
+	if privateRequests != 0 || strings.Contains(response.Body.String(), "private-video") {
+		t.Fatalf("private requests=%d body=%q", privateRequests, response.Body.String())
+	}
+}
+
+func newNoRedirectGeekNowTestRequester() geekNowVideoContentRequester {
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	return func(ctx context.Context, rawURL string, authorization string) (*http.Response, error) {
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		if authorization != "" {
+			request.Header.Set("Authorization", authorization)
+		}
+		return client.Do(request)
+	}
+}
+
 func TestJimengVideoProxyDownloadsContentThroughCLIChannel(t *testing.T) {
 	setupAIHandlerTestDB(t)
 	cliPath := writeFakeJimengCLI(t)
@@ -1016,6 +1703,143 @@ func saveXinglianHandlerSettings(t *testing.T, upstreamURL string) {
 	}, now)
 	if err != nil {
 		t.Fatalf("SaveSettings returned error: %v", err)
+	}
+}
+
+func saveGeekNowHandlerSettings(t *testing.T, upstreamURL string) {
+	saveGeekNowHandlerSettingsWithCredits(t, upstreamURL, 0)
+}
+
+func saveGeekNowHandlerSettingsWithCredits(t *testing.T, upstreamURL string, credits int) {
+	t.Helper()
+	now := time.Now().Format(time.RFC3339)
+	_, err := repository.SaveSettings(model.Settings{
+		Public: model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{
+			AvailableModels:   []string{"grok-imagine-video"},
+			DefaultVideoModel: "grok-imagine-video",
+			ModelCosts:        []model.ModelCost{{Model: "grok-imagine-video", Credits: credits}},
+		}},
+		Private: model.PrivateSetting{Channels: []model.ModelChannel{{
+			ID:           "geeknow-video",
+			Protocol:     "openai",
+			Name:         "GeekNow 视频",
+			BaseURL:      upstreamURL,
+			APIKey:       "geeknow-key",
+			Models:       []string{"grok-imagine-video"},
+			Capabilities: []string{"video", "video_query"},
+			Weight:       1,
+			Enabled:      true,
+		}}},
+	}, now)
+	if err != nil {
+		t.Fatalf("SaveSettings returned error: %v", err)
+	}
+}
+
+func saveCompetingGeekNowHandlerSettings(t *testing.T, geekNowURL string, ordinaryURL string) {
+	t.Helper()
+	now := time.Now().Format(time.RFC3339)
+	_, err := repository.SaveSettings(model.Settings{
+		Public: model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{
+			AvailableModels:   []string{"grok-imagine-video"},
+			DefaultVideoModel: "grok-imagine-video",
+			ModelCosts:        []model.ModelCost{{Model: "grok-imagine-video", Credits: 0}},
+		}},
+		Private: model.PrivateSetting{Channels: []model.ModelChannel{
+			{ID: "ordinary-openai", Protocol: "openai", Name: "普通 OpenAI", BaseURL: ordinaryURL, APIKey: "ordinary-key", Models: []string{"grok-imagine-video"}, Capabilities: []string{"video"}, Weight: 100, Enabled: true},
+			{ID: "geeknow-video", Protocol: "openai", Name: "GeekNow 视频", BaseURL: geekNowURL, APIKey: "geeknow-key", Models: []string{"grok-imagine-video"}, Capabilities: []string{"video", "video_query"}, Weight: 1, Enabled: true},
+		}},
+	}, now)
+	if err != nil {
+		t.Fatalf("SaveSettings returned error: %v", err)
+	}
+}
+
+func saveOpenAIVideoHandlerSettings(t *testing.T, ordinaryURL string, geekNowURL string) {
+	t.Helper()
+	channels := []model.ModelChannel{{ID: "ordinary-openai-video", Protocol: "openai", Name: "普通 OpenAI 视频", BaseURL: ordinaryURL, APIKey: "ordinary-key", Models: []string{"shared-openai-video"}, Weight: 1, Enabled: true}}
+	if geekNowURL != "" {
+		channels = append([]model.ModelChannel{{ID: "geeknow-video", Protocol: "openai", Name: "GeekNow 视频", BaseURL: geekNowURL, APIKey: "geeknow-key", Models: []string{"shared-openai-video"}, Capabilities: []string{"video", "video_query"}, Weight: 100, Enabled: true}}, channels...)
+	}
+	_, err := repository.SaveSettings(model.Settings{
+		Public:  model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{AvailableModels: []string{"shared-openai-video"}, DefaultVideoModel: "shared-openai-video", ModelCosts: []model.ModelCost{{Model: "shared-openai-video", Credits: 0}}}},
+		Private: model.PrivateSetting{Channels: channels},
+	}, time.Now().Format(time.RFC3339))
+	if err != nil {
+		t.Fatalf("SaveSettings returned error: %v", err)
+	}
+}
+
+func saveCollidingVideoHandlerSettings(t *testing.T, ordinaryURL string, geekNowURL string) {
+	t.Helper()
+	_, err := repository.SaveSettings(model.Settings{
+		Public: model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{AvailableModels: []string{"shared-collision-video"}, DefaultVideoModel: "shared-collision-video", ModelCosts: []model.ModelCost{{Model: "shared-collision-video", Credits: 0}}}},
+		Private: model.PrivateSetting{Channels: []model.ModelChannel{
+			{ID: "ordinary-openai-video", Protocol: "openai", Name: "普通 OpenAI 视频", BaseURL: ordinaryURL, APIKey: "ordinary-key", Models: []string{"shared-collision-video"}, Weight: 1, Enabled: true},
+			{ID: "geeknow-video", Protocol: "openai", Name: "GeekNow 视频", BaseURL: geekNowURL, APIKey: "geeknow-key", Models: []string{"shared-collision-video"}, Capabilities: []string{"video", "video_query"}, Weight: 1, Enabled: true},
+		}},
+	}, time.Now().Format(time.RFC3339))
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func saveVideoLifecycleHandlerSettings(t *testing.T, modelName string, credits int, channels ...model.ModelChannel) {
+	t.Helper()
+	_, err := repository.SaveSettings(model.Settings{
+		Public:  model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{AvailableModels: []string{modelName}, DefaultVideoModel: modelName, ModelCosts: []model.ModelCost{{Model: modelName, Credits: credits}}}},
+		Private: model.PrivateSetting{Channels: channels},
+	}, time.Now().Format(time.RFC3339))
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func saveHandlerTestUser(t *testing.T, id string, credits int) {
+	t.Helper()
+	now := time.Now().Format(time.RFC3339)
+	if _, err := repository.SaveUser(model.User{ID: id, Username: id, Role: model.UserRoleUser, Status: model.UserStatusActive, Credits: credits, AffCode: strings.ToUpper(id), CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func seedProtocolVideoAITask(t *testing.T, userID string, channel model.ModelChannel, modelName string, upstreamTaskID string, credits int) model.AITask {
+	t.Helper()
+	task, err := service.CreateAITask(service.CreateAITaskInput{UserID: userID, ChannelID: channel.ID, Model: modelName, Credits: credits, Path: "/videos", TaskType: "video_create", Provider: channel.Name, Protocol: channel.Protocol})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.MarkAITaskArkCreated(task.ID, []byte(`{"id":"`+upstreamTaskID+`","status":"queued"}`)); err != nil {
+		t.Fatal(err)
+	}
+	saved, _, _ := repository.GetAITask(task.ID)
+	return saved
+}
+
+func seedBoundVideoAITask(t *testing.T, userID string, channelID string, upstreamTaskID string) model.AITask {
+	t.Helper()
+	task, err := service.CreateAITask(service.CreateAITaskInput{UserID: userID, ChannelID: channelID, Model: "shared-collision-video", Path: "/videos", TaskType: "video_create", Provider: channelID, Protocol: "openai"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.MarkAITaskArkCreated(task.ID, []byte(`{"id":"`+upstreamTaskID+`","status":"queued"}`)); err != nil {
+		t.Fatal(err)
+	}
+	saved, _, _ := repository.GetAITask(task.ID)
+	return saved
+}
+
+func seedGeekNowAITask(t *testing.T) {
+	t.Helper()
+	task, err := service.CreateAITask(service.CreateAITaskInput{
+		UserID: "user-geeknow", TaskType: "video_create", Provider: "GeekNow 视频", Protocol: "openai",
+		Model: "grok-imagine-video", Path: "/videos", RequestBody: []byte(`{"model":"grok-imagine-video"}`), ContentType: "application/json",
+	})
+	if err != nil {
+		t.Fatalf("CreateAITask returned error: %v", err)
+	}
+	if err := service.MarkAITaskArkCreated(task.ID, []byte(`{"id":"task-1","status":"queued","raw_status":"pending"}`)); err != nil {
+		t.Fatalf("MarkAITaskArkCreated returned error: %v", err)
 	}
 }
 

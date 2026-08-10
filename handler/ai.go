@@ -106,14 +106,29 @@ func proxyAIGetRequest(w http.ResponseWriter, r *http.Request, path string) {
 	if strings.TrimSpace(modelName) == "" {
 		modelName = "grok-imagine-video"
 	}
-	channel, err := service.SelectModelChannel(modelName)
+	taskID, contentRequest := parseVideoTaskPath(path)
+	localAITaskID := strings.TrimSpace(r.Header.Get("X-AI-Task-ID"))
+	userID := ""
+	if localAITaskID != "" {
+		user, ok := service.UserFromContext(r.Context())
+		if !ok {
+			Fail(w, "未登录或权限不足")
+			return
+		}
+		userID = user.ID
+	}
+	channel, localAITaskID, err := service.SelectUserVideoTaskModelChannel(localAITaskID, taskID, userID, modelName)
 	if err != nil {
 		log.Printf("AI proxy select channel failed: model=%s err=%v", modelName, err)
 		Fail(w, "AI 接口请求失败")
 		return
 	}
+	if service.IsGeekNowVideoChannel(channel) && strings.HasPrefix(path, "/videos/") {
+		proxyGeekNowVideoGetRequest(w, r.Context(), channel, path, localAITaskID, userID)
+		return
+	}
 	if service.IsVolcengineArkProtocol(channel.Protocol) && strings.HasPrefix(path, "/videos/") {
-		proxyArkVideoGetRequest(w, r.Context(), channel, path)
+		proxyArkVideoGetRequest(w, r.Context(), channel, path, localAITaskID, userID)
 		return
 	}
 	if service.IsJimengCLIProtocol(channel.Protocol) && strings.HasPrefix(path, "/videos/") {
@@ -122,11 +137,11 @@ func proxyAIGetRequest(w http.ResponseWriter, r *http.Request, path string) {
 			Fail(w, "未登录或权限不足")
 			return
 		}
-		proxyJimengVideoGetRequest(w, service.WithJimengCLIHome(r.Context(), service.JimengUserHomeDir(channel, user.ID)), channel, path)
+		proxyJimengVideoGetRequest(w, service.WithJimengCLIHome(r.Context(), service.JimengUserHomeDir(channel, user.ID)), channel, path, localAITaskID, user.ID)
 		return
 	}
 	if service.IsXinglianCloudProtocol(channel.Protocol) && strings.HasPrefix(path, "/videos/") {
-		proxyXinglianVideoGetRequest(w, r.Context(), channel, path)
+		proxyXinglianVideoGetRequest(w, r.Context(), channel, path, localAITaskID, userID)
 		return
 	}
 	request, err := http.NewRequest(http.MethodGet, service.BuildModelChannelURL(channel, path), nil)
@@ -135,7 +150,25 @@ func proxyAIGetRequest(w http.ResponseWriter, r *http.Request, path string) {
 		return
 	}
 	request.Header.Set("Authorization", "Bearer "+channel.APIKey)
-	copyAIResponse(w, request, nil)
+	copyAIResponse(w, request, nil, func(_ int, payload []byte, _ string) {
+		if localAITaskID == "" {
+			return
+		}
+		if contentRequest {
+			if err := service.MarkUserVideoAITaskContentFetched(localAITaskID, userID); err != nil {
+				log.Printf("OpenAI video content record failed: task=%s err=%v", taskID, err)
+			}
+			return
+		}
+		var normalized map[string]any
+		if err := json.Unmarshal(payload, &normalized); err != nil {
+			log.Printf("OpenAI video task response invalid: task=%s err=%v", taskID, err)
+			return
+		}
+		if err := service.SyncUserVideoAITaskStatus(localAITaskID, userID, payload); err != nil {
+			log.Printf("OpenAI video task sync failed: task=%s err=%v", taskID, err)
+		}
+	})
 }
 
 func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
@@ -207,6 +240,15 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 	upstreamPath := path
 	upstreamBody := body
 	upstreamContentType := contentType
+	isGeekNowVideoTask := service.IsGeekNowVideoChannel(channel) && path == "/videos"
+	if isGeekNowVideoTask {
+		upstreamBody, upstreamContentType, err = service.BuildGeekNowVideoCreateRequest(body, contentType)
+		if err != nil {
+			log.Printf("GeekNow video request invalid: model=%s err=%v", modelName, err)
+			Fail(w, err.Error())
+			return
+		}
+	}
 	isArkVideoTask := service.IsVolcengineArkProtocol(channel.Protocol) && path == "/videos"
 	if isArkVideoTask {
 		upstreamPath = "/contents/generations/tasks"
@@ -237,6 +279,7 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 		UserID:        user.ID,
 		TaskType:      service.AITaskTypeForPath(path),
 		Provider:      channel.Name,
+		ChannelID:     channel.ID,
 		Protocol:      channel.Protocol,
 		Model:         modelName,
 		Path:          path,
@@ -316,6 +359,22 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 		})
 		return
 	}
+	if isGeekNowVideoTask {
+		copyGeekNowVideoTaskResponse(w, request, refundAndFailTask, func(_ int, _ []byte, normalized []byte) {
+			upstreamTaskID := arkTaskIDFromNormalized(normalized)
+			status := service.GeekNowVideoTaskStatus(normalized)
+			if err := service.MarkAITaskArkCreated(aiTask.ID, normalized); err != nil {
+				log.Printf("GeekNow video task record failed: task=%s err=%v", aiTask.ID, err)
+			}
+			if status == model.AITaskStatusFailed || status == model.AITaskStatusCancelled {
+				if err := service.SyncUserVideoAITaskStatus(aiTask.ID, user.ID, normalized); err != nil {
+					log.Printf("GeekNow terminal video task refund failed: task=%s err=%v", aiTask.ID, err)
+				}
+			}
+			writeAITaskHeaders(w, aiTask, consumeLogID, upstreamTaskID, string(status))
+		})
+		return
+	}
 	if isXinglianVideoTask {
 		copyXinglianVideoTaskResponse(w, request, refundAndFailTask, func(_ int, _ []byte, normalized []byte) {
 			if err := service.MarkAITaskArkCreated(aiTask.ID, normalized); err != nil {
@@ -326,6 +385,7 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 		return
 	}
 	responseTaskStatus := model.AITaskStatusCreated
+	upstreamTaskID := ""
 	copyResponse := copyAIResponseWithStart
 	if path == "/images/generations" || path == "/images/edits" {
 		copyResponse = func(w http.ResponseWriter, request *http.Request, onFailure func(string, []byte), onResponseStart func(int, string), onSuccess ...func(int, []byte, string)) {
@@ -337,8 +397,23 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 		if isAIEventStreamContentType(responseContentType) {
 			status = model.AITaskStatusRunning
 		}
-		writeAITaskHeaders(w, aiTask, consumeLogID, "", string(status))
+		writeAITaskHeaders(w, aiTask, consumeLogID, upstreamTaskID, string(status))
 	}, func(_ int, payload []byte, responseContentType string) {
+		if path == "/videos" {
+			upstreamTaskID = arkTaskIDFromNormalized(payload)
+			if upstreamTaskID != "" {
+				responseTaskStatus = service.NormalizedVideoTaskStatus(payload)
+				if err := service.MarkAITaskArkCreated(aiTask.ID, payload); err != nil {
+					log.Printf("OpenAI video task record failed: task=%s err=%v", aiTask.ID, err)
+				}
+				if responseTaskStatus == model.AITaskStatusFailed || responseTaskStatus == model.AITaskStatusCancelled {
+					if err := service.SyncUserVideoAITaskStatus(aiTask.ID, user.ID, payload); err != nil {
+						log.Printf("OpenAI terminal video task refund failed: task=%s err=%v", aiTask.ID, err)
+					}
+				}
+				return
+			}
+		}
 		if err := service.MarkAITaskSucceeded(aiTask.ID, payload, responseContentType); err != nil {
 			log.Printf("AI proxy mark task succeeded failed: task=%s err=%v", aiTask.ID, err)
 		}
@@ -376,7 +451,7 @@ func UserAITaskFrontendArtifact(w http.ResponseWriter, r *http.Request, id strin
 	OK(w, result)
 }
 
-func proxyJimengVideoGetRequest(w http.ResponseWriter, ctx context.Context, channel model.ModelChannel, path string) {
+func proxyJimengVideoGetRequest(w http.ResponseWriter, ctx context.Context, channel model.ModelChannel, path string, localAITaskID string, userID string) {
 	taskID, contentRequest := parseVideoTaskPath(path)
 	if taskID == "" {
 		Fail(w, "缺少视频任务 ID")
@@ -385,7 +460,7 @@ func proxyJimengVideoGetRequest(w http.ResponseWriter, ctx context.Context, chan
 	if contentRequest {
 		videoPath, normalized, err := service.DownloadJimengVideoTaskContent(ctx, channel, taskID)
 		if len(normalized) > 0 {
-			if syncErr := service.SyncJimengVideoAITaskStatus(taskID, normalized); syncErr != nil {
+			if syncErr := syncSelectedVideoAITaskStatus(localAITaskID, userID, taskID, normalized, service.SyncJimengVideoAITaskStatus); syncErr != nil {
 				log.Printf("Jimeng video task sync ai task failed: task=%s err=%v", taskID, syncErr)
 			}
 		}
@@ -395,7 +470,7 @@ func proxyJimengVideoGetRequest(w http.ResponseWriter, ctx context.Context, chan
 			return
 		}
 		if serveLocalVideoFile(w, ctx, videoPath) {
-			if err := service.MarkJimengVideoAITaskContentFetched(taskID); err != nil {
+			if err := markSelectedVideoAITaskContentFetched(localAITaskID, userID, taskID, service.MarkJimengVideoAITaskContentFetched); err != nil {
 				log.Printf("Jimeng video task mark content fetched failed: task=%s err=%v", taskID, err)
 			}
 		}
@@ -407,7 +482,7 @@ func proxyJimengVideoGetRequest(w http.ResponseWriter, ctx context.Context, chan
 		Fail(w, err.Error())
 		return
 	}
-	if err := service.SyncJimengVideoAITaskStatus(taskID, normalized); err != nil {
+	if err := syncSelectedVideoAITaskStatus(localAITaskID, userID, taskID, normalized, service.SyncJimengVideoAITaskStatus); err != nil {
 		log.Printf("Jimeng video task sync ai task failed: task=%s err=%v", taskID, err)
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -448,11 +523,76 @@ func serveLocalVideoFile(w http.ResponseWriter, ctx context.Context, path string
 	return true
 }
 
-func proxyArkVideoGetRequest(w http.ResponseWriter, ctx context.Context, channel model.ModelChannel, path string) {
-	proxyArkVideoGetByConfig(w, ctx, channel.BaseURL, channel.APIKey, path)
+func proxyArkVideoGetRequest(w http.ResponseWriter, ctx context.Context, channel model.ModelChannel, path string, localAITaskID string, userID string) {
+	proxyArkVideoGetByConfig(w, ctx, channel.BaseURL, channel.APIKey, path, localAITaskID, userID)
 }
 
-func proxyXinglianVideoGetRequest(w http.ResponseWriter, ctx context.Context, channel model.ModelChannel, path string) {
+func proxyGeekNowVideoGetRequest(w http.ResponseWriter, ctx context.Context, channel model.ModelChannel, path string, localAITaskID string, userID string) {
+	taskID, contentRequest := parseVideoTaskPath(path)
+	if taskID == "" {
+		Fail(w, "缺少视频任务 ID")
+		return
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, service.BuildModelChannelURL(channel, "/videos/"+url.PathEscape(taskID)), nil)
+	if err != nil {
+		Fail(w, "AI 接口请求失败")
+		return
+	}
+	request.Header.Set("Authorization", "Bearer "+channel.APIKey)
+	response, err := service.DoAIHTTPRequest(request)
+	if err != nil {
+		log.Printf("GeekNow video task query failed: url=%s err=%v", safeLogRequestURL(request), err)
+		Fail(w, "AI 接口请求失败")
+		return
+	}
+	defer response.Body.Close()
+	body, _ := io.ReadAll(response.Body)
+	if response.StatusCode >= http.StatusBadRequest {
+		Fail(w, upstreamErrorMessage(body, "AI 接口请求失败"))
+		return
+	}
+	normalized, err := service.NormalizeGeekNowVideoTaskResponse(body)
+	if err != nil {
+		log.Printf("GeekNow video task normalize failed: body=%s err=%v", safeLogPayload(body, "application/json"), err)
+		Fail(w, "AI 接口请求失败")
+		return
+	}
+	if err := syncSelectedVideoAITaskStatus(localAITaskID, userID, taskID, normalized, service.SyncArkVideoAITaskStatus); err != nil {
+		log.Printf("GeekNow video task sync failed: task=%s err=%v", taskID, err)
+	}
+	if contentRequest {
+		videoURL := service.GeekNowTaskVideoURL(body)
+		if videoURL == "" {
+			Fail(w, "视频任务尚未返回可下载地址")
+			return
+		}
+		if proxyGeekNowVideoContent(w, ctx, channel, videoURL) {
+			if err := markSelectedVideoAITaskContentFetched(localAITaskID, userID, taskID, service.MarkArkVideoAITaskContentFetched); err != nil {
+				log.Printf("GeekNow video content record failed: task=%s err=%v", taskID, err)
+			}
+		}
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(normalized)
+}
+
+func syncSelectedVideoAITaskStatus(localAITaskID string, userID string, upstreamTaskID string, normalized []byte, fallback func(string, []byte) error) error {
+	if localAITaskID != "" {
+		return service.SyncUserVideoAITaskStatus(localAITaskID, userID, normalized)
+	}
+	return fallback(upstreamTaskID, normalized)
+}
+
+func markSelectedVideoAITaskContentFetched(localAITaskID string, userID string, upstreamTaskID string, fallback func(string) error) error {
+	if localAITaskID != "" {
+		return service.MarkUserVideoAITaskContentFetched(localAITaskID, userID)
+	}
+	return fallback(upstreamTaskID)
+}
+
+func proxyXinglianVideoGetRequest(w http.ResponseWriter, ctx context.Context, channel model.ModelChannel, path string, localAITaskID string, userID string) {
 	taskID, contentRequest := parseVideoTaskPath(path)
 	if taskID == "" {
 		Fail(w, "缺少视频任务 ID")
@@ -486,7 +626,7 @@ func proxyXinglianVideoGetRequest(w http.ResponseWriter, ctx context.Context, ch
 		Fail(w, "AI 接口请求失败")
 		return
 	}
-	if err := service.SyncArkVideoAITaskStatus(taskID, normalized); err != nil {
+	if err := syncSelectedVideoAITaskStatus(localAITaskID, userID, taskID, normalized, service.SyncArkVideoAITaskStatus); err != nil {
 		log.Printf("Xinglian video task sync failed: task=%s err=%v", taskID, err)
 	}
 	if contentRequest {
@@ -496,7 +636,7 @@ func proxyXinglianVideoGetRequest(w http.ResponseWriter, ctx context.Context, ch
 			return
 		}
 		if proxyArkVideoContent(w, ctx, videoURL) {
-			if err := service.MarkArkVideoAITaskContentFetched(taskID); err != nil {
+			if err := markSelectedVideoAITaskContentFetched(localAITaskID, userID, taskID, service.MarkArkVideoAITaskContentFetched); err != nil {
 				log.Printf("Xinglian video content record failed: task=%s err=%v", taskID, err)
 			}
 		}
@@ -507,8 +647,8 @@ func proxyXinglianVideoGetRequest(w http.ResponseWriter, ctx context.Context, ch
 	_, _ = w.Write(normalized)
 }
 
-func proxyArkVideoGetByConfig(w http.ResponseWriter, ctx context.Context, baseURL string, apiKey string, path string) {
-	proxyArkVideoGetByConfigWithClient(w, ctx, strings.TrimRight(baseURL, "/"), apiKey, path, &http.Client{Timeout: service.AIVideoTaskTimeout})
+func proxyArkVideoGetByConfig(w http.ResponseWriter, ctx context.Context, baseURL string, apiKey string, path string, localAITaskID string, userID string) {
+	proxyArkVideoGetByConfigWithClient(w, ctx, strings.TrimRight(baseURL, "/"), apiKey, path, &http.Client{Timeout: service.AIVideoTaskTimeout}, localAITaskID, userID)
 }
 
 func proxyArkVideoGetByCustomConfig(w http.ResponseWriter, ctx context.Context, baseURL string, apiKey string, path string) {
@@ -524,10 +664,10 @@ func proxyArkVideoGetByCustomConfig(w http.ResponseWriter, ctx context.Context, 
 		}
 		_, err := validateCustomAIBaseURL(ctx, req.URL.String())
 		return err
-	}))
+	}), "", "")
 }
 
-func proxyArkVideoGetByConfigWithClient(w http.ResponseWriter, ctx context.Context, baseURL string, apiKey string, path string, client *http.Client) {
+func proxyArkVideoGetByConfigWithClient(w http.ResponseWriter, ctx context.Context, baseURL string, apiKey string, path string, client *http.Client, localAITaskID string, userID string) {
 	taskID, contentRequest := parseVideoTaskPath(path)
 	if taskID == "" {
 		Fail(w, "缺少视频任务 ID")
@@ -559,7 +699,7 @@ func proxyArkVideoGetByConfigWithClient(w http.ResponseWriter, ctx context.Conte
 			Fail(w, "AI 接口请求失败")
 			return
 		}
-	} else if err := service.SyncArkVideoAITaskStatus(taskID, normalized); err != nil {
+	} else if err := syncSelectedVideoAITaskStatus(localAITaskID, userID, taskID, normalized, service.SyncArkVideoAITaskStatus); err != nil {
 		log.Printf("Ark video task sync ai task failed: task=%s err=%v", taskID, err)
 	}
 	if contentRequest {
@@ -569,7 +709,7 @@ func proxyArkVideoGetByConfigWithClient(w http.ResponseWriter, ctx context.Conte
 			return
 		}
 		if proxyArkVideoContent(w, ctx, videoURL) {
-			if err := service.MarkArkVideoAITaskContentFetched(taskID); err != nil {
+			if err := markSelectedVideoAITaskContentFetched(localAITaskID, userID, taskID, service.MarkArkVideoAITaskContentFetched); err != nil {
 				log.Printf("Ark video task mark content fetched failed: task=%s err=%v", taskID, err)
 			}
 		}
@@ -604,6 +744,42 @@ func copyXinglianVideoTaskResponse(w http.ResponseWriter, request *http.Request,
 		return
 	}
 	normalized, err := service.NormalizeXinglianVideoTaskResponse(body)
+	if err != nil {
+		if onFailure != nil {
+			onFailure("AI 接口请求失败", body)
+		}
+		Fail(w, "AI 接口请求失败")
+		return
+	}
+	if len(onSuccess) > 0 && onSuccess[0] != nil {
+		onSuccess[0](response.StatusCode, body, normalized)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, _ = w.Write(normalized)
+}
+
+func copyGeekNowVideoTaskResponse(w http.ResponseWriter, request *http.Request, onFailure func(string, []byte), onSuccess ...func(int, []byte, []byte)) {
+	response, err := service.DoAIHTTPRequest(request)
+	if err != nil {
+		log.Printf("GeekNow video task request failed: url=%s err=%v", safeLogRequestURL(request), err)
+		if onFailure != nil {
+			onFailure("AI 接口请求失败", nil)
+		}
+		Fail(w, "AI 接口请求失败")
+		return
+	}
+	defer response.Body.Close()
+	body, _ := io.ReadAll(response.Body)
+	if response.StatusCode >= http.StatusBadRequest {
+		message := upstreamErrorMessage(body, "AI 接口请求失败")
+		if onFailure != nil {
+			onFailure(message, body)
+		}
+		Fail(w, message)
+		return
+	}
+	normalized, err := service.NormalizeGeekNowVideoTaskResponse(body)
 	if err != nil {
 		if onFailure != nil {
 			onFailure("AI 接口请求失败", body)
@@ -719,6 +895,131 @@ func proxyArkVideoContent(w http.ResponseWriter, ctx context.Context, videoURL s
 		return false
 	}
 	return true
+}
+
+func proxyGeekNowVideoContent(w http.ResponseWriter, ctx context.Context, channel model.ModelChannel, videoURL string) bool {
+	return proxyGeekNowVideoContentWithRequester(w, ctx, channel, videoURL, requestGeekNowVideoContent)
+}
+
+type geekNowVideoContentRequester func(context.Context, string, string) (*http.Response, error)
+
+func proxyGeekNowVideoContentWithRequester(w http.ResponseWriter, ctx context.Context, channel model.ModelChannel, videoURL string, requester geekNowVideoContentRequester) bool {
+	currentURL := videoURL
+	allowAuthorization := sameURLOrigin(videoURL, channel.BaseURL)
+	var response *http.Response
+	var err error
+	for redirects := 0; ; redirects++ {
+		authorization := ""
+		if allowAuthorization && sameURLOrigin(currentURL, channel.BaseURL) {
+			authorization = "Bearer " + channel.APIKey
+		}
+		response, err = requester(ctx, currentURL, authorization)
+		if err != nil {
+			break
+		}
+		if !isVideoContentRedirect(response.StatusCode) {
+			break
+		}
+		if redirects >= 5 {
+			_ = response.Body.Close()
+			err = errors.New("GeekNow video content redirected too many times")
+			break
+		}
+		next, locationErr := response.Location()
+		_ = response.Body.Close()
+		if locationErr != nil {
+			err = locationErr
+			break
+		}
+		currentURL = next.String()
+		if !sameURLOrigin(currentURL, channel.BaseURL) {
+			allowAuthorization = false
+		}
+	}
+	if err != nil {
+		log.Printf("GeekNow video content download failed: url=%s err=%v", safeLogURL(videoURL), err)
+		Fail(w, "视频下载失败：服务器无法访问 GeekNow 返回的视频地址")
+		return false
+	}
+	defer response.Body.Close()
+	if response.StatusCode >= http.StatusBadRequest {
+		Fail(w, fmt.Sprintf("视频下载失败：GeekNow 视频地址返回 %d", response.StatusCode))
+		return false
+	}
+	if err := validateProxyVideoContentResponse(response); err != nil {
+		Fail(w, fmt.Sprintf("视频下载失败：%s", videoContentRejectMessage(err)))
+		return false
+	}
+	for key, values := range response.Header {
+		if strings.EqualFold(key, "Content-Length") {
+			continue
+		}
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+	w.WriteHeader(response.StatusCode)
+	written, _ := io.Copy(w, io.LimitReader(response.Body, maxVideoDownloadBytes+1))
+	if written > maxVideoDownloadBytes {
+		log.Printf("GeekNow video content exceeded download limit: url=%s", safeLogURL(videoURL))
+		return false
+	}
+	return true
+}
+
+func requestGeekNowVideoContent(ctx context.Context, rawURL string, authorization string) (*http.Response, error) {
+	if authorization == "" {
+		if err := validateProxyDownloadURL(ctx, rawURL); err != nil {
+			return nil, err
+		}
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	if authorization != "" {
+		request.Header.Set("Authorization", authorization)
+	}
+	checkRedirect := func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	client := &http.Client{Timeout: service.AIVideoContentTimeout, CheckRedirect: checkRedirect}
+	if authorization == "" {
+		client = newPublicNetworkHTTPClient(ctx, service.AIVideoContentTimeout, checkRedirect)
+	}
+	return doVideoContentRequestWithRetry(client, request)
+}
+
+func isVideoContentRedirect(status int) bool {
+	switch status {
+	case http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther, http.StatusTemporaryRedirect, http.StatusPermanentRedirect:
+		return true
+	default:
+		return false
+	}
+}
+
+func sameURLOrigin(rawURL string, baseURL string) bool {
+	target, targetErr := url.Parse(rawURL)
+	base, baseErr := url.Parse(baseURL)
+	if targetErr != nil || baseErr != nil || target.User != nil || base.User != nil {
+		return false
+	}
+	if !strings.EqualFold(target.Scheme, base.Scheme) || !strings.EqualFold(target.Hostname(), base.Hostname()) {
+		return false
+	}
+	return urlOriginPort(target) == urlOriginPort(base)
+}
+
+func urlOriginPort(parsed *url.URL) string {
+	if port := parsed.Port(); port != "" {
+		return port
+	}
+	if strings.EqualFold(parsed.Scheme, "https") {
+		return "443"
+	}
+	if strings.EqualFold(parsed.Scheme, "http") {
+		return "80"
+	}
+	return ""
 }
 
 func doVideoContentRequestWithRetry(client *http.Client, request *http.Request) (*http.Response, error) {

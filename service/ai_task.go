@@ -23,6 +23,7 @@ type CreateAITaskInput struct {
 	UserID        string
 	TaskType      string
 	Provider      string
+	ChannelID     string
 	Protocol      string
 	Model         string
 	Path          string
@@ -42,6 +43,7 @@ func CreateAITask(input CreateAITaskInput) (model.AITask, error) {
 		TaskType:    input.TaskType,
 		ActionType:  inferAITaskActionType(input.Path, input.RequestBody, input.ContentType),
 		Provider:    input.Provider,
+		ChannelID:   strings.TrimSpace(input.ChannelID),
 		Protocol:    input.Protocol,
 		Model:       strings.TrimSpace(input.Model),
 		Path:        input.Path,
@@ -55,6 +57,48 @@ func CreateAITask(input CreateAITaskInput) (model.AITask, error) {
 		task.FrontendTraceJSON = marshalSanitized(frontendTrace)
 	}
 	return repository.SaveAITask(task)
+}
+
+func SelectVideoTaskModelChannel(upstreamTaskID string, fallbackModel string) (model.ModelChannel, error) {
+	task, ok, err := repository.GetAITaskByUpstreamTaskID(strings.TrimSpace(upstreamTaskID))
+	if err != nil {
+		return model.ModelChannel{}, err
+	}
+	if !ok {
+		return SelectModelChannel(fallbackModel)
+	}
+	return selectBoundVideoTaskModelChannel(task, fallbackModel)
+}
+
+func SelectUserVideoTaskModelChannel(aiTaskID string, upstreamTaskID string, userID string, fallbackModel string) (model.ModelChannel, string, error) {
+	if strings.TrimSpace(aiTaskID) == "" {
+		channel, err := SelectVideoTaskModelChannel(upstreamTaskID, fallbackModel)
+		return channel, "", err
+	}
+	task, ok, err := repository.GetAITask(strings.TrimSpace(aiTaskID))
+	if err != nil {
+		return model.ModelChannel{}, "", err
+	}
+	if !ok || task.UserID != strings.TrimSpace(userID) || task.UpstreamTaskID != strings.TrimSpace(upstreamTaskID) {
+		return model.ModelChannel{}, "", safeMessageError{message: "视频任务不存在或无权访问"}
+	}
+	channel, err := selectBoundVideoTaskModelChannel(task, fallbackModel)
+	return channel, task.ID, err
+}
+
+func selectBoundVideoTaskModelChannel(task model.AITask, fallbackModel string) (model.ModelChannel, error) {
+	if strings.TrimSpace(task.ChannelID) == "" {
+		return SelectModelChannel(fallbackModel)
+	}
+	modelName := strings.TrimSpace(task.Model)
+	if modelName == "" {
+		modelName = fallbackModel
+	}
+	return SelectModelChannelWithOptions(modelName, task.ChannelID, nil, "")
+}
+
+func NormalizedVideoTaskStatus(body []byte) model.AITaskStatus {
+	return arkTaskStatusFromNormalized(body)
 }
 
 func MarkAITaskSucceeded(id string, responseBody []byte, contentType string) error {
@@ -106,6 +150,21 @@ func SyncArkVideoAITaskStatus(upstreamTaskID string, normalizedBody []byte) erro
 	if err != nil || !ok {
 		return err
 	}
+	return syncVideoAITaskStatus(task, normalizedBody)
+}
+
+func SyncUserVideoAITaskStatus(id string, userID string, normalizedBody []byte) error {
+	task, ok, err := repository.GetAITask(strings.TrimSpace(id))
+	if err != nil {
+		return err
+	}
+	if !ok || task.UserID != strings.TrimSpace(userID) {
+		return safeMessageError{message: "视频任务不存在或无权访问"}
+	}
+	return syncVideoAITaskStatus(task, normalizedBody)
+}
+
+func syncVideoAITaskStatus(task model.AITask, normalizedBody []byte) error {
 	applyArkVideoTaskPayload(&task, normalizedBody)
 	if isRefundableAITaskStatus(task.Status) {
 		if err := refundAITaskIfNeeded(&task, false); err != nil {
@@ -134,9 +193,24 @@ func MarkArkVideoAITaskContentFetched(upstreamTaskID string) error {
 	if err != nil || !ok {
 		return err
 	}
+	return markVideoAITaskContentFetched(task)
+}
+
+func MarkUserVideoAITaskContentFetched(id string, userID string) error {
+	task, ok, err := repository.GetAITask(strings.TrimSpace(id))
+	if err != nil {
+		return err
+	}
+	if !ok || task.UserID != strings.TrimSpace(userID) {
+		return safeMessageError{message: "视频任务不存在或无权访问"}
+	}
+	return markVideoAITaskContentFetched(task)
+}
+
+func markVideoAITaskContentFetched(task model.AITask) error {
 	task.FinishedAt = now()
 	task.UpdatedAt = now()
-	_, err = repository.SaveAITask(task)
+	_, err := repository.SaveAITask(task)
 	return err
 }
 
