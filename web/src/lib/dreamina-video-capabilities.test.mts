@@ -12,6 +12,47 @@ test("describes Seedance 2.5 generation capabilities", () => {
     assert.equal(capability?.label, "2.5 · 4–30s · 多模态");
 });
 
+test("describes Ark Seedance 2.5 generation capabilities", () => {
+    const capability = resolveDreaminaVideoCapability({ protocol: "volcengine-ark", model: "doubao_seedance 2.5", mode: "multimodal2video" });
+
+    assert.equal(capability?.label, "2.5 · 4–30s · 多模态");
+    assert.deepEqual(capability?.duration, { min: 4, max: 30 });
+    assert.deepEqual(capability?.resolutions, ["480", "720"]);
+    assert.equal(capability?.fallbackResolution, "720");
+    assert.deepEqual(capability?.references, { images: 30, videos: 10, audios: 10, total: 50, allowAudioOnly: true });
+    assert.equal(capability?.fixedModel, false);
+});
+
+test("does not treat longer Seedance version names as 2.5", () => {
+    const ark = resolveDreaminaVideoCapability({ protocol: "volcengine-ark", model: "doubao-seedance-2-50", mode: "multimodal2video" });
+    const jimeng = resolveDreaminaVideoCapability({ protocol: "jimeng-cli", model: "seedance2.50", mode: "multimodal2video" });
+    const jimengAlias = resolveDreaminaVideoCapability({ protocol: "jimeng-cli", model: "seedance-2-5", mode: "multimodal2video" });
+
+    assert.equal(ark?.label, "");
+    assert.deepEqual(ark?.duration, { min: 4, max: 15 });
+    assert.deepEqual(ark?.resolutions, ["720", "1080"]);
+    assert.equal(jimeng?.label, "");
+    assert.deepEqual(jimeng?.duration, { min: 4, max: 15 });
+    assert.equal(jimengAlias?.label, "");
+});
+
+test("keeps Ark Seedance 2.0 duration, resolution, and audio-only limits", () => {
+    const base = { protocol: "volcengine-ark" as const, model: "doubao-seedance-2-0", mode: "multimodal2video" as const };
+    const capability = resolveDreaminaVideoCapability(base);
+
+    assert.deepEqual(capability?.duration, { min: 4, max: 15 });
+    assert.deepEqual(capability?.resolutions, ["720", "1080"]);
+    assert.deepEqual(capability?.references, { images: 9, videos: 3, audios: 3, total: 12, allowAudioOnly: false });
+    assert.match(validateDreaminaReferences({ ...base, images: 0, videos: 0, audios: 1 }).error, /至少添加图片或视频/);
+});
+
+test("allows Ark Seedance 2.5 audio-only all-reference input", () => {
+    const result = validateDreaminaReferences({ protocol: "volcengine-ark", model: "seedance2.5", mode: "multimodal2video", images: 0, videos: 0, audios: 1 });
+
+    assert.equal(result.error, "");
+    assert.equal(result.usageLabel, "1 / 50");
+});
+
 test("marks multi-frame as a fixed-model mode", () => {
     const capability = resolveDreaminaVideoCapability({ protocol: "jimeng-cli", model: "seedance2.5", mode: "multiframe2video" });
 

@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"mime/multipart"
 	"testing"
 )
@@ -12,7 +13,8 @@ func TestReadArkLocalVideoConfigJSONStripsPrivateConfig(t *testing.T) {
 		"model": "ep-test",
 		"content": [{"type": "text", "text": "生成短视频"}],
 		"_volcengine_api_key": "frontend-key",
-		"_volcengine_base_url": "https://ark.example.com/api/v3"
+		"_volcengine_base_url": "https://ark.example.com/api/v3",
+		"_seedance_task_mode": "generate"
 	}`)
 
 	apiKey, baseURL, payload, err := ReadArkLocalVideoConfig(body, "application/json")
@@ -28,6 +30,9 @@ func TestReadArkLocalVideoConfigJSONStripsPrivateConfig(t *testing.T) {
 	}
 	if _, ok := payload[arkLocalBaseURLField]; ok {
 		t.Fatalf("payload still contains base url field: %#v", payload)
+	}
+	if _, ok := payload["_seedance_task_mode"]; ok {
+		t.Fatalf("payload still contains private task mode: %#v", payload)
 	}
 	if payload["model"] != "ep-test" {
 		t.Fatalf("model = %#v", payload["model"])
@@ -136,6 +141,24 @@ func TestBuildArkVideoCreateRequestRejectsAudioOnlySeedanceInput(t *testing.T) {
 	}
 }
 
+func TestBuildArkVideoCreateRequestRejectsSeedance20MoreThanTwelveReferences(t *testing.T) {
+	if _, _, err := BuildArkVideoCreateRequest(arkSeedanceMixedReferenceRequest(t, "doubao-seedance-2-0", 9, 3, 1), "application/json"); err == nil || err.Error() != "Seedance 2.0 参考素材总数不能超过 12 个" {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestBuildArkVideoCreateRequestAllowsSeedance20TwelveReferences(t *testing.T) {
+	if _, _, err := BuildArkVideoCreateRequest(arkSeedanceMixedReferenceRequest(t, "doubao-seedance-2-0", 9, 3, 0), "application/json"); err != nil {
+		t.Fatalf("BuildArkVideoCreateRequest returned error at Seedance 2.0 total limit: %v", err)
+	}
+}
+
+func TestBuildArkVideoCreateRequestAllowsSeedance25MoreThanTwelveReferences(t *testing.T) {
+	if _, _, err := BuildArkVideoCreateRequest(arkSeedanceMixedReferenceRequest(t, "doubao-seedance-2-5", 9, 3, 1), "application/json"); err != nil {
+		t.Fatalf("BuildArkVideoCreateRequest returned error for Seedance 2.5 references: %v", err)
+	}
+}
+
 func TestReadArkLocalVideoConfigMultipartKeepsInputReferenceRole(t *testing.T) {
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
@@ -175,6 +198,290 @@ func TestNormalizeArkVideoDurationKeepsSeedanceRange(t *testing.T) {
 	for input, want := range cases {
 		if got := normalizeArkVideoDuration(input); got != want {
 			t.Fatalf("normalizeArkVideoDuration(%q) = %d, want %d", input, got, want)
+		}
+	}
+}
+
+func TestBuildArkVideoCreateRequestTruncatesFractionalJSONDuration(t *testing.T) {
+	tests := map[string]int{"14.9": 14, "3.9": 4}
+	for duration, want := range tests {
+		body, _, err := BuildArkVideoCreateRequest([]byte(fmt.Sprintf(`{
+			"model": "doubao-seedance-2-5",
+			"content": [{"type": "text", "text": "生成短视频"}],
+			"duration": %s
+		}`, duration)), "application/json")
+		if err != nil {
+			t.Fatalf("BuildArkVideoCreateRequest duration %s returned error: %v", duration, err)
+		}
+		if got := readJSONMap(t, body)["duration"]; got != float64(want) {
+			t.Fatalf("duration %s normalized to %#v, want %d", duration, got, want)
+		}
+	}
+}
+
+func TestBuildArkVideoCreateRequestKeepsDurationAliasPrecedence(t *testing.T) {
+	tests := []struct {
+		name       string
+		jsonFields string
+		formFields map[string]string
+		want       float64
+	}{
+		{name: "zero duration", jsonFields: `"duration":0,"seconds":1`, formFields: map[string]string{"duration": "0", "seconds": "1"}, want: 6},
+		{name: "invalid duration", jsonFields: `"duration":"invalid","seconds":10`, formFields: map[string]string{"duration": "invalid", "seconds": "10"}, want: 6},
+		{name: "empty duration", jsonFields: `"duration":" ","seconds":10`, formFields: map[string]string{"duration": " ", "seconds": "10"}, want: 10},
+		{name: "seconds only", jsonFields: `"seconds":1`, formFields: map[string]string{"seconds": "1"}, want: 4},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name+" JSON", func(t *testing.T) {
+			body, _, err := BuildArkVideoCreateRequest([]byte(fmt.Sprintf(`{"model":"doubao-seedance-2-5","content":[{"type":"text","text":"生成短视频"}],%s}`, tt.jsonFields)), "application/json")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := readJSONMap(t, body)["duration"]; got != tt.want {
+				t.Fatalf("JSON duration = %#v, want %v", got, tt.want)
+			}
+		})
+		t.Run(tt.name+" multipart", func(t *testing.T) {
+			var form bytes.Buffer
+			writer := multipart.NewWriter(&form)
+			writeMultipartField(t, writer, "model", "doubao-seedance-2-5")
+			writeMultipartField(t, writer, "prompt", "生成短视频")
+			for key, value := range tt.formFields {
+				writeMultipartField(t, writer, key, value)
+			}
+			if err := writer.Close(); err != nil {
+				t.Fatal(err)
+			}
+			body, _, err := BuildArkVideoCreateRequest(form.Bytes(), writer.FormDataContentType())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := readJSONMap(t, body)["duration"]; got != tt.want {
+				t.Fatalf("multipart duration = %#v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBuildArkVideoCreateRequestForModelUsesLocalSeedance25Capabilities(t *testing.T) {
+	body, _, err := BuildArkVideoCreateRequestForModel([]byte(`{
+		"model": "doubao-seedance-2-5",
+		"content": [{"type": "text", "text": "生成短视频"}],
+		"duration": 30,
+		"resolution": "480p"
+	}`), "application/json", "doubao-seedance-2-5", "ep-25")
+	if err != nil {
+		t.Fatalf("BuildArkVideoCreateRequestForModel returned error: %v", err)
+	}
+	payload := readJSONMap(t, body)
+	if payload["model"] != "ep-25" || payload["duration"] != float64(30) || payload["resolution"] != "480p" {
+		t.Fatalf("payload = %#v", payload)
+	}
+}
+
+func TestBuildArkVideoCreateRequestAcceptsSeedance25AudioOnly(t *testing.T) {
+	body, _, err := BuildArkVideoCreateRequest([]byte(`{
+		"model": "seedance_2.5",
+		"content": [{"type": "audio_url", "audio_url": {"url": "asset://audio-id"}}]
+	}`), "application/json")
+	if err != nil {
+		t.Fatalf("BuildArkVideoCreateRequest returned error: %v", err)
+	}
+	if content := readJSONMap(t, body)["content"].([]any); len(content) != 1 {
+		t.Fatalf("content = %#v", content)
+	}
+}
+
+func TestBuildArkVideoCreateRequestKeepsSeedance25EditControls(t *testing.T) {
+	body, _, err := BuildArkVideoCreateRequest([]byte(`{
+		"model": "doubao seedance-2_5",
+		"content": [{"type": "video_url", "video_url": {"url": "asset://video-id"}}],
+		"duration": -1,
+		"ratio": "adaptive",
+		"_seedance_task_mode": "edit"
+	}`), "application/json")
+	if err != nil {
+		t.Fatalf("BuildArkVideoCreateRequest returned error: %v", err)
+	}
+	payload := readJSONMap(t, body)
+	if payload["duration"] != float64(-1) || payload["ratio"] != "adaptive" {
+		t.Fatalf("payload controls = %#v", payload)
+	}
+}
+
+func TestBuildArkVideoCreateRequestDerivesSeedance25EditControlsFromPrivateMode(t *testing.T) {
+	body, _, err := BuildArkVideoCreateRequest([]byte(`{
+		"model": "doubao-seedance-2-5",
+		"content": [{"type": "video_url", "video_url": {"url": "asset://video-id"}}],
+		"duration": 12,
+		"ratio": "16:9",
+		"_seedance_task_mode": "edit"
+	}`), "application/json")
+	if err != nil {
+		t.Fatalf("BuildArkVideoCreateRequest returned error: %v", err)
+	}
+	payload := readJSONMap(t, body)
+	if payload["duration"] != float64(-1) || payload["ratio"] != "adaptive" {
+		t.Fatalf("payload controls = %#v", payload)
+	}
+	if _, ok := payload["_seedance_task_mode"]; ok {
+		t.Fatalf("private task mode leaked upstream: %#v", payload)
+	}
+}
+
+func TestBuildArkVideoCreateRequestDerivesSeedance25ExtendRatio(t *testing.T) {
+	body, _, err := BuildArkVideoCreateRequest([]byte(`{
+		"model": "doubao-seedance-2-5",
+		"content": [{"type": "video_url", "video_url": {"url": "asset://video-id"}}],
+		"duration": 24,
+		"ratio": "16:9",
+		"_seedance_task_mode": "extend"
+	}`), "application/json")
+	if err != nil {
+		t.Fatalf("BuildArkVideoCreateRequest returned error: %v", err)
+	}
+	payload := readJSONMap(t, body)
+	if payload["duration"] != float64(24) || payload["ratio"] != "adaptive" {
+		t.Fatalf("payload controls = %#v", payload)
+	}
+}
+
+func TestBuildArkVideoCreateRequestDefaultsSeedance25NonEditAutomaticDuration(t *testing.T) {
+	body, _, err := BuildArkVideoCreateRequest([]byte(`{
+		"model": "doubao-seedance-2-5",
+		"content": [{"type": "video_url", "video_url": {"url": "asset://video-id"}}],
+		"duration": -1,
+		"ratio": "16:9",
+		"_seedance_task_mode": "extend"
+	}`), "application/json")
+	if err != nil {
+		t.Fatalf("BuildArkVideoCreateRequest returned error: %v", err)
+	}
+	payload := readJSONMap(t, body)
+	if payload["duration"] != float64(6) || payload["ratio"] != "adaptive" {
+		t.Fatalf("payload controls = %#v", payload)
+	}
+	generateBody, _, err := BuildArkVideoCreateRequest([]byte(`{
+		"model": "doubao-seedance-2-5",
+		"content": [{"type": "text", "text": "生成短视频"}],
+		"duration": -1,
+		"ratio": "16:9",
+		"_seedance_task_mode": "generate"
+	}`), "application/json")
+	if err != nil {
+		t.Fatalf("generate request returned error: %v", err)
+	}
+	if generatePayload := readJSONMap(t, generateBody); generatePayload["duration"] != float64(6) || generatePayload["ratio"] != "16:9" {
+		t.Fatalf("generate payload controls = %#v", generatePayload)
+	}
+}
+
+func TestBuildArkVideoCreateRequestDerivesSeedance25FrameRatio(t *testing.T) {
+	body, _, err := BuildArkVideoCreateRequest([]byte(`{
+		"model": "doubao-seedance-2-5",
+		"content": [{"type": "image_url", "image_url": {"url": "asset://image-id"}, "role": "first_frame"}],
+		"duration": 12,
+		"ratio": "16:9",
+		"_seedance_task_mode": "generate"
+	}`), "application/json")
+	if err != nil {
+		t.Fatalf("BuildArkVideoCreateRequest returned error: %v", err)
+	}
+	if payload := readJSONMap(t, body); payload["ratio"] != "adaptive" {
+		t.Fatalf("payload controls = %#v", payload)
+	}
+}
+
+func TestBuildArkVideoCreateRequestKeepsSeedance25GenerateReferenceRatio(t *testing.T) {
+	body, _, err := BuildArkVideoCreateRequest([]byte(`{
+		"model": "doubao-seedance-2-5",
+		"content": [{"type": "image_url", "image_url": {"url": "asset://image-id"}, "role": "reference_image"}],
+		"duration": 12,
+		"ratio": "16:9",
+		"_seedance_task_mode": "generate"
+	}`), "application/json")
+	if err != nil {
+		t.Fatalf("BuildArkVideoCreateRequest returned error: %v", err)
+	}
+	if payload := readJSONMap(t, body); payload["ratio"] != "16:9" {
+		t.Fatalf("payload controls = %#v", payload)
+	}
+}
+
+func TestBuildArkVideoCreateRequestEnforcesSeedance25ReferenceLimits(t *testing.T) {
+	tests := []struct {
+		kind      string
+		limit     int
+		wantError string
+	}{
+		{kind: "image", limit: 30, wantError: "Seedance 2.5 最多支持 30 张图片"},
+		{kind: "video", limit: 10, wantError: "Seedance 2.5 最多支持 10 个视频"},
+		{kind: "audio", limit: 10, wantError: "Seedance 2.5 最多支持 10 个音频"},
+	}
+	for _, test := range tests {
+		t.Run(test.kind, func(t *testing.T) {
+			if _, _, err := BuildArkVideoCreateRequest(arkSeedanceTestRequest(t, "doubao-seedance-2-5", test.kind, test.limit), "application/json"); err != nil {
+				t.Fatalf("limit request returned error: %v", err)
+			}
+			_, _, err := BuildArkVideoCreateRequest(arkSeedanceTestRequest(t, "doubao-seedance-2-5", test.kind, test.limit+1), "application/json")
+			if err == nil || err.Error() != test.wantError {
+				t.Fatalf("overflow err = %v, want %q", err, test.wantError)
+			}
+		})
+	}
+}
+
+func TestBuildArkVideoCreateRequestRequiresMeaningfulInput(t *testing.T) {
+	_, _, err := BuildArkVideoCreateRequest([]byte(`{
+		"model": "doubao-seedance-2-5",
+		"content": [{"type": "text", "text": "   "}, {"type": "audio_url", "audio_url": {"url": " "}}]
+	}`), "application/json")
+	if err == nil || err.Error() != "缺少视频提示词或参考素材" {
+		t.Fatalf("err = %v", err)
+	}
+	if _, _, err := BuildArkVideoCreateRequest([]byte(`{
+		"model": "doubao-seedance-2-5",
+		"content": [{"type": "text", "text": "   "}, {"type": "audio_url", "audio_url": {"url": "asset://audio-id"}}]
+	}`), "application/json"); err != nil {
+		t.Fatalf("blank text with audio returned error: %v", err)
+	}
+}
+
+func TestBuildArkVideoCreateRequestKeepsSeedance20Limits(t *testing.T) {
+	body, _, err := BuildArkVideoCreateRequest([]byte(`{
+		"model": "doubao-seedance-2-0-260128",
+		"content": [{"type": "text", "text": "生成短视频"}],
+		"duration": 30
+	}`), "application/json")
+	if err != nil {
+		t.Fatalf("BuildArkVideoCreateRequest returned error: %v", err)
+	}
+	if duration := readJSONMap(t, body)["duration"]; duration != float64(15) {
+		t.Fatalf("duration = %#v, want 15", duration)
+	}
+}
+
+func TestBuildArkVideoCreateRequestDoesNotTreatSeedance250As25(t *testing.T) {
+	body, _, err := BuildArkVideoCreateRequest([]byte(`{
+		"model": "doubao-seedance-2-50",
+		"content": [{"type": "text", "text": "生成短视频"}],
+		"duration": 30,
+		"resolution": "480p"
+	}`), "application/json")
+	if err != nil {
+		t.Fatalf("BuildArkVideoCreateRequest returned error: %v", err)
+	}
+	payload := readJSONMap(t, body)
+	if payload["duration"] != float64(15) || payload["resolution"] != "720p" {
+		t.Fatalf("payload controls = %#v", payload)
+	}
+}
+
+func TestNormalizeArkVideoResolutionKeepsSeedance25Options(t *testing.T) {
+	tests := map[string]string{"480": "480p", "1080": "720p", "4k": "720p"}
+	for input, want := range tests {
+		if got := normalizeArkVideoResolution(input, "seedance-2.5"); got != want {
+			t.Fatalf("normalizeArkVideoResolution(%q) = %q, want %q", input, got, want)
 		}
 	}
 }
@@ -220,4 +527,37 @@ func readJSONMap(t *testing.T, body []byte) map[string]any {
 		t.Fatalf("Unmarshal JSON: %v", err)
 	}
 	return payload
+}
+
+func arkSeedanceTestRequest(t *testing.T, modelName string, kind string, count int) []byte {
+	t.Helper()
+	content := make([]any, 0, count)
+	contentType := kind + "_url"
+	for index := 0; index < count; index++ {
+		content = append(content, map[string]any{"type": contentType, contentType: map[string]string{"url": fmt.Sprintf("asset://%s-%d", kind, index)}})
+	}
+	body, err := json.Marshal(map[string]any{"model": modelName, "content": content})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return body
+}
+
+func arkSeedanceMixedReferenceRequest(t *testing.T, modelName string, imageCount int, videoCount int, audioCount int) []byte {
+	t.Helper()
+	content := []any{map[string]any{"type": "text", "text": "生成视频"}}
+	for _, item := range []struct {
+		kind  string
+		count int
+	}{{"image", imageCount}, {"video", videoCount}, {"audio", audioCount}} {
+		contentType := item.kind + "_url"
+		for index := 0; index < item.count; index++ {
+			content = append(content, map[string]any{"type": contentType, contentType: map[string]string{"url": fmt.Sprintf("asset://%s-%d", item.kind, index)}})
+		}
+	}
+	body, err := json.Marshal(map[string]any{"model": modelName, "content": content})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return body
 }

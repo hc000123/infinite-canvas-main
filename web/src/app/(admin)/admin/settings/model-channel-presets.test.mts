@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyModelChannelPreset, JIMENG_MODELS, MODEL_CHANNEL_PRESETS, XINGLIAN_MODELS } from "./model-channel-presets.ts";
+import { applyModelChannelPreset, JIMENG_MODELS, MODEL_CHANNEL_PRESETS, VOLCENGINE_ARK_MODELS, XINGLIAN_MODELS } from "./model-channel-presets.ts";
 
 function emptySettings() {
     return {
@@ -93,6 +93,70 @@ test("migrates an existing Ark provider channel and preserves its key and EP", (
     assert.equal(channels[0].id, "volcengine-seedance");
     assert.equal(channels[0].apiKey, "********");
     assert.deepEqual(channels[0].endpointMappings, [{ model: "doubao-seedance-2-0", endpointId: "ep-existing" }]);
+    assert.deepEqual(channels[0].models, [VOLCENGINE_ARK_MODELS.seedance20]);
+});
+
+test("adds an independent Seedance 2.5 mapping to an existing Ark channel", () => {
+    const settings = emptySettings();
+    settings.private.channels = [channel({
+        id: "volcengine-seedance",
+        protocol: "volcengine-ark",
+        baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+        endpointId: "ep-20-existing",
+        endpointMappings: [{ model: VOLCENGINE_ARK_MODELS.seedance20, endpointId: "ep-20-existing" }],
+    })];
+
+    const result = applyModelChannelPreset(settings, "volcengine", { seedance25EndpointId: "ep-25-new" });
+    const saved = result.settings.private.channels[0];
+
+    assert.deepEqual(saved.endpointMappings, [
+        { model: VOLCENGINE_ARK_MODELS.seedance20, endpointId: "ep-20-existing" },
+        { model: VOLCENGINE_ARK_MODELS.seedance25, endpointId: "ep-25-new" },
+    ]);
+    assert.deepEqual(saved.models, [VOLCENGINE_ARK_MODELS.seedance20, VOLCENGINE_ARK_MODELS.seedance25]);
+    assert.equal(saved.endpointId, "ep-20-existing");
+});
+
+test("does not create a Seedance 2.5 model when only a new 2.0 EP is configured", () => {
+    const result = applyModelChannelPreset(emptySettings(), "volcengine", { apiKey: "ark-key", endpointId: "ep-20-new" });
+    const saved = result.settings.private.channels[0];
+
+    assert.deepEqual(saved.endpointMappings, [{ model: VOLCENGINE_ARK_MODELS.seedance20, endpointId: "ep-20-new" }]);
+    assert.deepEqual(saved.models, [VOLCENGINE_ARK_MODELS.seedance20]);
+});
+
+test("preserves an existing Seedance 2.5 mapping when its input is left blank", () => {
+    const settings = emptySettings();
+    settings.private.channels = [channel({
+        id: "volcengine-seedance",
+        protocol: "volcengine-ark",
+        baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+        endpointId: "ep-20-existing",
+        endpointMappings: [
+            { model: VOLCENGINE_ARK_MODELS.seedance20, endpointId: "ep-20-existing" },
+            { model: VOLCENGINE_ARK_MODELS.seedance25, endpointId: "ep-25-existing" },
+        ],
+    })];
+
+    const result = applyModelChannelPreset(settings, "volcengine", {});
+
+    assert.deepEqual(result.settings.private.channels[0].endpointMappings, [
+        { model: VOLCENGINE_ARK_MODELS.seedance20, endpointId: "ep-20-existing" },
+        { model: VOLCENGINE_ARK_MODELS.seedance25, endpointId: "ep-25-existing" },
+    ]);
+});
+
+test("does not treat a structured Seedance 2.5 mapping as a 2.0 EP fallback", () => {
+    const settings = emptySettings();
+    settings.private.channels = [channel({
+        id: "volcengine-seedance",
+        protocol: "volcengine-ark",
+        baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
+        endpointId: "ep-legacy",
+        endpointMappings: [{ model: VOLCENGINE_ARK_MODELS.seedance25, endpointId: "ep-25-existing" }],
+    })];
+
+    assert.throws(() => applyModelChannelPreset(settings, "volcengine", {}), /请填写 Seedance 2.0 Endpoint \/ EP/);
 });
 
 test("keeps Jimeng advanced runtime settings", () => {

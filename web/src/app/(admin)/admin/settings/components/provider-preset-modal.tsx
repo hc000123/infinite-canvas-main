@@ -154,15 +154,22 @@ function PresetFields({ presetId, hasSavedKey }: { presetId: ModelChannelPresetI
     }
     return (
         <Row gutter={16}>
-            <Col span={presetId === "volcengine" ? 12 : 24}>
+            <Col xs={24} md={presetId === "volcengine" ? 8 : 24}>
                 <APIKeyField hasSavedKey={hasSavedKey} />
             </Col>
             {presetId === "volcengine" ? (
-                <Col span={12}>
-                    <Form.Item name="endpointId" label="火山 Endpoint / EP" extra="已有映射时留空保留；首次配置必须填写。">
-                        <Input placeholder="ep-xxxxxxxxxxxxxxxx" />
-                    </Form.Item>
-                </Col>
+                <>
+                    <Col xs={24} md={8}>
+                        <Form.Item name="endpointId" label="Seedance 2.0 Endpoint / EP" extra="已有 2.0 映射时留空保留；首次配置必须填写。">
+                            <Input placeholder="ep-xxxxxxxxxxxxxxxx" />
+                        </Form.Item>
+                    </Col>
+                    <Col xs={24} md={8}>
+                        <Form.Item name="seedance25EndpointId" label="Seedance 2.5 Endpoint / EP" extra="可选；已有 2.5 映射时留空保留。">
+                            <Input placeholder="ep-xxxxxxxxxxxxxxxx" />
+                        </Form.Item>
+                    </Col>
+                </>
             ) : null}
         </Row>
     );

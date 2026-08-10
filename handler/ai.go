@@ -26,6 +26,9 @@ import (
 const (
 	maxAIRequestBodyBytes = 100 * 1024 * 1024
 	maxAIRequestCount     = 15
+	maxArkSeedance25Usage = 30
+	minArkVideoUsage      = 4
+	defaultArkVideoUsage  = 6
 	maxImageDownloadBytes = 50 * 1024 * 1024
 	maxVideoDownloadBytes = 1024 * 1024 * 1024
 )
@@ -183,20 +186,21 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 			}
 		}
 	}
+	channel, err := service.SelectModelChannel(modelName)
+	if err != nil {
+		log.Printf("AI proxy select channel failed: model=%s err=%v", modelName, err)
+		Fail(w, "AI 接口请求失败")
+		return
+	}
+	modelName = service.ModelChannelLogicalModel(channel, modelName)
 	credits, err := service.ModelCost(modelName)
 	if err != nil {
 		log.Printf("AI proxy read model cost failed: model=%s err=%v", modelName, err)
 		Fail(w, "AI 接口请求失败")
 		return
 	}
-	credits, err = multiplyAICredits(credits, readAIRequestUsage(path, r.Header.Get("X-Infinite-Canvas-Request-Kind"), body, contentType))
+	credits, err = multiplyAICredits(credits, readAIRequestUsageForModel(path, r.Header.Get("X-Infinite-Canvas-Request-Kind"), body, contentType, modelName, channel.Protocol))
 	if err != nil {
-		Fail(w, "AI 接口请求失败")
-		return
-	}
-	channel, err := service.SelectModelChannel(modelName)
-	if err != nil {
-		log.Printf("AI proxy select channel failed: model=%s err=%v", modelName, err)
 		Fail(w, "AI 接口请求失败")
 		return
 	}
@@ -206,7 +210,7 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 	isArkVideoTask := service.IsVolcengineArkProtocol(channel.Protocol) && path == "/videos"
 	if isArkVideoTask {
 		upstreamPath = "/contents/generations/tasks"
-		upstreamBody, upstreamContentType, err = service.BuildArkVideoCreateRequestForModel(body, contentType, service.ModelChannelEndpointForModel(channel, modelName))
+		upstreamBody, upstreamContentType, err = service.BuildArkVideoCreateRequestForModel(body, contentType, modelName, service.ModelChannelEndpointForModel(channel, modelName))
 		if err != nil {
 			log.Printf("AI proxy build ark video request failed: model=%s err=%v", modelName, err)
 			Fail(w, err.Error())
@@ -1237,6 +1241,29 @@ func readMultipartModel(body []byte, contentType string) string {
 }
 
 func readAIRequestUsage(path string, requestKind string, body []byte, contentType string) int {
+	return readAIRequestUsageWithLimit(path, requestKind, body, contentType, maxAIRequestCount)
+}
+
+func readAIRequestUsageForModel(path string, requestKind string, body []byte, contentType string, modelName string, protocol string) int {
+	if path == "/videos" && service.IsVolcengineArkProtocol(protocol) {
+		seedance25 := service.IsArkSeedance25Model(modelName)
+		if seedance25 && readAIRequestString(body, contentType, "_seedance_task_mode") == "edit" {
+			return maxArkSeedance25Usage
+		}
+		usage := readArkVideoRequestDuration(body, contentType)
+		if usage < 1 {
+			usage = defaultArkVideoUsage
+		}
+		limit := maxAIRequestCount
+		if seedance25 {
+			limit = maxArkSeedance25Usage
+		}
+		return max(minArkVideoUsage, clampAIRequestUsage(usage, limit))
+	}
+	return readAIRequestUsage(path, requestKind, body, contentType)
+}
+
+func readAIRequestUsageWithLimit(path string, requestKind string, body []byte, contentType string, limit int) int {
 	keys := []string{}
 	switch {
 	case path == "/videos":
@@ -1247,11 +1274,15 @@ func readAIRequestUsage(path string, requestKind string, body []byte, contentTyp
 		return 1
 	}
 	usage := readAIRequestInt(body, contentType, keys...)
+	return clampAIRequestUsage(usage, limit)
+}
+
+func clampAIRequestUsage(usage int, limit int) int {
 	if usage < 1 {
 		return 1
 	}
-	if usage > maxAIRequestCount {
-		return maxAIRequestCount
+	if usage > limit {
+		return limit
 	}
 	return usage
 }
@@ -1286,6 +1317,77 @@ func readAIRequestInt(body []byte, contentType string, keys ...string) int {
 		}
 	}
 	return 0
+}
+
+func readArkVideoRequestDuration(body []byte, contentType string) int {
+	if strings.HasPrefix(contentType, "multipart/form-data") {
+		_, params, err := mime.ParseMediaType(contentType)
+		if err != nil {
+			return 0
+		}
+		form, err := multipart.NewReader(bytes.NewReader(body), params["boundary"]).ReadForm(32 << 20)
+		if err != nil {
+			return 0
+		}
+		defer form.RemoveAll()
+		for _, key := range []string{"duration", "seconds"} {
+			if values := form.Value[key]; len(values) > 0 {
+				raw := strings.TrimSpace(values[0])
+				if raw == "" {
+					continue
+				}
+				var value int
+				_, _ = fmt.Sscan(raw, &value)
+				return value
+			}
+		}
+		return 0
+	}
+	var payload map[string]any
+	_ = json.Unmarshal(body, &payload)
+	for _, key := range []string{"duration", "seconds"} {
+		value, ok := payload[key]
+		if !ok || value == nil {
+			continue
+		}
+		switch typed := value.(type) {
+		case string:
+			raw := strings.TrimSpace(typed)
+			if raw == "" {
+				continue
+			}
+			var parsed int
+			_, _ = fmt.Sscan(raw, &parsed)
+			return parsed
+		case float64:
+			return int(typed)
+		case int:
+			return typed
+		}
+	}
+	return 0
+}
+
+func readAIRequestString(body []byte, contentType string, key string) string {
+	if strings.HasPrefix(contentType, "multipart/form-data") {
+		_, params, err := mime.ParseMediaType(contentType)
+		if err != nil {
+			return ""
+		}
+		form, err := multipart.NewReader(bytes.NewReader(body), params["boundary"]).ReadForm(32 << 20)
+		if err != nil {
+			return ""
+		}
+		defer form.RemoveAll()
+		if values := form.Value[key]; len(values) > 0 {
+			return strings.TrimSpace(values[0])
+		}
+		return ""
+	}
+	var payload map[string]any
+	_ = json.Unmarshal(body, &payload)
+	value, _ := payload[key].(string)
+	return strings.TrimSpace(value)
 }
 
 func aiRequestIntValue(value any) int {

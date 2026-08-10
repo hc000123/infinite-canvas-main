@@ -17,25 +17,39 @@ export function normalizeVideoResolution(value: string) {
     return Number(resolution) >= 1080 ? "1080p" : "720p";
 }
 
-export function normalizeSeedanceDuration(value: string) {
-    const seconds = Math.floor(Number(value) || 6);
-    return Math.max(4, Math.min(15, seconds));
+export function isSeedance25Model(model?: string) {
+    const normalized = (model || "").toLowerCase().replace(/[\s._-]/g, "");
+    return normalized === "doubaoseedance25" || normalized === "seedance25";
 }
 
-export function normalizeSeedanceRatio(value: string) {
-    if (value === "auto" || value === "adaptive") return "adaptive";
-    if (["21:9", "16:9", "9:16", "1:1", "4:3", "3:4"].includes(value)) return value;
-    const size = normalizeVideoSize(value);
-    if (!size) return "16:9";
-    if (["21:9", "16:9", "9:16", "1:1", "4:3", "3:4"].includes(size)) return size;
-    if (size === "1024x1024") return "1:1";
-    if (size === "720x1280" || size === "1024x1792") return "9:16";
-    if (size === "1280x720" || size === "1792x1024") return "16:9";
-    if (size === "2560x1080" || size === "1920x810") return "21:9";
-    return size.includes("x") && Number(size.split("x")[0]) < Number(size.split("x")[1]) ? "9:16" : "16:9";
+export function normalizeSeedanceDuration(value: string, model?: string, taskMode?: string) {
+    if (isSeedance25Model(model) && taskMode === "edit") return -1;
+    const seconds = Math.floor(Number(value) || 6);
+    return Math.max(4, Math.min(isSeedance25Model(model) ? 30 : 15, seconds));
+}
+
+export function normalizeSeedanceRatio(value: string, model?: string, taskMode?: string, imageRoleMode?: string) {
+    let ratio: string;
+    if (value === "auto" || value === "adaptive") ratio = "adaptive";
+    else if (["21:9", "16:9", "9:16", "1:1", "4:3", "3:4"].includes(value)) ratio = value;
+    else {
+        const size = normalizeVideoSize(value);
+        if (!size) ratio = "16:9";
+        else if (["21:9", "16:9", "9:16", "1:1", "4:3", "3:4"].includes(size)) ratio = size;
+        else if (size === "1024x1024") ratio = "1:1";
+        else if (size === "720x1280" || size === "1024x1792") ratio = "9:16";
+        else if (size === "1280x720" || size === "1792x1024") ratio = "16:9";
+        else if (size === "2560x1080" || size === "1920x810") ratio = "21:9";
+        else ratio = size.includes("x") && Number(size.split("x")[0]) < Number(size.split("x")[1]) ? "9:16" : "16:9";
+    }
+    return isSeedance25Model(model) && (taskMode === "edit" || taskMode === "extend" || imageRoleMode === "first_frame" || imageRoleMode === "first_last_frame") ? "adaptive" : ratio;
 }
 
 export function normalizeSeedanceResolution(value: string, model?: string) {
+    if (isSeedance25Model(model)) {
+        const resolution = Number(value.toLowerCase().replace(/p$/i, ""));
+        return resolution > 0 && resolution <= 480 ? "480p" : "720p";
+    }
     if (isSeedanceFastModel(model)) return "720p";
     const resolution = Number(normalizeVideoResolution(value).replace(/p$/i, "")) || 720;
     return resolution >= 1080 ? "1080p" : "720p";

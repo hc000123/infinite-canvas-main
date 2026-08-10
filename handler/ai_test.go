@@ -212,6 +212,93 @@ func TestCloudVideoProxyIgnoresFrontendVolcengineKey(t *testing.T) {
 	}
 }
 
+func TestArkSeedance25EndpointProxyReservesMaximumEditCredits(t *testing.T) {
+	setupAIHandlerTestDB(t)
+	type capturedRequest struct {
+		method        string
+		path          string
+		authorization string
+		contentType   string
+		body          []byte
+		err           error
+	}
+	requests := make(chan capturedRequest, 1)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		requests <- capturedRequest{method: r.Method, path: r.URL.Path, authorization: r.Header.Get("Authorization"), contentType: r.Header.Get("Content-Type"), body: body, err: err}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"task-seedance-25","status":"queued"}`))
+	}))
+	defer upstream.Close()
+	saveArk25HandlerSettings(t, upstream.URL)
+	now := time.Now().Format(time.RFC3339)
+	if _, err := repository.SaveUser(model.User{ID: "user-seedance-25", Username: "seedance-25", Role: model.UserRoleUser, Status: model.UserStatusActive, Credits: 100, AffCode: "SEEDANCE25", CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+
+	body := []byte(`{
+		"model": "ep-25",
+		"content": [{"type":"text","text":"编辑短视频"},{"type":"video_url","video_url":{"url":"asset://video-id"},"role":"reference_video"}],
+		"duration": 1,
+		"_seedance_billing_duration": 1,
+		"ratio": "16:9",
+		"_seedance_task_mode": "edit",
+		"resolution": "480p"
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/videos", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(service.WithUser(req.Context(), model.AuthUser{ID: "user-seedance-25", Username: "seedance-25", Role: model.UserRoleUser}))
+	rec := httptest.NewRecorder()
+
+	proxyAIRequest(rec, req, "/videos")
+
+	upstreamCalled := false
+	var captured capturedRequest
+	select {
+	case captured = <-requests:
+		upstreamCalled = true
+	default:
+	}
+	if !upstreamCalled {
+		t.Fatal("upstream was not called")
+	}
+	if captured.err != nil {
+		t.Fatalf("read upstream body: %v", captured.err)
+	}
+	if captured.method != http.MethodPost || captured.path != "/contents/generations/tasks" {
+		t.Fatalf("upstream request = %s %s", captured.method, captured.path)
+	}
+	if captured.authorization != "Bearer backend-key" || captured.contentType != "application/json" {
+		t.Fatalf("upstream headers authorization=%q content-type=%q", captured.authorization, captured.contentType)
+	}
+	upstreamPayload := readJSONMap(t, captured.body)
+	if upstreamPayload["model"] != "ep-25" || upstreamPayload["duration"] != float64(-1) || upstreamPayload["ratio"] != "adaptive" || upstreamPayload["resolution"] != "480p" {
+		t.Fatalf("upstream payload = %#v", upstreamPayload)
+	}
+	if _, ok := upstreamPayload["_seedance_task_mode"]; ok {
+		t.Fatalf("private task mode leaked upstream: %#v", upstreamPayload)
+	}
+	if _, ok := upstreamPayload["_seedance_billing_duration"]; ok {
+		t.Fatalf("private billing duration leaked upstream: %#v", upstreamPayload)
+	}
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if credits := rec.Header().Get("X-AI-Task-Credits"); credits != "30" {
+		t.Fatalf("task credits = %q, want 30", credits)
+	}
+	if user, ok, err := repository.GetUserByID("user-seedance-25"); err != nil || !ok || user.Credits != 70 {
+		t.Fatalf("user = %#v ok=%v err=%v, want balance 70", user, ok, err)
+	}
+	if task, ok, err := repository.GetAITask(rec.Header().Get("X-AI-Task-ID")); err != nil || !ok || task.Model != "doubao-seedance-2-5" || task.Credits != 30 {
+		t.Fatalf("task = %#v ok=%v err=%v, want logical Seedance 2.5 with 30 credits", task, ok, err)
+	}
+	responsePayload := readJSONMap(t, rec.Body.Bytes())
+	if responsePayload["id"] != "task-seedance-25" || responsePayload["status"] != "queued" {
+		t.Fatalf("response status=%d payload=%#v", rec.Code, responsePayload)
+	}
+}
+
 func TestNormalizeImageGenerationPayloadArchivesRemoteURLs(t *testing.T) {
 	payload := []byte(`{"created":1,"data":[{"url":"https://cdn.example.com/generated.webp"}]}`)
 	normalized, err := normalizeImageGenerationPayload(payload, func(rawURL string) ([]byte, string, error) {
@@ -680,6 +767,89 @@ func TestReadAIRequestUsageUsesRequestBillingUnit(t *testing.T) {
 	}
 }
 
+func TestReadAIRequestUsageForModelUsesArkSeedance25Limit(t *testing.T) {
+	tests := []struct {
+		name      string
+		path      string
+		body      string
+		modelName string
+		protocol  string
+		want      int
+	}{
+		{name: "Ark Seedance 2.5 automatic edit reserves maximum", path: "/videos", body: `{"_seedance_task_mode":"edit","duration":-1}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 30},
+		{name: "Ark Seedance 2.5 edit ignores forged duration and billing", path: "/videos", body: `{"_seedance_task_mode":"edit","_seedance_billing_duration":1,"duration":1}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 30},
+		{name: "Ark Seedance 2.5 edit without billing reserves maximum", path: "/videos", body: `{"_seedance_task_mode":"edit","duration":30}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 30},
+		{name: "Ark Seedance 2.5 generate defaults invalid duration", path: "/videos", body: `{"_seedance_task_mode":"generate","duration":-1}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 6},
+		{name: "Ark Seedance 2.5 extend defaults invalid duration", path: "/videos", body: `{"_seedance_task_mode":"extend","duration":-1}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 6},
+		{name: "Ark Seedance 2.5 raises one second duration", path: "/videos", body: `{"duration":1}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 4},
+		{name: "Ark Seedance 2.5 raises three second duration", path: "/videos", body: `{"duration":3}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 4},
+		{name: "Ark Seedance 2.5 truncates fractional duration", path: "/videos", body: `{"duration":14.9}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 14},
+		{name: "Ark Seedance 2.5 truncates fractional duration before minimum", path: "/videos", body: `{"duration":3.9}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 4},
+		{name: "Ark duration zero takes precedence over seconds", path: "/videos", body: `{"duration":0,"seconds":1}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 6},
+		{name: "Ark invalid duration takes precedence over seconds", path: "/videos", body: `{"duration":"invalid","seconds":10}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 6},
+		{name: "Ark empty duration falls back to seconds", path: "/videos", body: `{"duration":" ","seconds":10}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 10},
+		{name: "Ark seconds alias uses minimum duration", path: "/videos", body: `{"seconds":1}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 4},
+		{name: "Ark Seedance 2.5 generate ignores private duration", path: "/videos", body: `{"_seedance_task_mode":"generate","_seedance_billing_duration":1,"duration":30}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 30},
+		{name: "Ark Seedance 2.5 generate caps duration", path: "/videos", body: `{"_seedance_task_mode":"generate","duration":999}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 30},
+		{name: "Ark Seedance 2.0 keeps default limit", path: "/videos", body: `{"duration":30}`, modelName: "doubao-seedance-2-0", protocol: string(model.ModelProtocolVolcengineArk), want: maxAIRequestCount},
+		{name: "Ark Seedance 2.0 generate defaults invalid duration", path: "/videos", body: `{"_seedance_task_mode":"generate","duration":-1}`, modelName: "doubao-seedance-2-0", protocol: string(model.ModelProtocolVolcengineArk), want: 6},
+		{name: "Ark Seedance 2.0 raises two second duration", path: "/videos", body: `{"duration":2}`, modelName: "doubao-seedance-2-0", protocol: string(model.ModelProtocolVolcengineArk), want: 4},
+		{name: "OpenAI video keeps one second duration", path: "/videos", body: `{"duration":1}`, modelName: "video-model", protocol: string(model.ModelProtocolOpenAI), want: 1},
+		{name: "Jimeng Seedance 2.5 keeps default limit", path: "/videos", body: `{"duration":30}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolJimengCLI), want: maxAIRequestCount},
+		{name: "image count keeps default limit", path: "/images/generations", body: `{"n":999}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: maxAIRequestCount},
+		{name: "Ark Seedance 2.50 keeps default limit", path: "/videos", body: `{"duration":30}`, modelName: "doubao-seedance-2-50", protocol: string(model.ModelProtocolVolcengineArk), want: maxAIRequestCount},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := readAIRequestUsageForModel(tt.path, "", []byte(tt.body), "application/json", tt.modelName, tt.protocol); got != tt.want {
+				t.Fatalf("usage = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestReadAIRequestUsageForModelSupportsMultipartAutomaticEdit(t *testing.T) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	writeMultipartField(t, writer, "_seedance_task_mode", "edit")
+	writeMultipartField(t, writer, "_seedance_billing_duration", "1")
+	writeMultipartField(t, writer, "duration", "1")
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if got := readAIRequestUsageForModel("/videos", "", body.Bytes(), writer.FormDataContentType(), "doubao-seedance-2-5", string(model.ModelProtocolVolcengineArk)); got != 30 {
+		t.Fatalf("multipart usage = %d, want 30", got)
+	}
+}
+
+func TestReadAIRequestUsageForModelKeepsMultipartDurationAliasPrecedence(t *testing.T) {
+	tests := []struct {
+		name   string
+		fields map[string]string
+		want   int
+	}{
+		{name: "zero duration", fields: map[string]string{"duration": "0", "seconds": "1"}, want: 6},
+		{name: "invalid duration", fields: map[string]string{"duration": "invalid", "seconds": "10"}, want: 6},
+		{name: "empty duration", fields: map[string]string{"duration": " ", "seconds": "10"}, want: 10},
+		{name: "seconds only", fields: map[string]string{"seconds": "1"}, want: 4},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var body bytes.Buffer
+			writer := multipart.NewWriter(&body)
+			for key, value := range tt.fields {
+				writeMultipartField(t, writer, key, value)
+			}
+			if err := writer.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if got := readAIRequestUsageForModel("/videos", "", body.Bytes(), writer.FormDataContentType(), "doubao-seedance-2-5", string(model.ModelProtocolVolcengineArk)); got != tt.want {
+				t.Fatalf("multipart usage = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestValidateProxyVideoContentResponseRejectsOversizedAndNonVideo(t *testing.T) {
 	if err := validateProxyVideoContentResponse(&http.Response{ContentLength: maxVideoDownloadBytes + 1}); err == nil {
 		t.Fatal("validateProxyVideoContentResponse accepted oversized response")
@@ -755,6 +925,31 @@ func saveAIHandlerSettings(t *testing.T, allowCustomChannel bool, upstreamURL st
 				Enabled:  true,
 			}},
 		},
+	}, now)
+	if err != nil {
+		t.Fatalf("SaveSettings returned error: %v", err)
+	}
+}
+
+func saveArk25HandlerSettings(t *testing.T, upstreamURL string) {
+	t.Helper()
+	now := time.Now().Format(time.RFC3339)
+	_, err := repository.SaveSettings(model.Settings{
+		Public: model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{
+			AvailableModels:   []string{"doubao-seedance-2-0", "doubao-seedance-2-5"},
+			DefaultVideoModel: "doubao-seedance-2-0",
+			ModelCosts:        []model.ModelCost{{Model: "doubao-seedance-2-0", Credits: 2}, {Model: "doubao-seedance-2-5", Credits: 1}},
+		}},
+		Private: model.PrivateSetting{Channels: []model.ModelChannel{{
+			Protocol:         string(model.ModelProtocolVolcengineArk),
+			Name:             "ark-seedance-25",
+			BaseURL:          upstreamURL,
+			APIKey:           "backend-key",
+			Models:           []string{"doubao-seedance-2-0", "doubao-seedance-2-5"},
+			EndpointMappings: []model.ModelEndpointMapping{{Model: "doubao-seedance-2-0", EndpointID: "ep-20"}, {Model: "doubao-seedance-2-5", EndpointID: "ep-25"}},
+			Weight:           1,
+			Enabled:          true,
+		}}},
 	}, now)
 	if err != nil {
 		t.Fatalf("SaveSettings returned error: %v", err)

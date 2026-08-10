@@ -5,6 +5,7 @@ export type ModelChannelPresetId = "volcengine" | "xinglian" | "jimeng" | "comfl
 export type ModelChannelPresetInput = {
     apiKey?: string;
     endpointId?: string;
+    seedance25EndpointId?: string;
     name?: string;
     baseUrl?: string;
     capability?: "text" | "image" | "video";
@@ -22,6 +23,10 @@ export type ModelChannelPresetDefinition = {
 };
 
 export const XINGLIAN_MODELS = ["sd2-720p-fast", "sd2-720p", "sd2-720p-sh", "sd2-720p-mini", "sd2-1080p-mini", "sd2-1080p-fast", "sd2-1080p", "sd2-720p-ax-fast", "sd2-720p-ax"] as const;
+export const VOLCENGINE_ARK_MODELS = {
+    seedance20: "doubao-seedance-2-0",
+    seedance25: "doubao-seedance-2-5",
+} as const;
 export const JIMENG_MODELS = ["seedance2.0mini", "seedance2.0fast", "seedance2.0", "seedance2.0_vip", "seedance2.0fast_vip", "seedance2.5"] as const;
 export const COMFLY_TEXT_MODELS = ["gpt-5.5-pro", "gpt-5.5", "gemini-3.1-pro-preview"] as const;
 export const COMFLY_IMAGE_MODELS = ["gemini-3.1-flash-image-preview", "nano-banana-pro", "nano-banana-2", "nano-banana-pro-2k", "gpt-image-2-all"] as const;
@@ -53,9 +58,13 @@ function applyVolcengine(settings: AdminSettings, input: ModelChannelPresetInput
     const index = findChannelIndex(settings.private.channels, "volcengine-seedance", (item) => item.protocol === "volcengine-ark" && trimURL(item.baseUrl) === baseUrl);
     const current = settings.private.channels[index];
     const apiKey = credential(input.apiKey, current?.apiKey);
-    const endpointId = firstValue(input.endpointId, current?.endpointMappings?.[0]?.endpointId, current?.endpointId);
+    const currentMappings = current?.endpointMappings || [];
+    const endpointId = firstValue(input.endpointId, currentMappings.find((item) => item.model === VOLCENGINE_ARK_MODELS.seedance20)?.endpointId, currentMappings.length ? "" : current?.endpointId);
+    const seedance25EndpointId = firstValue(input.seedance25EndpointId, currentMappings.find((item) => item.model === VOLCENGINE_ARK_MODELS.seedance25)?.endpointId);
+    const endpointMappings: AdminModelChannel["endpointMappings"] = [{ model: VOLCENGINE_ARK_MODELS.seedance20, endpointId }];
+    if (seedance25EndpointId) endpointMappings.push({ model: VOLCENGINE_ARK_MODELS.seedance25, endpointId: seedance25EndpointId });
     requireValue(apiKey, "请填写火山 API Key");
-    requireValue(endpointId, "请填写火山 Endpoint / EP");
+    requireValue(endpointId, "请填写 Seedance 2.0 Endpoint / EP");
     upsertChannel(
         settings,
         index,
@@ -66,8 +75,8 @@ function applyVolcengine(settings: AdminSettings, input: ModelChannelPresetInput
             baseUrl,
             apiKey,
             endpointId,
-            endpointMappings: [{ model: "doubao-seedance-2-0", endpointId }],
-            models: ["doubao-seedance-2-0"],
+            endpointMappings,
+            models: endpointMappings.map((item) => item.model),
             capabilities: ["video", "video_query", "asset_review", "preflight"],
             remark: "厂商预设：火山 Ark / Seedance",
         }),
