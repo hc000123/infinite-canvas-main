@@ -176,6 +176,7 @@ export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSu
                     imageCount={imageInputs.length}
                     mediaCount={mediaInputs.length}
                     preset={referencePreset}
+                    showMultiFrame={config.videoProtocol !== "minimax"}
                     theme={theme}
                     onModeChange={(videoReferenceMode, videoReferenceImageMode) => onConfigChange(node.id, { videoReferenceMode, videoReferenceImageMode })}
                 />
@@ -421,12 +422,14 @@ function VideoReferenceModeTabs({
     imageCount,
     mediaCount,
     preset,
+    showMultiFrame,
     theme,
     onModeChange,
 }: {
     imageCount: number;
     mediaCount: number;
     preset: VideoReferencePreset;
+    showMultiFrame: boolean;
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
     onModeChange: (mode: NonNullable<CanvasNodeMetadata["videoReferenceMode"]>, imageMode: NonNullable<CanvasNodeMetadata["videoReferenceImageMode"]>) => void;
 }) {
@@ -436,7 +439,7 @@ function VideoReferenceModeTabs({
         { value: "first_last_frame", label: "首尾帧", disabled: imageCount < 2, mode: "frames2video", imageMode: "first_last_frame" },
         { value: "multi_frame", label: "多帧故事 · 固定模型", disabled: imageCount < 2, mode: "multiframe2video", imageMode: "reference" },
         { value: "all_reference", label: "全能参考", disabled: mediaCount === 0, mode: "multimodal2video", imageMode: "reference" },
-    ];
+    ].filter((item) => showMultiFrame || item.value !== "multi_frame");
 
     return (
         <div className="thin-scrollbar flex shrink-0 gap-1 overflow-x-auto pb-0.5" onMouseDown={(event) => event.stopPropagation()}>
@@ -584,7 +587,8 @@ function resolveVideoReferencePreset(referenceMode: AiConfig["videoReferenceMode
 
 function videoConfigSummary(config: AiConfig) {
     const audio = config.videoGenerateAudio === "true" ? "音频开" : "音频关";
-    return `${videoRatioLabel(config.size)} · ${videoResolutionLabel(config.vquality).toUpperCase()} · ${videoSecondsLabel(config.videoSeconds, config)} · ${audio}`;
+    const summary = `${videoRatioLabel(config.size)} · ${videoResolutionLabel(config.vquality, config).toUpperCase()} · ${videoSecondsLabel(config.videoSeconds, config)}`;
+    return config.videoProtocol === "minimax" ? summary : `${summary} · ${audio}`;
 }
 
 function InputChip({ label, value, style }: { label: string; value: string; style: CSSProperties }) {

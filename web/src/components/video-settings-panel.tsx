@@ -52,7 +52,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
     const secondLimits = videoSecondsLimits(config);
     const seconds = normalizeVideoSecondsValue(config.videoSeconds, config);
     const ratio = normalizeVideoRatioValue(config.size);
-    const resolution = normalizeVideoResolutionValue(config.vquality);
+    const resolution = normalizeVideoResolutionValue(config.vquality, config);
     const referenceMode = normalizeVideoReferenceMode(config.videoReferenceMode);
     const dreaminaCapability = resolveDreaminaVideoCapability({
         protocol: config.videoProtocol,
@@ -60,8 +60,11 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
         mode: referenceMode === "auto" ? "text2video" : referenceMode,
     });
     const resolutionOptions = dreaminaCapability
-        ? dreaminaCapability.resolutions.map((value) => ({ value, label: value === "2160" ? "4K" : `${value}p` }))
+        ? dreaminaCapability.resolutions.map((value) => ({ value, label: config.videoProtocol === "minimax" && value === "2160" ? "2K" : value === "2160" ? "4K" : `${value}p` }))
         : defaultResolutionOptions;
+    const supportsGenerateAudio = config.videoProtocol !== "minimax";
+    const supportsSeed = config.videoProtocol !== "minimax";
+    const supportsSeedanceTaskMode = config.videoProtocol !== "minimax";
     const generateAudio = config.videoGenerateAudio === "true";
     const watermark = config.videoWatermark === "true";
     const promptReviewEnabled = config.videoPromptReviewEnabled !== "false";
@@ -72,21 +75,21 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
     const showSeedance25EditCreditHint = isArkSeedance25EditCredit({ videoProtocol: config.videoProtocol, videoModel: config.videoModel || config.seedanceModel, videoTaskMode: taskMode });
 
     useEffect(() => {
-        if (!showTaskMode || hasSourceVideo || (config.videoTaskMode !== "edit" && config.videoTaskMode !== "extend")) return;
+        if (!supportsSeedanceTaskMode || !showTaskMode || hasSourceVideo || (config.videoTaskMode !== "edit" && config.videoTaskMode !== "extend")) return;
         onConfigChange("videoTaskMode", "generate");
-    }, [config.videoTaskMode, hasSourceVideo, onConfigChange, showTaskMode]);
+    }, [config.videoTaskMode, hasSourceVideo, onConfigChange, showTaskMode, supportsSeedanceTaskMode]);
 
     useEffect(() => {
         if (resolutionOptions.some((item) => item.value === resolution)) return;
-        onConfigChange("vquality", "720");
-    }, [onConfigChange, resolution, resolutionOptions]);
+        onConfigChange("vquality", dreaminaCapability?.fallbackResolution || "720");
+    }, [dreaminaCapability?.fallbackResolution, onConfigChange, resolution, resolutionOptions]);
 
     return (
         <ImageSettingsTheme theme={theme}>
             <div className={className} style={{ color: theme.node.text }} onMouseDown={(event) => event.stopPropagation()}>
                 {showTitle ? <div className="text-lg font-semibold">视频设置</div> : null}
                 <div className="text-xs leading-5 opacity-55">生成新视频时可用图片控制首帧/首尾帧。续写请从已完成视频节点的“续写”按钮进入。</div>
-                {showTaskMode ? (
+                {showTaskMode && supportsSeedanceTaskMode ? (
                     <SettingGroup title="生成方式" color={theme.node.muted}>
                         <div className={`grid gap-2.5 ${hasSourceVideo ? "grid-cols-3" : "grid-cols-1"}`}>
                             {taskOptions.map((item) => (
@@ -158,11 +161,11 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                     <SecondRangeControl value={seconds} min={secondLimits.min} max={secondLimits.max} theme={theme} onChange={(value) => onConfigChange("videoSeconds", value)} />
                 </SettingGroup>
                 <SettingGroup title="生成参数" color={theme.node.muted}>
-                    <div className="grid grid-cols-2 gap-2.5">
-                        <ToggleSwitch checked={generateAudio} label="生成音频" theme={theme} onChange={(checked) => onConfigChange("videoGenerateAudio", String(checked))} />
+                    <div className={`grid gap-2.5 ${supportsGenerateAudio ? "grid-cols-2" : "grid-cols-1"}`}>
+                        {supportsGenerateAudio ? <ToggleSwitch checked={generateAudio} label="生成音频" theme={theme} onChange={(checked) => onConfigChange("videoGenerateAudio", String(checked))} /> : null}
                         <ToggleSwitch checked={watermark} label="水印" theme={theme} onChange={(checked) => onConfigChange("videoWatermark", String(checked))} />
                     </div>
-                    <label className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm" style={{ background: theme.node.fill, color: theme.node.text }}>
+                    {supportsSeed ? <label className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm" style={{ background: theme.node.fill, color: theme.node.text }}>
                         <span className="shrink-0" style={{ color: theme.node.muted }}>
                             seed
                         </span>
@@ -174,7 +177,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                             className="h-8 flex-1 rounded-lg border bg-transparent px-3 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--studio-focus-ring)] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                             onChange={(value) => onConfigChange("videoSeed", value)}
                         />
-                    </label>
+                    </label> : null}
                 </SettingGroup>
                 <SettingGroup title="生成辅助" color={theme.node.muted}>
                     <ToggleSwitch checked={promptReviewEnabled} label="生成前提示词自审" theme={theme} onChange={(checked) => onConfigChange("videoPromptReviewEnabled", String(checked))} />
@@ -184,9 +187,11 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
     );
 }
 
-export function videoResolutionLabel(value: string) {
-    const resolution = normalizeVideoResolutionValue(value);
-    return resolution === "2160" ? "4K" : `${resolution}p`;
+export type VideoResolutionConfig = Partial<Pick<AiConfig, "videoProtocol">>;
+
+export function videoResolutionLabel(value: string, config?: VideoResolutionConfig) {
+    value = normalizeVideoResolutionValue(value, config);
+    return config && config.videoProtocol === "minimax" && value === "2160" ? "2K" : value === "2160" ? "4K" : `${value}p`;
 }
 
 export function videoRatioLabel(value: string) {
@@ -232,9 +237,10 @@ export function normalizeVideoRatioValue(value: string) {
     return "16:9";
 }
 
-export function normalizeVideoResolutionValue(value: string) {
+export function normalizeVideoResolutionValue(value: string, config?: VideoResolutionConfig) {
     if (String(value).toLowerCase() === "4k") return "2160";
     const resolution = Number(String(value || "").replace(/p$/i, ""));
+    if (config?.videoProtocol === "minimax" && resolution === 768) return "768";
     if (resolution >= 2160) return "2160";
     if (resolution >= 1080) return "1080";
     return resolution > 0 && resolution <= 480 ? "480" : "720";

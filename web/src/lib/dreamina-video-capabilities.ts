@@ -28,6 +28,17 @@ type DreaminaReferenceInput = DreaminaCapabilityInput & {
 };
 
 export function resolveDreaminaVideoCapability(input: DreaminaCapabilityInput): DreaminaVideoCapability | null {
+    if (input.protocol === "minimax") {
+        return {
+            label: "H3 · 4–15s · 多模态",
+            notice: "",
+            duration: { min: 4, max: 15 },
+            resolutions: ["768", "2160"],
+            fallbackResolution: "768",
+            references: { images: 9, videos: 3, audios: 3, total: 12, allowAudioOnly: true },
+            fixedModel: false,
+        };
+    }
     if (input.protocol !== "jimeng-cli" && input.protocol !== "volcengine-ark") return null;
     if (input.protocol === "jimeng-cli" && input.mode === "multiframe2video") {
         return {
@@ -88,6 +99,7 @@ export function validateDreaminaReferences(input: DreaminaReferenceInput) {
     if (input.mode === "text2video") return total ? { ...empty, error: "文生视频不能携带参考素材" } : empty;
     if (input.mode === "image2video") return input.images === 1 && !input.videos && !input.audios ? empty : { ...empty, error: "图生视频需要恰好 1 张图片" };
     if (input.mode === "frames2video") return input.images === 2 && !input.videos && !input.audios ? empty : { ...empty, error: "首尾帧需要恰好 2 张图片" };
+    if (input.protocol === "minimax" && input.mode === "multiframe2video") return { ...empty, error: "MiniMax H3 不支持多帧故事" };
     if (input.mode === "multiframe2video" && capability.fixedModel) return input.images >= 2 && input.images <= 20 && !input.videos && !input.audios ? empty : { ...empty, error: "多帧故事需要 2–20 张图片，且不能包含视频或音频" };
     const usage = {
         usageLabel: `${total} / ${capability.references.total}`,
@@ -95,9 +107,9 @@ export function validateDreaminaReferences(input: DreaminaReferenceInput) {
     };
     if (!total) return { ...usage, error: "全能参考至少添加一种参考素材" };
     if (!capability.references.allowAudioOnly && !input.images && !input.videos) return { ...usage, error: "全能参考至少添加图片或视频" };
-    if (input.images > capability.references.images) return { ...usage, error: `Seedance 全能参考最多支持 ${capability.references.images} 张图片` };
-    if (input.videos > capability.references.videos) return { ...usage, error: `Seedance 全能参考最多支持 ${capability.references.videos} 个视频` };
-    if (input.audios > capability.references.audios) return { ...usage, error: `Seedance 全能参考最多支持 ${capability.references.audios} 个音频` };
+    if (input.images > capability.references.images) return { ...usage, error: `全能参考最多支持 ${capability.references.images} 张图片` };
+    if (input.videos > capability.references.videos) return { ...usage, error: `全能参考最多支持 ${capability.references.videos} 个视频` };
+    if (input.audios > capability.references.audios) return { ...usage, error: `全能参考最多支持 ${capability.references.audios} 个音频` };
     if (total > capability.references.total) return { ...usage, error: `当前素材 ${total} / ${capability.references.total}，请断开 ${total - capability.references.total} 个参考` };
     return { ...usage, error: "" };
 }
