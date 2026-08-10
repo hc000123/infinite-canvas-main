@@ -164,8 +164,8 @@ func safeSkillLifecycleError(err error) error {
 		return nil
 	case errors.Is(err, repository.ErrSkillVersionMustBePublished):
 		return safeMessageError{message: "只能归档已发布 Skill 版本"}
-	case errors.Is(err, repository.ErrSkillVersionHasWorkflowBindings):
-		return safeMessageError{message: "Skill 版本已绑定工作流阶段，不能归档"}
+	case errors.Is(err, repository.ErrSkillVersionActiveReference):
+		return safeMessageError{message: "Skill 版本仍被已发布 Workflow、Agent 或工作流阶段绑定引用，不能归档"}
 	case errors.Is(err, repository.ErrSkillVersionMustBeDraft):
 		return safeMessageError{message: "只能删除未发布草稿版本"}
 	case errors.Is(err, repository.ErrSkillVersionReferenced):

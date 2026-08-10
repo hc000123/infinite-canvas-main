@@ -10,7 +10,7 @@ import (
 
 var (
 	ErrSkillVersionMustBePublished      = errors.New("skill version must be published")
-	ErrSkillVersionHasWorkflowBindings = errors.New("skill version has workflow stage bindings")
+	ErrSkillVersionActiveReference     = errors.New("skill version has active references")
 	ErrSkillVersionMustBeDraft          = errors.New("skill version must be a draft")
 	ErrSkillVersionReferenced           = errors.New("skill version is referenced")
 	ErrSkillDefinitionSeedProtected     = errors.New("seed skill definition is protected")
@@ -352,12 +352,12 @@ func ArchiveSkillVersionWithAudit(versionID, skillID, updatedAt string, audit mo
 		return err
 	}
 	return database.Transaction(func(tx *gorm.DB) error {
-		var bindingCount int64
-		if err := tx.Model(&model.WorkflowStageSkillBinding{}).Where("skill_version_id = ?", strings.TrimSpace(versionID)).Count(&bindingCount).Error; err != nil {
+		referenced, err := activeSkillVersionReferenced(tx, strings.TrimSpace(versionID))
+		if err != nil {
 			return err
 		}
-		if bindingCount > 0 {
-			return ErrSkillVersionHasWorkflowBindings
+		if referenced {
+			return ErrSkillVersionActiveReference
 		}
 		result := tx.Model(&model.SkillVersion{}).Where("id = ? AND skill_id = ? AND status = ?", strings.TrimSpace(versionID), strings.TrimSpace(skillID), model.SkillVersionPublished).
 			Updates(map[string]any{"status": model.SkillVersionArchived, "updated_at": updatedAt})
@@ -460,11 +460,34 @@ func skillVersionReferenced(tx *gorm.DB, versionID string) (bool, error) {
 		query string
 		args  []any
 	}{
-		{&model.SkillEvaluation{}, "skill_version_id = ?", []any{versionID}},
+		{&model.SkillEvaluation{}, "skill_version_id = ? OR baseline_version_id = ?", []any{versionID, versionID}},
 		{&model.WorkflowStageSkillBinding{}, "skill_version_id = ?", []any{versionID}},
 		{&model.InvocationPreflightRevision{}, "skill_version_id = ?", []any{versionID}},
 		{&model.WorkflowVersion{}, "package_json LIKE ?", []any{"%" + versionID + "%"}},
 		{&model.AgentVersion{}, "default_skill_refs_json LIKE ?", []any{"%" + versionID + "%"}},
+	}
+	for _, check := range checks {
+		var count int64
+		if err := tx.Model(check.model).Where(check.query, check.args...).Count(&count).Error; err != nil {
+			return false, err
+		}
+		if count > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func activeSkillVersionReferenced(tx *gorm.DB, versionID string) (bool, error) {
+	pattern := "%\"" + versionID + "\"%"
+	checks := []struct {
+		model any
+		query string
+		args  []any
+	}{
+		{&model.WorkflowStageSkillBinding{}, "skill_version_id = ?", []any{versionID}},
+		{&model.WorkflowVersion{}, "status = ? AND package_json LIKE ?", []any{model.WorkflowVersionPublished, pattern}},
+		{&model.AgentVersion{}, "status = ? AND default_skill_refs_json LIKE ?", []any{model.AgentVersionPublished, pattern}},
 	}
 	for _, check := range checks {
 		var count int64

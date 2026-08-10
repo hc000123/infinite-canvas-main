@@ -3,6 +3,7 @@ package repository
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/basketikun/infinite-canvas/model"
@@ -135,6 +136,86 @@ func TestSetRecommendedSkillVersionIsAtomic(t *testing.T) {
 	storedVersion, ok, err := GetSkillVersion(version.ID)
 	if err != nil || !ok || storedVersion.Status != model.SkillVersionPublished {
 		t.Fatalf("version=%+v ok=%v err=%v", storedVersion, ok, err)
+	}
+}
+
+func TestArchiveSkillVersionRejectsPublishedWorkflowReference(t *testing.T) {
+	setupRepositoryTestDB(t)
+	skill := model.SkillDefinition{ID: "archive-workflow-skill", Name: "剧本", OwnerType: model.SkillOwnerSystem, Enabled: true, RecommendedVersionID: "archive-workflow-skill-version"}
+	version := model.SkillVersion{ID: skill.RecommendedVersionID, SkillID: skill.ID, Version: "1.0.0", Status: model.SkillVersionPublished}
+	if err := CreateSkillAggregate(skill, version); err != nil {
+		t.Fatal(err)
+	}
+	workflowVersion := model.WorkflowVersion{ID: "published-workflow-version", WorkflowID: "published-workflow", Version: "1.0.0", Status: model.WorkflowVersionPublished, PackageJSON: `{"nodes":[{"skillVersionId":"archive-workflow-skill-version"}]}`}
+	if err := CreateWorkflowDefinitionAggregate(model.WorkflowDefinition{ID: workflowVersion.WorkflowID, Name: "Workflow", OwnerType: model.WorkflowOwnerSystem, Enabled: true, RecommendedVersionID: workflowVersion.ID}, workflowVersion); err != nil {
+		t.Fatal(err)
+	}
+
+	err := ArchiveSkillVersionWithAudit(version.ID, skill.ID, "later", model.SkillAuditLog{ID: "archive-workflow-audit"})
+	if !errors.Is(err, ErrSkillVersionActiveReference) {
+		t.Fatalf("err=%v", err)
+	}
+	storedVersion, ok, err := GetSkillVersion(version.ID)
+	if err != nil || !ok || storedVersion.Status != model.SkillVersionPublished {
+		t.Fatalf("skill version=%+v ok=%v err=%v", storedVersion, ok, err)
+	}
+	storedWorkflow, ok, err := GetWorkflowVersion(workflowVersion.ID)
+	if err != nil || !ok || storedWorkflow.Status != model.WorkflowVersionPublished || storedWorkflow.PackageJSON != workflowVersion.PackageJSON {
+		t.Fatalf("workflow version=%+v ok=%v err=%v", storedWorkflow, ok, err)
+	}
+}
+
+func TestArchiveSkillVersionRejectsPublishedAgentReference(t *testing.T) {
+	setupRepositoryTestDB(t)
+	skill := model.SkillDefinition{ID: "archive-agent-skill", Name: "分镜", OwnerType: model.SkillOwnerSystem, Enabled: true, RecommendedVersionID: "archive-agent-skill-version"}
+	version := model.SkillVersion{ID: skill.RecommendedVersionID, SkillID: skill.ID, Version: "1.0.0", Status: model.SkillVersionPublished}
+	if err := CreateSkillAggregate(skill, version); err != nil {
+		t.Fatal(err)
+	}
+	agentVersion := model.AgentVersion{ID: "published-agent-version", AgentID: "published-agent", Version: "1.0.0", Status: model.AgentVersionPublished, DefaultSkillRefsJSON: `[{"skillVersionId":"archive-agent-skill-version"}]`}
+	if err := CreateAgentAggregate(model.AgentDefinition{ID: agentVersion.AgentID, Name: "Agent", OwnerType: model.AgentOwnerSystem, Enabled: true, RecommendedVersionID: agentVersion.ID}, agentVersion); err != nil {
+		t.Fatal(err)
+	}
+
+	err := ArchiveSkillVersionWithAudit(version.ID, skill.ID, "later", model.SkillAuditLog{ID: "archive-agent-audit"})
+	if !errors.Is(err, ErrSkillVersionActiveReference) {
+		t.Fatalf("err=%v", err)
+	}
+	storedVersion, ok, err := GetSkillVersion(version.ID)
+	if err != nil || !ok || storedVersion.Status != model.SkillVersionPublished {
+		t.Fatalf("skill version=%+v ok=%v err=%v", storedVersion, ok, err)
+	}
+	storedAgent, ok, err := GetAgentVersion(agentVersion.ID)
+	if err != nil || !ok || storedAgent.Status != model.AgentVersionPublished || storedAgent.DefaultSkillRefsJSON != agentVersion.DefaultSkillRefsJSON {
+		t.Fatalf("agent version=%+v ok=%v err=%v", storedAgent, ok, err)
+	}
+}
+
+func TestDeleteSkillDraftRejectsBaselineEvaluationReference(t *testing.T) {
+	setupRepositoryTestDB(t)
+	skill := model.SkillDefinition{ID: "baseline-skill", Name: "基线", OwnerType: model.SkillOwnerSystem, Enabled: true}
+	baseline := model.SkillVersion{ID: "baseline-version", SkillID: skill.ID, Version: "1.0.0", Status: model.SkillVersionDraft}
+	if err := CreateSkillAggregate(skill, baseline); err != nil {
+		t.Fatal(err)
+	}
+	comparison := model.SkillVersion{ID: "comparison-version", SkillID: skill.ID, Version: "1.0.1", Status: model.SkillVersionDraft}
+	if err := CreateSkillVersion(comparison); err != nil {
+		t.Fatal(err)
+	}
+	evaluation := model.SkillEvaluation{ID: "baseline-evaluation", SkillVersionID: comparison.ID, BaselineVersionID: baseline.ID, Status: "passed"}
+	if err := CreateSkillEvaluation(evaluation); err != nil {
+		t.Fatal(err)
+	}
+
+	err := DeleteUnreferencedSkillDraftWithAudit(baseline.ID, model.SkillAuditLog{ID: "delete-baseline-audit"})
+	if !errors.Is(err, ErrSkillVersionReferenced) {
+		t.Fatalf("err=%v", err)
+	}
+	if stored, ok, err := GetSkillVersion(baseline.ID); err != nil || !ok || stored.Status != model.SkillVersionDraft {
+		t.Fatalf("baseline=%+v ok=%v err=%v", stored, ok, err)
+	}
+	if stored, ok, err := GetSkillEvaluation(evaluation.ID); err != nil || !ok || stored.BaselineVersionID != baseline.ID {
+		t.Fatalf("evaluation=%+v ok=%v err=%v", stored, ok, err)
 	}
 }
 

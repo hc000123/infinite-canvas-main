@@ -203,7 +203,7 @@ func TestAdminCannotArchiveBoundSkillVersion(t *testing.T) {
 
 	AdminArchiveSkillVersion(recorder, request, versionID)
 
-	if !strings.Contains(recorder.Body.String(), `"code":1`) || !strings.Contains(recorder.Body.String(), "Skill 版本已绑定工作流阶段，不能归档") {
+	if !strings.Contains(recorder.Body.String(), `"code":1`) || !strings.Contains(recorder.Body.String(), "Skill 版本仍被已发布 Workflow、Agent 或工作流阶段绑定引用，不能归档") {
 		t.Fatalf("body=%s", recorder.Body.String())
 	}
 	version, ok, err := repository.GetSkillVersion(versionID)
