@@ -10,15 +10,17 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
-	"unicode"
 )
 
 const (
 	arkLocalAPIKeyField  = "_volcengine_api_key"
 	arkLocalBaseURLField = "_volcengine_base_url"
 )
+
+var arkSeedance25ModelPattern = regexp.MustCompile(`(?i)^(?:doubao[[:space:]_.-]*)?seedance[[:space:]_.-]*2[[:space:]_.-]*5(?:[[:space:]_.-]+[0-9]{6})?$`)
 
 type arkVideoCreateFields struct {
 	ModelName       string
@@ -742,13 +744,7 @@ func arkVideoContentHasURL(entry map[string]any, key string) bool {
 }
 
 func IsArkSeedance25Model(modelName string) bool {
-	normalized := strings.Map(func(char rune) rune {
-		if unicode.IsSpace(char) || char == '.' || char == '_' || char == '-' {
-			return -1
-		}
-		return unicode.ToLower(char)
-	}, modelName)
-	return normalized == "seedance25" || normalized == "doubaoseedance25"
+	return arkSeedance25ModelPattern.MatchString(strings.TrimSpace(modelName))
 }
 
 func appendArkVideoControls(payload map[string]any, modelName string, taskMode string, content []any, seconds string, size string, resolution string, generateAudio string, watermark string, seed string, returnLastFrame string) {

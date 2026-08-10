@@ -477,6 +477,22 @@ func TestBuildArkVideoCreateRequestDoesNotTreatSeedance250As25(t *testing.T) {
 	}
 }
 
+func TestBuildArkVideoCreateRequestTreatsDatedSeedance25AliasAs25(t *testing.T) {
+	body, _, err := BuildArkVideoCreateRequest([]byte(`{
+		"model": "doubao-seedance-2-5-260628",
+		"content": [{"type": "text", "text": "生成短视频"}],
+		"duration": 30,
+		"resolution": "480p"
+	}`), "application/json")
+	if err != nil {
+		t.Fatalf("BuildArkVideoCreateRequest returned error: %v", err)
+	}
+	payload := readJSONMap(t, body)
+	if payload["duration"] != float64(30) || payload["resolution"] != "480p" {
+		t.Fatalf("payload controls = %#v", payload)
+	}
+}
+
 func TestNormalizeArkVideoResolutionKeepsSeedance25Options(t *testing.T) {
 	tests := map[string]string{"480": "480p", "1080": "720p", "4k": "720p"}
 	for input, want := range tests {

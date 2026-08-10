@@ -791,6 +791,7 @@ func TestReadAIRequestUsageForModelUsesArkSeedance25Limit(t *testing.T) {
 		{name: "Ark seconds alias uses minimum duration", path: "/videos", body: `{"seconds":1}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 4},
 		{name: "Ark Seedance 2.5 generate ignores private duration", path: "/videos", body: `{"_seedance_task_mode":"generate","_seedance_billing_duration":1,"duration":30}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 30},
 		{name: "Ark Seedance 2.5 generate caps duration", path: "/videos", body: `{"_seedance_task_mode":"generate","duration":999}`, modelName: "doubao-seedance-2-5", protocol: string(model.ModelProtocolVolcengineArk), want: 30},
+		{name: "Ark dated Seedance 2.5 alias keeps maximum", path: "/videos", body: `{"duration":30}`, modelName: "doubao-seedance-2-5-260628", protocol: string(model.ModelProtocolVolcengineArk), want: 30},
 		{name: "Ark Seedance 2.0 keeps default limit", path: "/videos", body: `{"duration":30}`, modelName: "doubao-seedance-2-0", protocol: string(model.ModelProtocolVolcengineArk), want: maxAIRequestCount},
 		{name: "Ark Seedance 2.0 generate defaults invalid duration", path: "/videos", body: `{"_seedance_task_mode":"generate","duration":-1}`, modelName: "doubao-seedance-2-0", protocol: string(model.ModelProtocolVolcengineArk), want: 6},
 		{name: "Ark Seedance 2.0 raises two second duration", path: "/videos", body: `{"duration":2}`, modelName: "doubao-seedance-2-0", protocol: string(model.ModelProtocolVolcengineArk), want: 4},
@@ -847,6 +848,13 @@ func TestReadAIRequestUsageForModelKeepsMultipartDurationAliasPrecedence(t *test
 				t.Fatalf("multipart usage = %d, want %d", got, tt.want)
 			}
 		})
+	}
+}
+
+func writeMultipartField(t *testing.T, writer *multipart.Writer, key string, value string) {
+	t.Helper()
+	if err := writer.WriteField(key, value); err != nil {
+		t.Fatalf("WriteField %s: %v", key, err)
 	}
 }
 

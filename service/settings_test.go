@@ -492,15 +492,15 @@ func TestSaveSettingsValidatesArkEndpointMappingUniqueness(t *testing.T) {
 			},
 		},
 		{
-			name: "allows duplicate endpoint in disabled Ark channel",
+			name:     "allows duplicate endpoint in disabled Ark channel",
 			channels: []model.ModelChannel{{ID: "ark", Protocol: string(model.ModelProtocolVolcengineArk), Name: "Ark", BaseURL: "https://ark.example.com", APIKey: "ark-key", Enabled: false, EndpointMappings: []model.ModelEndpointMapping{{Model: "doubao-seedance-2-0", EndpointID: "ep-shared"}, {Model: "doubao-seedance-2-5", EndpointID: "ep-shared"}}}},
 		},
 		{
-			name: "ignores whitespace Ark endpoints",
+			name:     "ignores whitespace Ark endpoints",
 			channels: []model.ModelChannel{{ID: "ark", Protocol: string(model.ModelProtocolVolcengineArk), Name: "Ark", BaseURL: "https://ark.example.com", APIKey: "ark-key", Enabled: true, EndpointMappings: []model.ModelEndpointMapping{{Model: "doubao-seedance-2-0", EndpointID: "   "}, {Model: "doubao-seedance-2-5", EndpointID: "\t"}}}},
 		},
 		{
-			name: "allows duplicate endpoint in non Ark channel",
+			name:     "allows duplicate endpoint in non Ark channel",
 			channels: []model.ModelChannel{{ID: "openai", Protocol: string(model.ModelProtocolOpenAI), Name: "OpenAI", BaseURL: "https://openai.example.com", APIKey: "openai-key", Enabled: true, EndpointMappings: []model.ModelEndpointMapping{{Model: "model-a", EndpointID: "ep-shared"}, {Model: "model-b", EndpointID: "ep-shared"}}}},
 		},
 	}

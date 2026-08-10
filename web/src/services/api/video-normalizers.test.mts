@@ -23,10 +23,12 @@ test("caps Seedance Fast resolution to 720p", () => {
 
 test("recognizes only explicit Seedance 2.5 aliases", () => {
     assert.equal(isSeedance25Model("doubao-seedance-2-5"), true);
+    assert.equal(isSeedance25Model("doubao-seedance-2-5-260628"), true);
     assert.equal(isSeedance25Model(" doubao_seedance 2.5 "), true);
     assert.equal(isSeedance25Model("seedance_2-5"), true);
     assert.equal(isSeedance25Model("Seedance2.5"), true);
     assert.equal(isSeedance25Model("doubao-seedance-2-50"), false);
+    assert.equal(isSeedance25Model("doubao-seedance-2-50-260628"), false);
     assert.equal(isSeedance25Model("seedance2.50"), false);
     assert.equal(isSeedance25Model("seedance/2/5"), false);
 });

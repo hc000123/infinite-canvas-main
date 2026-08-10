@@ -18,8 +18,7 @@ export function normalizeVideoResolution(value: string) {
 }
 
 export function isSeedance25Model(model?: string) {
-    const normalized = (model || "").toLowerCase().replace(/[\s._-]/g, "");
-    return normalized === "doubaoseedance25" || normalized === "seedance25";
+    return /^(?:doubao[\s._-]*)?seedance[\s._-]*2[\s._-]*5(?:[\s._-]+\d{6})?$/i.test((model || "").trim());
 }
 
 export function normalizeSeedanceDuration(value: string, model?: string, taskMode?: string) {
