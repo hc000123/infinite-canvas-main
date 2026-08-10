@@ -6,7 +6,6 @@ export type SkillFilter = {
     inputArtifactType: string;
     outputArtifactType: string;
     projectTag: string;
-    ownerType: "" | "system" | "project";
 };
 
 export function canPublishSkill(input: { version: SkillVersion; packageValue: SkillPackage; evaluations: SkillEvaluation[] }) {
@@ -22,14 +21,13 @@ export function filterSkillItems(items: SkillAdminItem[], filter: SkillFilter) {
             const manifest = recommendedPackage?.manifest;
             return (
                 (!search || `${skill.name} ${skill.summary}`.toLowerCase().includes(search)) &&
-                (!filter.ownerType || skill.ownerType === filter.ownerType) &&
                 (!filter.capability || manifest?.capabilities.includes(filter.capability)) &&
                 (!filter.inputArtifactType || manifest?.inputArtifactTypes.includes(filter.inputArtifactType)) &&
                 (!filter.outputArtifactType || manifest?.outputArtifactTypes.includes(filter.outputArtifactType)) &&
                 (!filter.projectTag || manifest?.projectTags.includes(filter.projectTag))
             );
         })
-        .sort((left, right) => left.skill.ownerType.localeCompare(right.skill.ownerType) || left.skill.name.localeCompare(right.skill.name, "zh-CN") || right.skill.updatedAt.localeCompare(left.skill.updatedAt));
+        .sort((left, right) => left.skill.name.localeCompare(right.skill.name, "zh-CN") || right.skill.updatedAt.localeCompare(left.skill.updatedAt));
 }
 
 export function latestPassingEvaluation(version: SkillVersion | undefined, evaluations: SkillEvaluation[]) {

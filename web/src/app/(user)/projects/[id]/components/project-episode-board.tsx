@@ -57,7 +57,6 @@ type ProjectEpisodeBoardProps = {
     onEditCanvasPreset: (canvasId: string) => void;
     onEditEpisodeTitle: (row: ProjectEpisodeBoardRow) => void;
     onOpenAgentWorkspace: () => void;
-    onOpenSkillManagement: () => void;
     onOpenProjectCache: () => void;
     onEditProject: () => void;
     onFilterChange: (filter: EpisodeFilter) => void;
@@ -96,7 +95,6 @@ export function ProjectEpisodeBoard({
     onEditCanvasPreset,
     onEditEpisodeTitle,
     onOpenAgentWorkspace,
-    onOpenSkillManagement,
     onOpenProjectCache,
     onEditProject,
     onFilterChange,
@@ -135,7 +133,6 @@ export function ProjectEpisodeBoard({
                         placement="bottomRight"
                         menu={{
                             items: [
-                                { key: "skills", icon: <Library className="size-4" />, label: "Skill 管理", onClick: onOpenSkillManagement },
                                 { key: "cache", icon: <Database className="size-4" />, label: "查看项目缓存", onClick: onOpenProjectCache },
                             ],
                         }}

@@ -28,7 +28,7 @@ import { groupSkillItemsByStage, resolveOpenSkillStageKeys } from "@/components/
 import { SkillTrialPanel } from "@/components/skills/skill-trial-panel";
 import { canPublishSkill, filterSkillItems, latestPassingEvaluation, shortSkillHash, skillLifecycleLabel, type SkillFilter } from "./skill-view";
 
-const initialFilters: SkillFilter = { search: "", capability: "", inputArtifactType: "", outputArtifactType: "", projectTag: "", ownerType: "" };
+const initialFilters: SkillFilter = { search: "", capability: "", inputArtifactType: "", outputArtifactType: "", projectTag: "" };
 
 function newSkillPackage(capability = "custom.general", inputType = "source_text", outputType = "structured_result"): SkillPackage {
     return {
@@ -146,7 +146,7 @@ export default function AdminSkillsPage() {
             <Flex vertical gap={14}>
                 <Card className="studio-panel" variant="borderless">
                     <Flex justify="space-between" align="flex-start" gap={18} wrap>
-                        <div><Typography.Text className="text-xs font-semibold tracking-[0.18em] text-[var(--studio-accent)]">COMPOSABLE CAPABILITY REGISTRY</Typography.Text><Typography.Title level={2} style={{ margin: "8px 0 4px" }}>Skill 中心</Typography.Title><Typography.Text type="secondary">Skill 独立发布、版本冻结、按能力检索；工作流只是其中一个调用方。</Typography.Text></div>
+                        <div><Typography.Text className="text-xs font-semibold tracking-[0.18em] text-[var(--studio-accent)]">COMPOSABLE CAPABILITY REGISTRY</Typography.Text><Typography.Title level={2} style={{ margin: "8px 0 4px" }}>Skill 中心</Typography.Title><Typography.Text type="secondary">全部 Skill 由管理员统一维护，发布后供所有账号和项目使用。</Typography.Text></div>
                         <Space wrap><Tag icon={<SafetyCertificateOutlined />} color="success">外部载入 · 独立试跑 · 版本冻结</Tag><Button type="primary" icon={<PlusOutlined />} onClick={() => setFolderImportMode("new")}>导入外部 Skill</Button></Space>
                     </Flex>
                     <Space wrap className="mt-5">
@@ -155,7 +155,6 @@ export default function AdminSkillsPage() {
                         <Select aria-label="输入 Artifact" placeholder="输入 Artifact" allowClear options={filterOptions.inputs} value={filters.inputArtifactType || undefined} onChange={(inputArtifactType) => setFilters({ ...filters, inputArtifactType: inputArtifactType || "" })} style={{ width: 170 }} />
                         <Select aria-label="输出 Artifact" placeholder="输出 Artifact" allowClear options={filterOptions.outputs} value={filters.outputArtifactType || undefined} onChange={(outputArtifactType) => setFilters({ ...filters, outputArtifactType: outputArtifactType || "" })} style={{ width: 170 }} />
                         <Select aria-label="项目标签" placeholder="项目标签" allowClear options={filterOptions.tags} value={filters.projectTag || undefined} onChange={(projectTag) => setFilters({ ...filters, projectTag: projectTag || "" })} style={{ width: 150 }} />
-                        <Segmented aria-label="所有者" options={[{ label: "全部", value: "" }, { label: "系统", value: "system" }, { label: "项目", value: "project" }]} value={filters.ownerType} onChange={(ownerType) => setFilters({ ...filters, ownerType: ownerType as SkillFilter["ownerType"] })} />
                     </Space>
                 </Card>
 
@@ -169,7 +168,7 @@ export default function AdminSkillsPage() {
                                     onChange={(keys) => setOpenStageKeys(Array.isArray(keys) ? keys : [keys])}
                                     items={stageGroups.map((group) => ({
                                         key: group.key,
-                                        label: <Flex justify="space-between" align="center" gap={8} wrap><Typography.Text strong>{group.label}</Typography.Text><Space size={4} wrap><Tag>{group.totalCount} 个</Tag>{group.systemCount ? <Tag color="blue">系统 {group.systemCount}</Tag> : null}{group.projectCount ? <Tag color="gold">项目 {group.projectCount}</Tag> : null}</Space></Flex>,
+                                        label: <Flex justify="space-between" align="center" gap={8} wrap><Typography.Text strong>{group.label}</Typography.Text><Tag>{group.totalCount} 个</Tag></Flex>,
                                         children: <Flex vertical gap={8}>{group.items.map((item) => <SkillCard key={item.skill.id} item={item} active={item.skill.id === activeItem.skill.id} onClick={() => { setActiveSkillId(item.skill.id); setActiveVersionId(""); }} />)}</Flex>,
                                     }))}
                                 />
@@ -215,7 +214,7 @@ export default function AdminSkillsPage() {
 
 function SkillCard({ item, active, onClick }: { item: ReturnType<typeof filterSkillItems>[number]; active: boolean; onClick: () => void }) {
     const manifest = item.recommendedPackage?.manifest;
-    return <button type="button" onClick={onClick} className={`w-full rounded-lg border p-3 text-left transition ${active ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] hover:border-[var(--studio-border-strong)]"}`}><Flex justify="space-between" gap={8}><Typography.Text strong>{item.skill.name}</Typography.Text><Tag>{item.skill.ownerType === "system" ? "系统" : "项目"}</Tag></Flex><Typography.Text type="secondary" className="mt-1 block line-clamp-2 text-xs">{item.skill.summary}</Typography.Text><Flex gap={4} wrap className="mt-2">{manifest?.capabilities.slice(0, 2).map((value) => <Tag key={value} color="blue">{value}</Tag>)}</Flex><Typography.Text type="secondary" className="mt-2 block text-[11px]">{manifest ? `${manifest.inputArtifactTypes.join(", ")} → ${manifest.outputArtifactTypes.join(", ")}` : "尚未设置推荐版本"}</Typography.Text></button>;
+    return <button type="button" onClick={onClick} className={`w-full rounded-lg border p-3 text-left transition ${active ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] hover:border-[var(--studio-border-strong)]"}`}><Typography.Text strong>{item.skill.name}</Typography.Text><Typography.Text type="secondary" className="mt-1 block line-clamp-2 text-xs">{item.skill.summary}</Typography.Text><Flex gap={4} wrap className="mt-2">{manifest?.capabilities.slice(0, 2).map((value) => <Tag key={value} color="blue">{value}</Tag>)}</Flex><Typography.Text type="secondary" className="mt-2 block text-[11px]">{manifest ? `${manifest.inputArtifactTypes.join(", ")} → ${manifest.outputArtifactTypes.join(", ")}` : "尚未设置推荐版本"}</Typography.Text></button>;
 }
 function VersionButton({ version, active, label, onClick }: { version: SkillVersion; active: boolean; label: string; onClick: () => void }) { const color = label === "推荐" ? "blue" : label === "可使用" ? "success" : label === "待试跑" ? "warning" : "default"; return <button type="button" onClick={onClick} className={`w-full rounded-lg border p-3 text-left ${active ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]"}`}><Flex justify="space-between"><Typography.Text strong>v{version.version}</Typography.Text><Tag color={color}>{label}</Tag></Flex><Typography.Text type="secondary" className="mt-2 block text-xs">{shortSkillHash(version.contentHash)}</Typography.Text></button>; }
 function Status({ label, value }: { label: string; value: string }) { return <Flex justify="space-between" gap={10}><Typography.Text type="secondary">{label}</Typography.Text><Typography.Text>{value}</Typography.Text></Flex>; }

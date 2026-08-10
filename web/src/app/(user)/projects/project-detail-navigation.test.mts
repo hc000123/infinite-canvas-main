@@ -50,17 +50,17 @@ test("project Agent center has an explicit return-to-project action", () => {
     assert.match(page, /`\/projects\/\$\{project\.id\}`/);
 });
 
-test("project production navigation exposes production control, Skill management and project cache", () => {
+test("project production navigation exposes production control and project cache", () => {
     const board = readProjectFile("./[id]/components/project-episode-board.tsx");
     const page = readProjectFile("./[id]/page.tsx");
     assert.match(board, /生产总控/);
     assert.doesNotMatch(board, />项目 Agent</);
-    assert.match(board, /Skill 管理/);
+    assert.doesNotMatch(board, /Skill 管理|onOpenSkillManagement/);
     assert.match(board, /查看项目缓存/);
     assert.doesNotMatch(board, /Workflow 中心/);
     assert.doesNotMatch(board, /Agent 中心/);
     assert.match(page, /onOpenAgentWorkspace=\{\(\) => router\.push\(agentWorkspaceHref\(\{ projectId: project\.id \}\)\)\}/);
-    assert.match(page, /onOpenSkillManagement=\{\(\) => router\.push\(`\/projects\/\$\{project\.id\}\/skills`\)\}/);
+    assert.doesNotMatch(page, /onOpenSkillManagement|\/skills`/);
     assert.doesNotMatch(page, /onOpenAgentSettings|\/agents`|onOpenWorkflowCenter/);
 });
 
@@ -69,4 +69,11 @@ test("legacy project Workflow URL redirects to the project Agent", () => {
 
     assert.match(workflowPage, /redirect\(agentWorkspaceHref\(\{ projectId \}\)\)/);
     assert.doesNotMatch(workflowPage, /WorkflowRegistryList|WorkflowVersionEditor|WorkflowExecutionConsole/);
+});
+
+test("legacy Skill URL redirects to the project detail", () => {
+    const skillPage = readProjectFile("./[id]/skills/page.tsx");
+
+    assert.match(skillPage, /redirect\(`\/projects\/\$\{id\}`\)/);
+    assert.doesNotMatch(skillPage, /SkillFolderImport|SkillTrialPanel|fetchProjectSkills/);
 });

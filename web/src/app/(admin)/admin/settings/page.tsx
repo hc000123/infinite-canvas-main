@@ -2,7 +2,7 @@
 
 import { CheckCircleOutlined, DeleteOutlined, FormatPainterOutlined, LoadingOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from "@ant-design/icons";
 import { json } from "@codemirror/lang-json";
-import { Alert, App, Button, Card, Col, Flex, Form, Input, InputNumber, Modal, Row, Segmented, Select, Space, Switch, Table, Tabs, Tag, Typography, type FormInstance } from "antd";
+import { Alert, App, Button, Card, Col, Collapse, Flex, Form, Input, InputNumber, Modal, Row, Segmented, Select, Space, Switch, Table, Tabs, Tag, Typography, type FormInstance } from "antd";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorView } from "@uiw/react-codemirror";
@@ -628,8 +628,13 @@ export default function AdminSettingsPage() {
                     ) : activeMode === "visual" ? (
                         <Form form={form} layout="vertical" initialValues={emptySettings} requiredMark={false}>
                             <Flex vertical gap={12}>
-                                <Card size="small" title="火山素材审核（唯一配置入口）">
-                                    <Flex vertical gap={14}>
+                                <Collapse
+                                    defaultActiveKey={[]}
+                                    items={[{
+                                        key: "volcengine-asset",
+                                        forceRender: true,
+                                        label: <Flex vertical gap={4}><Flex align="center" gap={8} wrap><Typography.Text strong>火山素材审核（唯一配置入口）</Typography.Text><Tag color={privateVolcengineAsset.enabled ? "success" : "default"}>{privateVolcengineAsset.enabled ? "已开启" : "未开启"}</Tag><Tag color={isVolcengineAssetKeyConfigured(privateVolcengineAsset, "accessKey") && isVolcengineAssetKeyConfigured(privateVolcengineAsset, "secretKey") ? "success" : "default"}>{isVolcengineAssetKeyConfigured(privateVolcengineAsset, "accessKey") && isVolcengineAssetKeyConfigured(privateVolcengineAsset, "secretKey") ? "密钥已配置" : "密钥待配置"}</Tag></Flex><Typography.Text type="secondary" className="text-xs">{VOLCENGINE_ASSET_CONFIG_NOTICE}</Typography.Text></Flex>,
+                                        children: <Flex vertical gap={14}>
                                         <Typography.Text type="secondary">
                                             {VOLCENGINE_ASSET_CONFIG_NOTICE}
                                             此处是唯一编辑入口，用来填写 AK/SK、ProjectName、Region 和公网素材访问地址；素材组 ID 可选。图片会先保存到后端公开静态目录；如果公网素材访问地址是火山 TOS
@@ -694,8 +699,9 @@ export default function AdminSettingsPage() {
                                                 </Form.Item>
                                             </Col>
                                         </Row>
-                                    </Flex>
-                                </Card>
+                                        </Flex>,
+                                    }]}
+                                />
                                 <div ref={enterpriseVideoFocusRef}>
                                     {isEnterpriseVideoFocus ? (
                                         <Alert

@@ -6,13 +6,12 @@ import { Alert, App, Button, Checkbox, Collapse, Empty, Flex, Input, Modal, Tabs
 import { useEffect, useState } from "react";
 
 import { trialAdminSkillVersion, type SkillTrialInput, type SkillTrialResult } from "@/services/api/admin-skills";
-import { trialProjectSkillVersion } from "@/services/api/project-skills";
 import { useConfigStore } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { skillTrialModelBlockReason } from "./skill-trial-model-preflight";
 import { resolveSkillTrialTextPreview } from "./skill-trial-result-preview";
 
-export function SkillTrialPanel({ open, token, versionId, executorKind, scope = "admin", onCancel, onCompleted }: { open: boolean; token: string; versionId: string; executorKind?: string; scope?: "admin" | "project"; onCancel: () => void; onCompleted: (result: SkillTrialResult) => void }) {
+export function SkillTrialPanel({ open, token, versionId, executorKind, onCancel, onCompleted }: { open: boolean; token: string; versionId: string; executorKind?: string; onCancel: () => void; onCompleted: (result: SkillTrialResult) => void }) {
     const { message } = App.useApp();
     const role = useUserStore((state) => state.user?.role);
     const modelChannel = useConfigStore((state) => state.publicSettings?.modelChannel);
@@ -30,7 +29,7 @@ export function SkillTrialPanel({ open, token, versionId, executorKind, scope = 
         if (open) void loadPublicSettings({ force: true });
     }, [loadPublicSettings, open]);
     const mutation = useMutation({
-        mutationFn: () => scope === "admin" ? trialAdminSkillVersion(token, versionId, trialInput(inputText, artifactText, parameterText, confirmAPICost)) : trialProjectSkillVersion(token, versionId, trialInput(inputText, artifactText, parameterText, confirmAPICost)),
+        mutationFn: () => trialAdminSkillVersion(token, versionId, trialInput(inputText, artifactText, parameterText, confirmAPICost)),
         onSuccess: (value) => { setResult(value); onCompleted(value); value.evaluation.status === "passed" ? message.success("试跑通过，已可发布为可用版本") : message.warning("试跑未通过，请查看问题后更新文件夹"); },
         onError: (error) => message.error(error instanceof Error ? error.message : "试跑失败"),
     });

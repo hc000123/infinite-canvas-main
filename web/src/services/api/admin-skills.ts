@@ -3,7 +3,7 @@ import { buildSkillFolderFormData, type SkillFolderImportFields } from "./skill-
 
 export { buildSkillFolderFormData } from "./skill-folder-form";
 
-export type SkillOwnerType = "system" | "project";
+export type SkillOwnerType = "system";
 export type SkillVersionStatus = "draft" | "published" | "archived";
 
 export type SkillDefinition = {
@@ -141,7 +141,7 @@ export type SkillSourceFile = { path: string; mimeType: string; hash: string; si
 export type SkillTrialInput = { inputText: string; inputArtifacts: Array<{ bindingName: string; artifactId: string; contentHash: string }>; parameters: Record<string, unknown>; confirmApiCost: boolean };
 export type SkillTrialResult = { evaluation: SkillEvaluation; stageKey: string; raw: Record<string, unknown>; standard: Record<string, unknown>; diff: Record<string, unknown>; gates: Array<{ code: string; message: string; itemId?: string; blocking: boolean }> };
 export type SkillDraftInput = { version: string; package: SkillPackage };
-export type CreateSkillInput = SkillDraftInput & Pick<SkillDefinition, "name" | "summary" | "ownerType" | "ownerProjectId">;
+export type CreateSkillInput = SkillDraftInput & Pick<SkillDefinition, "name" | "summary">;
 export type SkillOption = Pick<SkillDefinition, "ownerType" | "ownerProjectId" | "summary"> & {
     skillId: string;
     skillName: string;
@@ -165,7 +165,7 @@ export function importAdminSkillFolder(token: string, files: File[], input: Skil
 }
 
 export function importAdminSkillFolderVersion(token: string, skillId: string, files: File[], version?: string) {
-    const form = buildSkillFolderFormData(files, { ownerType: "system", stageKey: "version", version });
+    const form = buildSkillFolderFormData(files, { stageKey: "version", version });
     return apiPostForm<SkillVersion>(`${base}/skills/${encodeURIComponent(skillId)}/import-version`, form, token);
 }
 
@@ -197,6 +197,10 @@ export function updateAdminSkill(token: string, id: string, input: Partial<Pick<
     return apiPatch<SkillDefinition>(`${base}/skills/${encodeURIComponent(id)}`, input, token);
 }
 
+export function deleteAdminSkill(token: string, id: string) {
+    return apiDelete<void>(`${base}/skills/${encodeURIComponent(id)}`, token);
+}
+
 export function fetchAdminSkillVersion(token: string, id: string) {
     return apiGet<SkillVersionDetail>(`${base}/skill-versions/${encodeURIComponent(id)}`, undefined, token);
 }
@@ -210,11 +214,11 @@ export function updateAdminSkillVersion(token: string, id: string, input: SkillD
 }
 
 export function deleteAdminSkillVersion(token: string, id: string) {
-    return apiDelete<void>(`/api/v1/skill-versions/${encodeURIComponent(id)}`, token);
+    return apiDelete<void>(`${base}/skill-versions/${encodeURIComponent(id)}`, token);
 }
 
 export function archiveAdminSkillVersion(token: string, id: string) {
-    return apiPost<SkillVersion>(`/api/v1/skill-versions/${encodeURIComponent(id)}/archive`, {}, token);
+    return apiPost<SkillVersion>(`${base}/skill-versions/${encodeURIComponent(id)}/archive`, {}, token);
 }
 
 export function validateAdminSkillVersion(token: string, id: string) {

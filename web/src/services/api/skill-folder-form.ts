@@ -1,7 +1,5 @@
 export type SkillFolderImportFields = {
-    ownerType: "system" | "project";
     stageKey: string;
-    projectId?: string;
     name?: string;
     summary?: string;
     version?: string;
