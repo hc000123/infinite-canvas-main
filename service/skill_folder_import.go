@@ -63,8 +63,6 @@ type SkillFolderSnapshot struct {
 }
 
 type SkillFolderImportInput struct {
-	OwnerType       model.SkillOwnerType
-	ProjectID       string
 	StageKey        string
 	Name            string
 	Summary         string
@@ -234,9 +232,6 @@ func parseSkillFolderMetadata(content string) (SkillFolderMetadata, error) {
 }
 
 func ImportManagedSkillFolder(userID string, isAdmin bool, input SkillFolderImportInput) (ResolvedSkill, error) {
-	if input.OwnerType != model.SkillOwnerSystem {
-		return ResolvedSkill{}, safeMessageError{message: "项目 Skill 已停用，请由管理员在 Skill 中心统一管理"}
-	}
 	if !isAdmin {
 		return ResolvedSkill{}, safeMessageError{message: "只有管理员可以导入 System Skill"}
 	}

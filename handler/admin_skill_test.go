@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/basketikun/infinite-canvas/model"
+	"github.com/basketikun/infinite-canvas/repository"
 	"github.com/basketikun/infinite-canvas/service"
 )
 
@@ -21,7 +22,7 @@ func TestAdminSkillFolderImportAndSourcePreview(t *testing.T) {
 	}
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
-	for key, value := range map[string]string{"ownerType": "system", "stageKey": "script", "folderName": "Seedance", "name": "确认后系统 Skill", "summary": "", "version": ""} {
+	for key, value := range map[string]string{"stageKey": "script", "folderName": "Seedance", "name": "确认后系统 Skill", "summary": "", "version": ""} {
 		_ = writer.WriteField(key, value)
 	}
 	for path, content := range map[string]string{"Seedance/SKILL.md": "---\nname: frontmatter 原名\ndescription: frontmatter 原说明\nversion: 9.9.9\n---\n# Rules", "Seedance/rules/preserve.md": "保留全部台词"} {
@@ -101,7 +102,7 @@ func TestAdminStandaloneSkillTrialDoesNotRequireWorkflowRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshot, _ := service.ParseSkillFolder("剧本优化", []service.SkillFolderFile{{Path: "SKILL.md", Data: []byte("# Rules")}})
-	created, err := service.ImportManagedSkillFolder("admin-1", true, service.SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: "script", Snapshot: snapshot})
+	created, err := service.ImportManagedSkillFolder("admin-1", true, service.SkillFolderImportInput{StageKey: "script", Snapshot: snapshot})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,5 +132,45 @@ func TestPublishedSkillVersionCannotBePatched(t *testing.T) {
 
 	if !strings.Contains(recorder.Body.String(), `"code":1`) || !strings.Contains(recorder.Body.String(), "已发布版本不可修改") {
 		t.Fatalf("body=%s", recorder.Body.String())
+	}
+}
+
+func TestAdminCanDeleteDraftAndArchivePublishedSkillVersions(t *testing.T) {
+	setupWorkflowHandlerTestDB(t)
+	if err := service.EnsureCoreArtifactSchemas(); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := service.ParseSkillFolder("draft", []service.SkillFolderFile{{Path: "SKILL.md", Data: []byte("# Rules")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := service.ImportManagedSkillFolder("admin-1", true, service.SkillFolderImportInput{StageKey: "script", Snapshot: snapshot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminContext := service.WithUser(context.Background(), model.AuthUser{ID: "admin-1", Role: model.UserRoleAdmin})
+	deleteRequest := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/skill-versions/"+created.Version.ID, nil).WithContext(adminContext)
+	deleteRecorder := httptest.NewRecorder()
+	AdminDeleteSkillVersion(deleteRecorder, deleteRequest, created.Version.ID)
+	if !strings.Contains(deleteRecorder.Body.String(), `"code":0`) {
+		t.Fatalf("delete body=%s", deleteRecorder.Body.String())
+	}
+	if _, ok, err := repository.GetSkillVersion(created.Version.ID); err != nil || ok {
+		t.Fatalf("deleted version ok=%v err=%v", ok, err)
+	}
+
+	if err := service.EnsureSkillSeeds(); err != nil {
+		t.Fatal(err)
+	}
+	versionID := "skill-version-system-workflow-script-3.2.0"
+	archiveRequest := httptest.NewRequest(http.MethodPost, "/api/v1/admin/skill-versions/"+versionID+"/archive", nil).WithContext(adminContext)
+	archiveRecorder := httptest.NewRecorder()
+	AdminArchiveSkillVersion(archiveRecorder, archiveRequest, versionID)
+	if !strings.Contains(archiveRecorder.Body.String(), `"code":0`) || !strings.Contains(archiveRecorder.Body.String(), `"status":"archived"`) {
+		t.Fatalf("archive body=%s", archiveRecorder.Body.String())
+	}
+	version, ok, err := repository.GetSkillVersion(versionID)
+	if err != nil || !ok || version.Status != model.SkillVersionArchived {
+		t.Fatalf("archived version=%+v ok=%v err=%v", version, ok, err)
 	}
 }

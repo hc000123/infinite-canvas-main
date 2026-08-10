@@ -66,27 +66,6 @@ func New() *gin.Engine {
 	v1.PUT("/agents/:id/recommended-version", func(c *gin.Context) {
 		handler.RecommendAgentVersion(c.Writer, c.Request, c.Param("id"))
 	})
-	v1.GET("/skills", gin.WrapF(handler.Skills))
-	v1.GET("/skill-stage-templates", gin.WrapF(handler.SkillStageTemplates))
-	v1.POST("/skills/import-folder", gin.WrapF(handler.ImportProjectSkillFolder))
-	v1.POST("/skills", gin.WrapF(handler.CreateProjectSkill))
-	v1.PATCH("/skills/:id", func(c *gin.Context) { handler.UpdateProjectSkill(c.Writer, c.Request, c.Param("id")) })
-	v1.DELETE("/skills/:id", func(c *gin.Context) { handler.DeleteProjectSkill(c.Writer, c.Request, c.Param("id")) })
-	v1.POST("/skills/:id/copy", func(c *gin.Context) { handler.CopySystemSkill(c.Writer, c.Request, c.Param("id")) })
-	v1.POST("/skills/:id/versions", func(c *gin.Context) { handler.CreateProjectSkillVersion(c.Writer, c.Request, c.Param("id")) })
-	v1.POST("/skills/:id/import-version", func(c *gin.Context) { handler.ImportProjectSkillFolderVersion(c.Writer, c.Request, c.Param("id")) })
-	v1.GET("/skill-versions/:id", func(c *gin.Context) { handler.ProjectSkillVersion(c.Writer, c.Request, c.Param("id")) })
-	v1.GET("/skill-versions/:id/source-files", func(c *gin.Context) { handler.ProjectSkillSourceFiles(c.Writer, c.Request, c.Param("id")) })
-	v1.GET("/skill-versions/:id/source-file", func(c *gin.Context) { handler.ProjectSkillSourceFile(c.Writer, c.Request, c.Param("id")) })
-	v1.PATCH("/skill-versions/:id", func(c *gin.Context) { handler.UpdateProjectSkillVersion(c.Writer, c.Request, c.Param("id")) })
-	v1.DELETE("/skill-versions/:id", func(c *gin.Context) { handler.DeleteProjectSkillVersion(c.Writer, c.Request, c.Param("id")) })
-	v1.POST("/skill-versions/:id/validate", func(c *gin.Context) { handler.ValidateProjectSkillVersion(c.Writer, c.Request, c.Param("id")) })
-	v1.POST("/skill-versions/:id/evaluations", func(c *gin.Context) { handler.EvaluateProjectSkillVersion(c.Writer, c.Request, c.Param("id")) })
-	v1.POST("/skill-versions/:id/trials", func(c *gin.Context) { handler.TrialProjectSkillVersion(c.Writer, c.Request, c.Param("id")) })
-	v1.GET("/skill-trials/:id", func(c *gin.Context) { handler.ProjectSkillTrial(c.Writer, c.Request, c.Param("id")) })
-	v1.POST("/skill-versions/:id/publish", func(c *gin.Context) { handler.PublishProjectSkillVersion(c.Writer, c.Request, c.Param("id")) })
-	v1.POST("/skill-versions/:id/archive", func(c *gin.Context) { handler.ArchiveProjectSkillVersion(c.Writer, c.Request, c.Param("id")) })
-	v1.PUT("/skills/:id/recommended-version", func(c *gin.Context) { handler.RecommendProjectSkillVersion(c.Writer, c.Request, c.Param("id")) })
 	v1.GET("/workflows", gin.WrapF(handler.Workflows))
 	v1.POST("/workflows", gin.WrapF(handler.CreateWorkflowDefinition))
 	v1.GET("/workflows/:id", func(c *gin.Context) {
@@ -409,6 +388,9 @@ func New() *gin.Engine {
 	skillAdmin.PATCH("/skill-versions/:id", func(c *gin.Context) {
 		handler.AdminUpdateSkillVersion(c.Writer, c.Request, c.Param("id"))
 	})
+	skillAdmin.DELETE("/skill-versions/:id", func(c *gin.Context) {
+		handler.AdminDeleteSkillVersion(c.Writer, c.Request, c.Param("id"))
+	})
 	skillAdmin.GET("/skill-versions/:id/source-files", func(c *gin.Context) {
 		handler.AdminSkillSourceFiles(c.Writer, c.Request, c.Param("id"))
 	})
@@ -432,6 +414,9 @@ func New() *gin.Engine {
 	})
 	skillAdmin.POST("/skill-versions/:id/publish", func(c *gin.Context) {
 		handler.AdminPublishSkillVersion(c.Writer, c.Request, c.Param("id"))
+	})
+	skillAdmin.POST("/skill-versions/:id/archive", func(c *gin.Context) {
+		handler.AdminArchiveSkillVersion(c.Writer, c.Request, c.Param("id"))
 	})
 	skillAdmin.PUT("/skills/:id/recommended-version", func(c *gin.Context) {
 		handler.AdminRecommendSkillVersion(c.Writer, c.Request, c.Param("id"))

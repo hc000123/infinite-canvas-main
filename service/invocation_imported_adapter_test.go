@@ -246,7 +246,7 @@ func mustImportPublishedFolderSkill(t *testing.T, stageKey string) ResolvedSkill
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: stageKey, Snapshot: snapshot})
+	created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{StageKey: stageKey, Snapshot: snapshot})
 	if err != nil {
 		t.Fatal(err)
 	}
