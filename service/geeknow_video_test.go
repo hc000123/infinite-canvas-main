@@ -2,8 +2,10 @@ package service
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"mime/multipart"
+	"net/textproto"
 	"strings"
 	"testing"
 
@@ -41,7 +43,11 @@ func TestBuildGeekNowVideoCreateRequestMapsModelFamilies(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.model, func(t *testing.T) {
-			body, contentType, err := BuildGeekNowVideoCreateRequest([]byte(`{"model":"`+tt.model+`","prompt":"hi","seconds":"6","duration":"6","ratio":"16:9","size":"1280x720","resolution":"720"}`), "application/json")
+			video := ""
+			if tt.model == "omni-fast-v2v" {
+				video = `,"video_url":"https://cdn.example.com/source.mp4"`
+			}
+			body, contentType, err := BuildGeekNowVideoCreateRequest([]byte(`{"model":"`+tt.model+`","prompt":"hi","seconds":"6","duration":"6","ratio":"16:9","size":"1280x720","resolution":"720"`+video+`}`), "application/json")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -85,6 +91,55 @@ func TestBuildGeekNowVideoCreateRequestMapsMultipartImageRoles(t *testing.T) {
 	}
 }
 
+func TestBuildGeekNowVideoCreateRequestMapsOmniV2VVideoInput(t *testing.T) {
+	body, contentType := geekNowVideoMultipartBody(t, []byte("\x00\x00\x00\x18ftypmp42video"), "video/mp4")
+	normalized, normalizedContentType, err := BuildGeekNowVideoCreateRequest(body, contentType)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if normalizedContentType != "application/json" {
+		t.Fatalf("contentType = %q", normalizedContentType)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(normalized, &payload); err != nil {
+		t.Fatal(err)
+	}
+	video, _ := payload["video"].(string)
+	if !strings.HasPrefix(video, "data:video/mp4;base64,") {
+		t.Fatalf("video = %q, want MP4 data URI", video)
+	}
+}
+
+func TestBuildGeekNowVideoCreateRequestAcceptsOmniV2VPublicVideoURL(t *testing.T) {
+	normalized, _, err := BuildGeekNowVideoCreateRequest([]byte(`{"model":"omni-fast-v2v","prompt":"继续镜头","video_url":"https://cdn.example.com/source.mp4"}`), "application/json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(normalized, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["video"] != "https://cdn.example.com/source.mp4" {
+		t.Fatalf("video = %#v", payload["video"])
+	}
+}
+
+func TestBuildGeekNowVideoCreateRequestRejectsOmniV2VWithoutVideo(t *testing.T) {
+	_, _, err := BuildGeekNowVideoCreateRequest([]byte(`{"model":"omni-fast-v2v","prompt":"继续镜头"}`), "application/json")
+	if err == nil || !strings.Contains(err.Error(), "视频") {
+		t.Fatalf("error = %v, want missing-video error", err)
+	}
+}
+
+func TestBuildGeekNowVideoCreateRequestRejectsOversizedOmniV2VDataURI(t *testing.T) {
+	video := base64.StdEncoding.EncodeToString(make([]byte, geekNowOmniV2VMaxVideoBytes+1))
+	body := []byte(`{"model":"omni-fast-v2v","prompt":"继续镜头","video":"data:video/mp4;base64,` + video + `"}`)
+	_, _, err := BuildGeekNowVideoCreateRequest(body, "application/json")
+	if err == nil || !strings.Contains(err.Error(), "15 MB") {
+		t.Fatalf("error = %v, want size-limit error", err)
+	}
+}
+
 func TestBuildGeekNowVideoCreateRequestRejectsMissingRequiredFields(t *testing.T) {
 	for name, body := range map[string]string{
 		"model":  `{"prompt":"hi"}`,
@@ -97,6 +152,31 @@ func TestBuildGeekNowVideoCreateRequestRejectsMissingRequiredFields(t *testing.T
 			}
 		})
 	}
+}
+
+func geekNowVideoMultipartBody(t *testing.T, video []byte, contentType string) ([]byte, string) {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for key, value := range map[string]string{"model": "omni-fast-v2v", "prompt": "继续镜头", "duration": "6", "ratio": "16:9", "resolution": "720p"} {
+		if err := writer.WriteField(key, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	header := make(textproto.MIMEHeader)
+	header.Set("Content-Disposition", `form-data; name="input_video[]"; filename="source.mp4"`)
+	header.Set("Content-Type", contentType)
+	part, err := writer.CreatePart(header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write(video); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return body.Bytes(), writer.FormDataContentType()
 }
 
 func TestNormalizeGeekNowVideoTaskResponse(t *testing.T) {

@@ -154,17 +154,30 @@ function applyComfly(settings: AdminSettings, input: ModelChannelPresetInput, su
 }
 
 function applyGeekNow(settings: AdminSettings, input: ModelChannelPresetInput, summary: ModelChannelPresetResult["summary"]) {
-    const baseUrl = "https://www.geeknow.top/v1";
+    const baseUrl = "https://geeknow.ai/v1";
     const saved = settings.private.channels.find((item) => item.id.startsWith("geeknow-") && item.apiKey);
     const apiKey = credential(input.apiKey, saved?.apiKey);
     requireValue(apiKey, "请填写 GeekNow API Key");
-    const templates = [
-        channelTemplate({ id: "geeknow-text", name: "GeekNow 文本", baseUrl, apiKey, models: [...GEEKNOW_TEXT_MODELS], capabilities: ["text"], remark: "厂商预设：GeekNow 文本" }),
-        channelTemplate({ id: "geeknow-image", name: "GeekNow 图片", baseUrl, apiKey, models: [...GEEKNOW_IMAGE_MODELS], capabilities: ["image"], remark: "厂商预设：GeekNow 图片" }),
-        channelTemplate({ id: "geeknow-video", name: "GeekNow 视频", baseUrl, apiKey, models: [...GEEKNOW_VIDEO_MODELS], capabilities: ["video", "video_query"], remark: "厂商预设：GeekNow 视频" }),
+    const presets = [
+        { id: "geeknow-text", name: "GeekNow 文本", models: GEEKNOW_TEXT_MODELS, capabilities: ["text"], remark: "厂商预设：GeekNow 文本" },
+        { id: "geeknow-image", name: "GeekNow 图片", models: GEEKNOW_IMAGE_MODELS, capabilities: ["image"], remark: "厂商预设：GeekNow 图片" },
+        { id: "geeknow-video", name: "GeekNow 视频", models: GEEKNOW_VIDEO_MODELS, capabilities: ["video", "video_query"], remark: "厂商预设：GeekNow 视频" },
     ];
-    for (const template of templates) {
-        upsertChannel(settings, settings.private.channels.findIndex((item) => item.id === template.id), template, summary);
+    for (const preset of presets) {
+        const index = settings.private.channels.findIndex((item) => item.id === preset.id);
+        const current = settings.private.channels[index];
+        const template = channelTemplate({
+            ...current,
+            id: preset.id,
+            protocol: "openai",
+            name: preset.name,
+            baseUrl,
+            apiKey,
+            models: uniqueValues([...preset.models, ...(current?.models || [])]),
+            capabilities: preset.capabilities,
+            remark: preset.remark,
+        });
+        upsertChannel(settings, index, template, summary);
     }
 }
 

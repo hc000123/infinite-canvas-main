@@ -9,6 +9,7 @@ import { buildSeedanceVideoTaskPayload, defaultSeedanceImageRole, seedanceAssetU
 import { buildDreaminaVideoPayload } from "@/services/api/dreamina-video-payload";
 import { buildXinglianVideoPayload } from "@/services/api/xinglian-video-payload";
 import { aiTaskRequestHeaders, aiTaskTraceHeaders, preserveVideoTaskLedger, readAiTaskLedgerFromHeaders, type AiTaskLedger, type AiTaskTrace } from "@/services/api/ai-task-trace";
+import { appendOmniV2VVideoInput, isOmniV2VModel } from "@/services/api/omni-v2v-payload";
 import { type AiConfig } from "@/stores/use-config-store";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio } from "@/types/audio";
@@ -301,7 +302,7 @@ export async function buildVideoPayload(config: AiConfig, prompt: string, refere
     if (config.videoProtocol === "xinglian-cloud") {
         return buildXinglianVideoRequest(config, prompt, references, model);
     }
-    if (!references.images.length && !references.videos.length && !references.audios.length) {
+    if (!references.images.length && !references.videos.length && !references.audios.length && !isOmniV2VModel(model)) {
         const seed = normalizeSeedanceSeed(config.videoSeed);
         return {
             model,
@@ -336,7 +337,20 @@ export async function buildVideoPayload(config: AiConfig, prompt: string, refere
         body.append("input_reference[]", file);
         body.append("input_reference_role[]", references.images[index]?.seedanceRole || "reference_image");
     });
+    const videos = isOmniV2VModel(model) ? await Promise.all(references.videos.map(openAIVideoReference)) : [];
+    appendOmniV2VVideoInput(body, model, videos);
     return body;
+}
+
+async function openAIVideoReference(video: ReferenceVideo): Promise<File | string> {
+    const url = video.url || (await resolveMediaUrl(video.storageKey, ""));
+    if (!url) throw new Error("Omni V2V 无法读取输入视频，请重新导入后再试");
+    if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) return url;
+    if (url.startsWith("asset://")) throw new Error("Omni V2V 输入视频需要公网 MP4 地址或本地 MP4 文件");
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Omni V2V 无法读取输入视频：HTTP ${response.status}`);
+    const blob = await response.blob();
+    return new File([blob], video.name || "source.mp4", { type: blob.type || video.type || "video/mp4" });
 }
 
 async function buildDreaminaVideoRequest(config: AiConfig, prompt: string, references: NormalizedVideoReferences, model: string) {

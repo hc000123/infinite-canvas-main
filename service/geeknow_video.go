@@ -1,9 +1,13 @@
 package service
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"mime/multipart"
+	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -25,7 +29,10 @@ type geekNowVideoCreateFields struct {
 	GenerateAudio string
 	Watermark     string
 	Images        []geekNowImageReference
+	Video         string
 }
+
+const geekNowOmniV2VMaxVideoBytes = 15 << 20
 
 func IsGeekNowVideoChannel(channel model.ModelChannel) bool {
 	return strings.TrimSpace(channel.ID) == "geeknow-video"
@@ -43,6 +50,9 @@ func BuildGeekNowVideoCreateRequest(body []byte, contentType string) ([]byte, st
 		return nil, "", errors.New("缺少视频提示词")
 	}
 	payload := map[string]any{"model": fields.Model, "prompt": fields.Prompt}
+	if err := appendGeekNowVideoInput(payload, fields); err != nil {
+		return nil, "", err
+	}
 	appendGeekNowVideoControls(payload, fields)
 	if err := appendGeekNowImageReferences(payload, fields); err != nil {
 		return nil, "", err
@@ -80,6 +90,20 @@ func readGeekNowVideoCreateFields(body []byte, contentType string) (geekNowVideo
 			}
 			fields.Images = append(fields.Images, geekNowImageReference{URL: dataURL, Role: role})
 		}
+		fields.Video = firstArkFormAliasValue(form.Value, "video", "video_url", "input_video", "input_video_url[]")
+		videos := form.File["input_video[]"]
+		if len(videos) > 1 || (len(videos) == 1 && fields.Video != "") {
+			return geekNowVideoCreateFields{}, errors.New("Omni V2V 只支持 1 个输入视频")
+		}
+		if len(videos) == 1 {
+			if err := validateGeekNowVideoFile(videos[0]); err != nil {
+				return geekNowVideoCreateFields{}, err
+			}
+			fields.Video, err = multipartArkFileDataURL(videos[0])
+			if err != nil {
+				return geekNowVideoCreateFields{}, err
+			}
+		}
 		return fields, nil
 	}
 	var payload map[string]any
@@ -95,6 +119,7 @@ func readGeekNowVideoCreateFields(body []byte, contentType string) (geekNowVideo
 		Resolution:    arkStringMapValue(payload, "resolution", "resolution_name"),
 		GenerateAudio: arkStringMapValue(payload, "generate_audio"),
 		Watermark:     arkStringMapValue(payload, "watermark"),
+		Video:         arkStringMapValue(payload, "video", "video_url", "input_video"),
 	}
 	appendGeekNowMapImages(&fields.Images, payload["first_image"], "first_frame")
 	appendGeekNowMapImages(&fields.Images, payload["first_image_url"], "first_frame")
@@ -104,6 +129,54 @@ func readGeekNowVideoCreateFields(body []byte, contentType string) (geekNowVideo
 		appendGeekNowMapImages(&fields.Images, payload[key], "reference_image")
 	}
 	return fields, nil
+}
+
+func appendGeekNowVideoInput(payload map[string]any, fields geekNowVideoCreateFields) error {
+	if strings.ToLower(fields.Model) != "omni-fast-v2v" {
+		return nil
+	}
+	if strings.TrimSpace(fields.Video) == "" {
+		return errors.New("Omni V2V 必须提供 1 个 MP4 输入视频")
+	}
+	if err := validateGeekNowVideoValue(fields.Video); err != nil {
+		return err
+	}
+	payload["video"] = fields.Video
+	return nil
+}
+
+func validateGeekNowVideoFile(header *multipart.FileHeader) error {
+	if header.Size > geekNowOmniV2VMaxVideoBytes {
+		return errors.New("Omni V2V 输入视频不能超过 15 MB")
+	}
+	contentType := strings.ToLower(strings.TrimSpace(header.Header.Get("Content-Type")))
+	if contentType != "video/mp4" && strings.ToLower(filepath.Ext(header.Filename)) != ".mp4" {
+		return errors.New("Omni V2V 输入视频必须是 MP4")
+	}
+	return nil
+}
+
+func validateGeekNowVideoValue(value string) error {
+	value = strings.TrimSpace(value)
+	if strings.HasPrefix(value, "data:") {
+		const prefix = "data:video/mp4;base64,"
+		if !strings.HasPrefix(strings.ToLower(value), prefix) {
+			return errors.New("Omni V2V 输入视频必须是 MP4")
+		}
+		decoded, err := base64.StdEncoding.DecodeString(value[len(prefix):])
+		if err != nil {
+			return errors.New("Omni V2V 输入视频数据无效")
+		}
+		if len(decoded) > geekNowOmniV2VMaxVideoBytes {
+			return errors.New("Omni V2V 输入视频不能超过 15 MB")
+		}
+		return nil
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return errors.New("Omni V2V 输入视频必须是公网 MP4 URL 或 MP4 data URI")
+	}
+	return nil
 }
 
 func appendGeekNowVideoControls(payload map[string]any, fields geekNowVideoCreateFields) {

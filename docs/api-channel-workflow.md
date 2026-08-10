@@ -102,7 +102,9 @@
 
 ### GeekNow 整包渠道
 
-GeekNow 使用官方 Base URL `https://www.geeknow.top/v1`。一键预设以同一个 API Key 创建 `geeknow-text`、`geeknow-image`、`geeknow-video` 三个稳定私有渠道；文本与图片沿用 OpenAI 兼容接口，视频仅在 `geeknow-video` 上使用厂商专用映射：创建请求发往 `/v1/videos`，查询请求发往 `/v1/videos/{id}`。模型目录可覆盖文本 GPT、Claude、Gemini、DeepSeek、Qwen，图片 GPT Image、Seedream、Grok，以及视频 Grok、Sora、Veo、Seedance、MiniMax、manxue、Omni；预设新增模型不会自动公开。
+GeekNow 使用已验证网关 `https://geeknow.ai/v1`。一键预设以同一个 API Key 创建 `geeknow-text`、`geeknow-image`、`geeknow-video` 三个稳定私有渠道；文本与图片沿用 OpenAI 兼容接口，视频仅在 `geeknow-video` 上使用厂商专用映射：创建请求发往 `/v1/videos`，查询请求发往 `/v1/videos/{id}`。模型目录可覆盖文本 GPT、Claude、Gemini、DeepSeek、Qwen，图片 GPT Image、Seedream、Grok，以及视频 Grok、Sora、Veo、Seedance、MiniMax、manxue、Omni；预设新增模型不会自动公开，重复应用只补齐核心模型并保留管理员手动模型与运行配置。
+
+`omni-fast-v2v` 的视频引用会映射为上游 `video` 字段；只接受 1 个公网 MP4 URL、MP4 data URI 或不超过 15 MB 的本地 MP4 文件。缺失、格式错误、超限或多视频请求在创建本地 AI 任务与扣费前失败，不请求 GeekNow 上游。
 
 GeekNow 视频创建后，本地 `aiTaskId` 与实际 `channelId` 一起写入任务账本。后续查询和下载先用本地 `aiTaskId` 找回创建渠道，再携带上游任务 ID 请求该渠道，不能按同名模型 fallback，也不能让不同渠道返回的相同上游 ID 串到一起。
 
