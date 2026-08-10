@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"strings"
 
 	"github.com/basketikun/infinite-canvas/model"
@@ -135,7 +136,7 @@ func ArchiveOwnedSkillVersion(userID string, isAdmin bool, versionID string) (mo
 	stamp := now()
 	audit := skillAudit(userID, "archive_version", skill, version.ID, stamp)
 	if err := repository.ArchiveSkillVersionWithAudit(version.ID, skill.ID, stamp, audit); err != nil {
-		return version, err
+		return version, safeSkillLifecycleError(err)
 	}
 	version.Status, version.UpdatedAt = model.SkillVersionArchived, stamp
 	return version, nil
@@ -146,7 +147,7 @@ func DeleteOwnedSkillVersion(userID string, isAdmin bool, versionID string) erro
 	if err != nil {
 		return err
 	}
-	return repository.DeleteUnreferencedSkillDraftWithAudit(version.ID, skillAudit(userID, "delete_draft", skill, version.ID, now()))
+	return safeSkillLifecycleError(repository.DeleteUnreferencedSkillDraftWithAudit(version.ID, skillAudit(userID, "delete_draft", skill, version.ID, now())))
 }
 
 func DeleteOwnedSkillDefinition(userID string, isAdmin bool, skillID string) error {
@@ -154,7 +155,30 @@ func DeleteOwnedSkillDefinition(userID string, isAdmin bool, skillID string) err
 	if err != nil {
 		return err
 	}
-	return repository.DeleteUnpublishedSkillDefinitionWithAudit(skill.ID, skillAudit(userID, "delete_definition", skill, "", now()))
+	return safeSkillLifecycleError(repository.DeleteUnpublishedSkillDefinitionWithAudit(skill.ID, skillAudit(userID, "delete_definition", skill, "", now())))
+}
+
+func safeSkillLifecycleError(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, repository.ErrSkillVersionMustBePublished):
+		return safeMessageError{message: "只能归档已发布 Skill 版本"}
+	case errors.Is(err, repository.ErrSkillVersionHasWorkflowBindings):
+		return safeMessageError{message: "Skill 版本已绑定工作流阶段，不能归档"}
+	case errors.Is(err, repository.ErrSkillVersionMustBeDraft):
+		return safeMessageError{message: "只能删除未发布草稿版本"}
+	case errors.Is(err, repository.ErrSkillVersionReferenced):
+		return safeMessageError{message: "Skill 已有评测、绑定或引用，不能删除"}
+	case errors.Is(err, repository.ErrSkillDefinitionSeedProtected):
+		return safeMessageError{message: "系统种子 Skill 不能删除"}
+	case errors.Is(err, repository.ErrSkillDefinitionHasHistory):
+		return safeMessageError{message: "已发布或已归档 Skill 不能删除"}
+	case errors.Is(err, repository.ErrSkillDefinitionReferenced):
+		return safeMessageError{message: "Skill Definition 已被 Workflow 或 Agent 引用，不能删除"}
+	default:
+		return err
+	}
 }
 
 func editableSkill(userID string, isAdmin bool, skillID string) (model.SkillDefinition, error) {

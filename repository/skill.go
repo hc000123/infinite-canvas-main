@@ -8,6 +8,16 @@ import (
 	"gorm.io/gorm"
 )
 
+var (
+	ErrSkillVersionMustBePublished      = errors.New("skill version must be published")
+	ErrSkillVersionHasWorkflowBindings = errors.New("skill version has workflow stage bindings")
+	ErrSkillVersionMustBeDraft          = errors.New("skill version must be a draft")
+	ErrSkillVersionReferenced           = errors.New("skill version is referenced")
+	ErrSkillDefinitionSeedProtected     = errors.New("seed skill definition is protected")
+	ErrSkillDefinitionHasHistory        = errors.New("skill definition has published or archived versions")
+	ErrSkillDefinitionReferenced        = errors.New("skill definition is referenced")
+)
+
 func CreateSkillDefinition(skill model.SkillDefinition) error {
 	db, err := DB()
 	if err != nil {
@@ -342,13 +352,20 @@ func ArchiveSkillVersionWithAudit(versionID, skillID, updatedAt string, audit mo
 		return err
 	}
 	return database.Transaction(func(tx *gorm.DB) error {
+		var bindingCount int64
+		if err := tx.Model(&model.WorkflowStageSkillBinding{}).Where("skill_version_id = ?", strings.TrimSpace(versionID)).Count(&bindingCount).Error; err != nil {
+			return err
+		}
+		if bindingCount > 0 {
+			return ErrSkillVersionHasWorkflowBindings
+		}
 		result := tx.Model(&model.SkillVersion{}).Where("id = ? AND skill_id = ? AND status = ?", strings.TrimSpace(versionID), strings.TrimSpace(skillID), model.SkillVersionPublished).
 			Updates(map[string]any{"status": model.SkillVersionArchived, "updated_at": updatedAt})
 		if result.Error != nil {
 			return result.Error
 		}
 		if result.RowsAffected != 1 {
-			return errors.New("只能归档已发布 Skill 版本")
+			return ErrSkillVersionMustBePublished
 		}
 		if err := tx.Model(&model.SkillDefinition{}).Where("id = ? AND recommended_version_id = ?", skillID, versionID).
 			Updates(map[string]any{"recommended_version_id": "", "updated_at": updatedAt}).Error; err != nil {
@@ -369,14 +386,14 @@ func DeleteUnreferencedSkillDraftWithAudit(versionID string, audit model.SkillAu
 			return err
 		}
 		if version.Status != model.SkillVersionDraft {
-			return errors.New("只能删除未发布草稿版本")
+			return ErrSkillVersionMustBeDraft
 		}
 		referenced, err := skillVersionReferenced(tx, version.ID)
 		if err != nil {
 			return err
 		}
 		if referenced {
-			return errors.New("Skill 草稿已有评测、绑定或引用，不能删除")
+			return ErrSkillVersionReferenced
 		}
 		if err := tx.Create(&audit).Error; err != nil {
 			return err
@@ -396,7 +413,7 @@ func DeleteUnpublishedSkillDefinitionWithAudit(skillID string, audit model.Skill
 			return err
 		}
 		if strings.HasPrefix(skill.ID, "skill-system-") {
-			return errors.New("系统种子 Skill 不能删除")
+			return ErrSkillDefinitionSeedProtected
 		}
 		var versions []model.SkillVersion
 		if err := tx.Where("skill_id = ?", skill.ID).Find(&versions).Error; err != nil {
@@ -404,14 +421,14 @@ func DeleteUnpublishedSkillDefinitionWithAudit(skillID string, audit model.Skill
 		}
 		for _, version := range versions {
 			if version.Status != model.SkillVersionDraft {
-				return errors.New("已发布或已归档 Skill 不能删除")
+				return ErrSkillDefinitionHasHistory
 			}
 			referenced, err := skillVersionReferenced(tx, version.ID)
 			if err != nil {
 				return err
 			}
 			if referenced {
-				return errors.New("Skill 已有评测、绑定或引用，不能删除")
+				return ErrSkillVersionReferenced
 			}
 		}
 		var definitionRefs int64
@@ -425,7 +442,7 @@ func DeleteUnpublishedSkillDefinitionWithAudit(skillID string, audit model.Skill
 			}
 		}
 		if definitionRefs > 0 {
-			return errors.New("Skill Definition 已被 Workflow 或 Agent 引用，不能删除")
+			return ErrSkillDefinitionReferenced
 		}
 		if err := tx.Create(&audit).Error; err != nil {
 			return err

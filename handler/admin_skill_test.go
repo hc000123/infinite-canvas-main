@@ -163,6 +163,12 @@ func TestAdminCanDeleteDraftAndArchivePublishedSkillVersions(t *testing.T) {
 		t.Fatal(err)
 	}
 	versionID := "skill-version-system-workflow-script-3.2.0"
+	publishedDeleteRequest := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/skill-versions/"+versionID, nil).WithContext(adminContext)
+	publishedDeleteRecorder := httptest.NewRecorder()
+	AdminDeleteSkillVersion(publishedDeleteRecorder, publishedDeleteRequest, versionID)
+	if !strings.Contains(publishedDeleteRecorder.Body.String(), `"code":1`) || !strings.Contains(publishedDeleteRecorder.Body.String(), "只能删除未发布草稿版本") {
+		t.Fatalf("published delete body=%s", publishedDeleteRecorder.Body.String())
+	}
 	archiveRequest := httptest.NewRequest(http.MethodPost, "/api/v1/admin/skill-versions/"+versionID+"/archive", nil).WithContext(adminContext)
 	archiveRecorder := httptest.NewRecorder()
 	AdminArchiveSkillVersion(archiveRecorder, archiveRequest, versionID)
@@ -172,5 +178,44 @@ func TestAdminCanDeleteDraftAndArchivePublishedSkillVersions(t *testing.T) {
 	version, ok, err := repository.GetSkillVersion(versionID)
 	if err != nil || !ok || version.Status != model.SkillVersionArchived {
 		t.Fatalf("archived version=%+v ok=%v err=%v", version, ok, err)
+	}
+}
+
+func TestAdminCannotArchiveBoundSkillVersion(t *testing.T) {
+	setupWorkflowHandlerTestDB(t)
+	if err := service.EnsureSkillSeeds(); err != nil {
+		t.Fatal(err)
+	}
+	skillID := "skill-system-workflow-script"
+	beforeSkill, ok, err := repository.GetSkillDefinition(skillID)
+	if err != nil || !ok || beforeSkill.RecommendedVersionID == "" {
+		t.Fatalf("skill=%+v ok=%v err=%v", beforeSkill, ok, err)
+	}
+	versionID := beforeSkill.RecommendedVersionID
+	if err := repository.UpsertWorkflowStageSkillBinding(model.WorkflowStageSkillBinding{
+		ID: "bound-archive", StageKey: "script", Scope: model.WorkflowStageSkillScopeProject, ScopeID: "project-bound", SkillVersionID: versionID,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/admin/skill-versions/"+versionID+"/archive", nil)
+	request = request.WithContext(service.WithUser(context.Background(), model.AuthUser{ID: "admin-1", Role: model.UserRoleAdmin}))
+	recorder := httptest.NewRecorder()
+
+	AdminArchiveSkillVersion(recorder, request, versionID)
+
+	if !strings.Contains(recorder.Body.String(), `"code":1`) || !strings.Contains(recorder.Body.String(), "Skill 版本已绑定工作流阶段，不能归档") {
+		t.Fatalf("body=%s", recorder.Body.String())
+	}
+	version, ok, err := repository.GetSkillVersion(versionID)
+	if err != nil || !ok || version.Status != model.SkillVersionPublished {
+		t.Fatalf("version=%+v ok=%v err=%v", version, ok, err)
+	}
+	afterSkill, ok, err := repository.GetSkillDefinition(skillID)
+	if err != nil || !ok || afterSkill.RecommendedVersionID != beforeSkill.RecommendedVersionID {
+		t.Fatalf("before=%+v after=%+v ok=%v err=%v", beforeSkill, afterSkill, ok, err)
+	}
+	binding, ok, err := repository.ResolveWorkflowStageSkillBinding("script", "project-bound")
+	if err != nil || !ok || binding.SkillVersionID != versionID {
+		t.Fatalf("binding=%+v ok=%v err=%v", binding, ok, err)
 	}
 }

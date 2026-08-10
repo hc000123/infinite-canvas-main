@@ -164,11 +164,27 @@ func TestProjectSkillManagementRoutesAreRemoved(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	app := New()
 	routes := []struct{ method, path string }{
-		{http.MethodGet, "/api/v1/skills?projectId=project-1"},
-		{http.MethodPost, "/api/v1/skills/import-folder"},
-		{http.MethodGet, "/api/v1/skill-versions/version-1"},
-		{http.MethodGet, "/api/v1/skill-trials/trial-1"},
+		{http.MethodGet, "/api/v1/skills"},
 		{http.MethodGet, "/api/v1/skill-stage-templates"},
+		{http.MethodPost, "/api/v1/skills/import-folder"},
+		{http.MethodPost, "/api/v1/skills"},
+		{http.MethodPatch, "/api/v1/skills/skill-1"},
+		{http.MethodDelete, "/api/v1/skills/skill-1"},
+		{http.MethodPost, "/api/v1/skills/skill-1/copy"},
+		{http.MethodPost, "/api/v1/skills/skill-1/versions"},
+		{http.MethodPost, "/api/v1/skills/skill-1/import-version"},
+		{http.MethodGet, "/api/v1/skill-versions/version-1"},
+		{http.MethodPatch, "/api/v1/skill-versions/version-1"},
+		{http.MethodDelete, "/api/v1/skill-versions/version-1"},
+		{http.MethodGet, "/api/v1/skill-versions/version-1/source-files"},
+		{http.MethodGet, "/api/v1/skill-versions/version-1/source-file"},
+		{http.MethodPost, "/api/v1/skill-versions/version-1/validate"},
+		{http.MethodPost, "/api/v1/skill-versions/version-1/evaluations"},
+		{http.MethodPost, "/api/v1/skill-versions/version-1/trials"},
+		{http.MethodPost, "/api/v1/skill-versions/version-1/publish"},
+		{http.MethodPost, "/api/v1/skill-versions/version-1/archive"},
+		{http.MethodGet, "/api/v1/skill-trials/trial-1"},
+		{http.MethodPut, "/api/v1/skills/skill-1/recommended-version"},
 	}
 	for _, route := range routes {
 		recorder := httptest.NewRecorder()
