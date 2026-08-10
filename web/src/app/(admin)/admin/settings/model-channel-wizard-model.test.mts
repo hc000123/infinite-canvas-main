@@ -296,6 +296,12 @@ test("渠道检测模式根据协议和视频能力选择", () => {
     assert.equal(channelVerificationMode(channel({ capabilities: ["text"] })), "model-test");
 });
 
+test("GeekNow video verification only checks connectivity", () => {
+    const geeknow = channel({ id: "geeknow-video", protocol: "openai", capabilities: ["video", "video_query"] });
+    assert.equal(channelVerificationMode(geeknow), "connectivity");
+    assert.match(channelVerificationCopy(geeknow).description, /不创建视频任务/);
+});
+
 test("渠道检测文案覆盖三种模式并正确标记星链与 OpenAI 视频渠道", () => {
     assert.deepEqual(channelVerificationCopy(channel({ protocol: "xinglian-cloud" })), {
         tableLabel: "视频预检",

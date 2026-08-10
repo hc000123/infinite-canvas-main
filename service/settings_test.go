@@ -1046,6 +1046,44 @@ func TestSelectModelChannelAllowsJimengCLIWithoutAPIKeyOrBaseURL(t *testing.T) {
 	}
 }
 
+func TestAdminChannelModelsGeekNowOnlyReadsModels(t *testing.T) {
+	requestCount := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		if r.Method != http.MethodGet || r.URL.Path != "/v1/models" {
+			t.Errorf("request = %s %s, want GET /v1/models", r.Method, r.URL.Path)
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		if auth := r.Header.Get("Authorization"); auth != "Bearer geeknow-key" {
+			t.Errorf("authorization = %q, want GeekNow bearer key", auth)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write([]byte(`{"data":[{"id":"veo_3_1"},{"id":"sora-2"}]}`))
+	}))
+	defer upstream.Close()
+
+	models, err := AdminChannelModels(nil, model.ModelChannel{
+		ID:           "geeknow-video",
+		Protocol:     string(model.ModelProtocolOpenAI),
+		Name:         "GeekNow 视频",
+		BaseURL:      upstream.URL,
+		APIKey:       "geeknow-key",
+		Capabilities: []string{"video", "video_query"},
+		Enabled:      true,
+	})
+	if err != nil {
+		t.Fatalf("AdminChannelModels returned error: %v", err)
+	}
+	if !reflect.DeepEqual(models, []string{"sora-2", "veo_3_1"}) {
+		t.Fatalf("models = %#v, want GeekNow model list", models)
+	}
+	if requestCount != 1 {
+		t.Fatalf("request count = %d, want one read-only GET and no /videos request", requestCount)
+	}
+}
+
 func TestAdminTestArkChannelModelChecksEnterpriseAPIAuth(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/contents/generations/tasks/__infinite_canvas_probe__" {
