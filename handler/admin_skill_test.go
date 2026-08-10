@@ -181,6 +181,57 @@ func TestAdminCanDeleteDraftAndArchivePublishedSkillVersions(t *testing.T) {
 	}
 }
 
+func TestAdminCanDeleteUnpublishedSkillDefinition(t *testing.T) {
+	setupWorkflowHandlerTestDB(t)
+	if err := service.EnsureCoreArtifactSchemas(); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := service.ParseSkillFolder("draft", []service.SkillFolderFile{{Path: "SKILL.md", Data: []byte("# Rules")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := service.ImportManagedSkillFolder("admin-1", true, service.SkillFolderImportInput{StageKey: "script", Snapshot: snapshot})
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminContext := service.WithUser(context.Background(), model.AuthUser{ID: "admin-1", Role: model.UserRoleAdmin})
+	request := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/skills/"+created.Skill.ID, nil).WithContext(adminContext)
+	recorder := httptest.NewRecorder()
+
+	AdminDeleteSkill(recorder, request, created.Skill.ID)
+
+	if !strings.Contains(recorder.Body.String(), `"code":0`) || !strings.Contains(recorder.Body.String(), `"deleted":true`) {
+		t.Fatalf("body=%s", recorder.Body.String())
+	}
+	if _, ok, err := repository.GetSkillDefinition(created.Skill.ID); err != nil || ok {
+		t.Fatalf("definition ok=%v err=%v", ok, err)
+	}
+	if _, ok, err := repository.GetSkillVersion(created.Version.ID); err != nil || ok {
+		t.Fatalf("version ok=%v err=%v", ok, err)
+	}
+}
+
+func TestAdminSkillSensitiveReadsAndDeletesRequireAdminContext(t *testing.T) {
+	setupWorkflowHandlerTestDB(t)
+	contextValue := service.WithUser(context.Background(), model.AuthUser{ID: "user-1", Role: model.UserRoleUser})
+	for _, item := range []struct {
+		name string
+		call func(http.ResponseWriter, *http.Request)
+	}{
+		{name: "delete definition", call: func(w http.ResponseWriter, r *http.Request) { AdminDeleteSkill(w, r, "skill-1") }},
+		{name: "read evaluation", call: func(w http.ResponseWriter, r *http.Request) { AdminSkillEvaluation(w, r, "evaluation-1") }},
+	} {
+		t.Run(item.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/api/v1/admin/skills", nil).WithContext(contextValue)
+			recorder := httptest.NewRecorder()
+			item.call(recorder, request)
+			if !strings.Contains(recorder.Body.String(), `"code":1`) || !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+				t.Fatalf("body=%s", recorder.Body.String())
+			}
+		})
+	}
+}
+
 func TestAdminCannotArchiveBoundSkillVersion(t *testing.T) {
 	setupWorkflowHandlerTestDB(t)
 	if err := service.EnsureSkillSeeds(); err != nil {

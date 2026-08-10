@@ -56,9 +56,12 @@ func TestDeterministicSkillEvaluationRoundTripsStoredDiff(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stored, err := GetSkillEvaluationResult(result.Evaluation.ID)
+	stored, err := GetManagedSkillEvaluationResult("admin-1", result.Evaluation.ID, true)
 	if err != nil || stored.Diff["sameInput"] != true {
 		t.Fatalf("stored=%+v err=%v", stored, err)
+	}
+	if _, err := GetManagedSkillEvaluationResult("user-1", result.Evaluation.ID, false); err == nil {
+		t.Fatal("non-admin read a managed Skill evaluation")
 	}
 }
 

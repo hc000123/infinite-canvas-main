@@ -124,6 +124,21 @@ func GetSkillEvaluationResult(id string) (SkillEvaluationResult, error) {
 	if err != nil || !ok {
 		return SkillEvaluationResult{}, safeMessageError{message: "Skill 评测不存在"}
 	}
+	return decodeSkillEvaluationResult(evaluation), nil
+}
+
+func GetManagedSkillEvaluationResult(userID, id string, isAdmin bool) (SkillEvaluationResult, error) {
+	evaluation, ok, err := repository.GetSkillEvaluation(id)
+	if err != nil || !ok {
+		return SkillEvaluationResult{}, safeMessageError{message: "Skill 评测不存在"}
+	}
+	if _, _, err := GetManagedSkillVersionPackage(userID, evaluation.SkillVersionID, isAdmin); err != nil {
+		return SkillEvaluationResult{}, err
+	}
+	return decodeSkillEvaluationResult(evaluation), nil
+}
+
+func decodeSkillEvaluationResult(evaluation model.SkillEvaluation) SkillEvaluationResult {
 	var result struct {
 		Candidate map[string]any `json:"candidate"`
 		Baseline  map[string]any `json:"baseline"`
@@ -131,7 +146,7 @@ func GetSkillEvaluationResult(id string) (SkillEvaluationResult, error) {
 	var diff map[string]any
 	_ = json.Unmarshal([]byte(evaluation.ResultJSON), &result)
 	_ = json.Unmarshal([]byte(evaluation.DiffJSON), &diff)
-	return SkillEvaluationResult{Evaluation: evaluation, ImageCount: workflowSkillManifestImageCount(evaluation.ImageManifestJSON), Candidate: result.Candidate, Baseline: result.Baseline, Diff: diff}, nil
+	return SkillEvaluationResult{Evaluation: evaluation, ImageCount: workflowSkillManifestImageCount(evaluation.ImageManifestJSON), Candidate: result.Candidate, Baseline: result.Baseline, Diff: diff}
 }
 
 func workflowStageFromSkillManifest(manifest SkillManifest) string {

@@ -266,6 +266,125 @@ func TestCreateSkillEvaluationUpdatesVersionSummary(t *testing.T) {
 	}
 }
 
+func TestDeleteSkillDraftUsesStructuredVersionReferences(t *testing.T) {
+	setupRepositoryTestDB(t)
+	skill := model.SkillDefinition{ID: "delete-structured-skill", Name: "结构化删除", OwnerType: model.SkillOwnerSystem, Enabled: true}
+	version := model.SkillVersion{ID: "version-1", SkillID: skill.ID, Version: "1.0.0", Status: model.SkillVersionDraft}
+	if err := CreateSkillAggregate(skill, version); err != nil {
+		t.Fatal(err)
+	}
+	workflow := model.WorkflowVersion{ID: "delete-structured-workflow-version", WorkflowID: "delete-structured-workflow", Version: "1.0.0", Status: model.WorkflowVersionDraft, PackageJSON: `{"nodes":[{"skillBinding":{"skillVersionId":"version-10"},"condition":{"value":"version-1"}}]}`}
+	if err := CreateWorkflowDefinitionAggregate(model.WorkflowDefinition{ID: workflow.WorkflowID, Name: "Workflow", OwnerType: model.WorkflowOwnerSystem}, workflow); err != nil {
+		t.Fatal(err)
+	}
+	agent := model.AgentVersion{ID: "delete-structured-agent-version", AgentID: "delete-structured-agent", Version: "1.0.0", Status: model.AgentVersionDraft, DefaultSkillRefsJSON: `[{"skillVersionId":"version-10","parameters":{"value":"version-1"}}]`}
+	if err := CreateAgentAggregate(model.AgentDefinition{ID: agent.AgentID, Name: "Agent", OwnerType: model.AgentOwnerSystem}, agent); err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteUnreferencedSkillDraftWithAudit(version.ID, model.SkillAuditLog{ID: "delete-structured-audit"}); err != nil {
+		t.Fatalf("non-reference JSON blocked deletion: %v", err)
+	}
+	if _, ok, err := GetSkillVersion(version.ID); err != nil || ok {
+		t.Fatalf("version ok=%v err=%v", ok, err)
+	}
+}
+
+func TestDeleteSkillDraftRejectsRealStructuredVersionReferences(t *testing.T) {
+	for _, source := range []string{"workflow", "agent"} {
+		t.Run(source, func(t *testing.T) {
+			setupRepositoryTestDB(t)
+			skill := model.SkillDefinition{ID: "referenced-skill", Name: "真实引用", OwnerType: model.SkillOwnerSystem, Enabled: true}
+			version := model.SkillVersion{ID: "referenced-version", SkillID: skill.ID, Version: "1.0.0", Status: model.SkillVersionDraft}
+			if err := CreateSkillAggregate(skill, version); err != nil {
+				t.Fatal(err)
+			}
+			if source == "workflow" {
+				workflow := model.WorkflowVersion{ID: "referencing-workflow-version", WorkflowID: "referencing-workflow", Version: "1.0.0", Status: model.WorkflowVersionDraft, PackageJSON: `{"nodes":[{"skillBinding":{"skillVersionId":"referenced-version"}}]}`}
+				if err := CreateWorkflowDefinitionAggregate(model.WorkflowDefinition{ID: workflow.WorkflowID, Name: "Workflow", OwnerType: model.WorkflowOwnerSystem}, workflow); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				agent := model.AgentVersion{ID: "referencing-agent-version", AgentID: "referencing-agent", Version: "1.0.0", Status: model.AgentVersionDraft, DefaultSkillRefsJSON: `[{"skillVersionId":"referenced-version"}]`}
+				if err := CreateAgentAggregate(model.AgentDefinition{ID: agent.AgentID, Name: "Agent", OwnerType: model.AgentOwnerSystem}, agent); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := DeleteUnreferencedSkillDraftWithAudit(version.ID, model.SkillAuditLog{ID: "referenced-audit"}); !errors.Is(err, ErrSkillVersionReferenced) {
+				t.Fatalf("err=%v", err)
+			}
+		})
+	}
+}
+
+func TestDeleteSkillDefinitionUsesStructuredSkillReferences(t *testing.T) {
+	for _, source := range []string{"ignored values", "workflow skill", "agent default", "agent access"} {
+		t.Run(source, func(t *testing.T) {
+			setupRepositoryTestDB(t)
+			skill := model.SkillDefinition{ID: "definition-1", Name: "Definition", OwnerType: model.SkillOwnerSystem, Enabled: true}
+			version := model.SkillVersion{ID: "definition-version", SkillID: skill.ID, Version: "1.0.0", Status: model.SkillVersionDraft}
+			if err := CreateSkillAggregate(skill, version); err != nil {
+				t.Fatal(err)
+			}
+			switch source {
+			case "ignored values", "workflow skill":
+				binding := `{"skillId":"other-definition"}`
+				if source == "workflow skill" {
+					binding = `{"skillId":"definition-1"}`
+				}
+				workflow := model.WorkflowVersion{ID: "definition-workflow-version", WorkflowID: "definition-workflow", Version: "1.0.0", Status: model.WorkflowVersionDraft, PackageJSON: `{"nodes":[{"skillBinding":` + binding + `,"condition":{"value":"definition-1"}}]}`}
+				if err := CreateWorkflowDefinitionAggregate(model.WorkflowDefinition{ID: workflow.WorkflowID, Name: "Workflow", OwnerType: model.WorkflowOwnerSystem}, workflow); err != nil {
+					t.Fatal(err)
+				}
+			case "agent default":
+				agent := model.AgentVersion{ID: "definition-agent-version", AgentID: "definition-agent", Version: "1.0.0", Status: model.AgentVersionDraft, DefaultSkillRefsJSON: `[{"skillId":"definition-1"}]`}
+				if err := CreateAgentAggregate(model.AgentDefinition{ID: agent.AgentID, Name: "Agent", OwnerType: model.AgentOwnerSystem}, agent); err != nil {
+					t.Fatal(err)
+				}
+			case "agent access":
+				agent := model.AgentVersion{ID: "definition-access-agent-version", AgentID: "definition-access-agent", Version: "1.0.0", Status: model.AgentVersionDraft, SkillAccessPolicyJSON: `{"allowedSkillIds":["definition-1"]}`}
+				if err := CreateAgentAggregate(model.AgentDefinition{ID: agent.AgentID, Name: "Agent", OwnerType: model.AgentOwnerSystem}, agent); err != nil {
+					t.Fatal(err)
+				}
+			}
+			err := DeleteUnpublishedSkillDefinitionWithAudit(skill.ID, model.SkillAuditLog{ID: "definition-delete-audit"})
+			if source == "ignored values" {
+				if err != nil {
+					t.Fatalf("non-reference value blocked deletion: %v", err)
+				}
+				return
+			}
+			if !errors.Is(err, ErrSkillDefinitionReferenced) {
+				t.Fatalf("err=%v", err)
+			}
+		})
+	}
+}
+
+func TestDeleteSkillDefinitionProtectsSeedsAndPublishedHistory(t *testing.T) {
+	for _, item := range []struct {
+		name    string
+		skillID string
+		status  model.SkillVersionStatus
+		want    error
+	}{
+		{name: "seed", skillID: "skill-system-protected", status: model.SkillVersionDraft, want: ErrSkillDefinitionSeedProtected},
+		{name: "published history", skillID: "ordinary-history", status: model.SkillVersionPublished, want: ErrSkillDefinitionHasHistory},
+		{name: "archived history", skillID: "ordinary-archive", status: model.SkillVersionArchived, want: ErrSkillDefinitionHasHistory},
+	} {
+		t.Run(item.name, func(t *testing.T) {
+			setupRepositoryTestDB(t)
+			skill := model.SkillDefinition{ID: item.skillID, Name: item.name, OwnerType: model.SkillOwnerSystem, Enabled: true}
+			version := model.SkillVersion{ID: item.skillID + "-version", SkillID: skill.ID, Version: "1.0.0", Status: item.status}
+			if err := CreateSkillAggregate(skill, version); err != nil {
+				t.Fatal(err)
+			}
+			if err := DeleteUnpublishedSkillDefinitionWithAudit(skill.ID, model.SkillAuditLog{ID: item.skillID + "-audit"}); !errors.Is(err, item.want) {
+				t.Fatalf("err=%v", err)
+			}
+		})
+	}
+}
+
 func TestListSkillRegistryRelationsInBatches(t *testing.T) {
 	setupRepositoryTestDB(t)
 	for _, skill := range []model.SkillDefinition{{ID: "skill-1", Name: "一", OwnerType: model.SkillOwnerSystem}, {ID: "skill-2", Name: "二", OwnerType: model.SkillOwnerSystem}} {

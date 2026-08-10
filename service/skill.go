@@ -60,7 +60,7 @@ type SkillOption struct {
 }
 
 func ListSkillAdminItems() ([]SkillAdminItem, error) {
-	skills, err := repository.ListSkillDefinitions()
+	skills, err := repository.ListSystemSkillDefinitions()
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +266,7 @@ func ResolveExactSkillVersion(userID, projectID, versionID string) (ResolvedSkil
 
 func resolveExactSkillVersionForAdmin(versionID string) (ResolvedSkill, error) {
 	skill, version, ok, err := repository.GetSkillWithVersion(versionID)
-	if err != nil || !ok {
+	if err != nil || !ok || skill.OwnerType != model.SkillOwnerSystem {
 		return ResolvedSkill{}, safeMessageError{message: "Skill 版本不存在"}
 	}
 	return resolvePublishedSkill(skill, version)

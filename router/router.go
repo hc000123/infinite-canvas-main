@@ -376,6 +376,9 @@ func New() *gin.Engine {
 	skillAdmin.PATCH("/skills/:id", func(c *gin.Context) {
 		handler.AdminUpdateSkill(c.Writer, c.Request, c.Param("id"))
 	})
+	skillAdmin.DELETE("/skills/:id", func(c *gin.Context) {
+		handler.AdminDeleteSkill(c.Writer, c.Request, c.Param("id"))
+	})
 	skillAdmin.POST("/skills/:id/versions", func(c *gin.Context) {
 		handler.AdminCreateSkillVersion(c.Writer, c.Request, c.Param("id"))
 	})

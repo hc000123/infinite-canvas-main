@@ -257,6 +257,19 @@ func AdminDeleteSkillVersion(w http.ResponseWriter, r *http.Request, id string) 
 	OK(w, map[string]bool{"deleted": true})
 }
 
+func AdminDeleteSkill(w http.ResponseWriter, r *http.Request, id string) {
+	admin, ok := skillAdmin(r)
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	if err := service.DeleteOwnedSkillDefinition(admin.ID, true, id); err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, map[string]bool{"deleted": true})
+}
+
 func AdminValidateSkillVersion(w http.ResponseWriter, r *http.Request, id string) {
 	admin, ok := skillAdmin(r)
 	if !ok {
@@ -321,8 +334,13 @@ func AdminSkillTrial(w http.ResponseWriter, r *http.Request, id string) {
 	OK(w, result)
 }
 
-func AdminSkillEvaluation(w http.ResponseWriter, _ *http.Request, id string) {
-	result, err := service.GetSkillEvaluationResult(id)
+func AdminSkillEvaluation(w http.ResponseWriter, r *http.Request, id string) {
+	admin, ok := skillAdmin(r)
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	result, err := service.GetManagedSkillEvaluationResult(admin.ID, id, true)
 	if err != nil {
 		FailError(w, err)
 		return

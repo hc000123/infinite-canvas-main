@@ -214,6 +214,15 @@ func TestSkillManagementRejectsLegacyProjectOwnerAndNonAdminPackageRead(t *testi
 	if _, _, err := GetManagedSkillVersionPackage("user-1", version.ID, false); err == nil {
 		t.Fatal("non-admin read a management package")
 	}
+	items, err := ListSkillAdminItems()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range items {
+		if item.Skill.ID == skill.ID {
+			t.Fatal("legacy project Skill leaked into admin registry")
+		}
+	}
 }
 
 func TestRegularUserCannotMutateSystemSkill(t *testing.T) {
@@ -241,5 +250,21 @@ func TestRegularUserCannotMutateSystemSkill(t *testing.T) {
 	version, _, _ := repository.GetSkillVersion("skill-version-system-workflow-script-3.2.0")
 	if skill.Enabled || version.Status != model.SkillVersionArchived {
 		t.Fatalf("seed restore overwrote managed state: skill=%+v version=%+v", skill, version)
+	}
+}
+
+func TestSkillDefinitionLifecycleErrorsRemainSafeAndSpecific(t *testing.T) {
+	for _, item := range []struct {
+		err  error
+		want string
+	}{
+		{repository.ErrSkillDefinitionSeedProtected, "系统种子 Skill 不能删除"},
+		{repository.ErrSkillDefinitionHasHistory, "已发布或已归档 Skill 不能删除"},
+		{repository.ErrSkillDefinitionReferenced, "已被 Workflow 或 Agent 引用"},
+		{repository.ErrSkillVersionReferenced, "已有评测、绑定或引用"},
+	} {
+		if err := safeSkillLifecycleError(item.err); err == nil || !strings.Contains(err.Error(), item.want) {
+			t.Fatalf("source=%v err=%v", item.err, err)
+		}
 	}
 }

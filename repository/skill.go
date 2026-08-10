@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"encoding/json"
 	"errors"
 	"strings"
 
@@ -212,7 +211,17 @@ func CreateSkillEvaluation(evaluation model.SkillEvaluation) error {
 	if err != nil {
 		return err
 	}
-	return db.Create(&evaluation).Error
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := validateEvaluationSkillVersion(tx, evaluation.SkillVersionID); err != nil {
+			return err
+		}
+		if strings.TrimSpace(evaluation.BaselineVersionID) != "" {
+			if err := validateEvaluationSkillVersion(tx, evaluation.BaselineVersionID); err != nil {
+				return err
+			}
+		}
+		return tx.Create(&evaluation).Error
+	})
 }
 
 func CreateSkillEvaluationAndUpdateSummary(evaluation model.SkillEvaluation, summaryJSON, updatedAt string) error {
@@ -221,11 +230,26 @@ func CreateSkillEvaluationAndUpdateSummary(evaluation model.SkillEvaluation, sum
 		return err
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
+		if err := validateEvaluationSkillVersion(tx, evaluation.SkillVersionID); err != nil {
+			return err
+		}
+		if strings.TrimSpace(evaluation.BaselineVersionID) != "" {
+			if err := validateEvaluationSkillVersion(tx, evaluation.BaselineVersionID); err != nil {
+				return err
+			}
+		}
 		if err := tx.Create(&evaluation).Error; err != nil {
 			return err
 		}
-		return tx.Model(&model.SkillVersion{}).Where("id = ?", evaluation.SkillVersionID).
-			Updates(map[string]any{"evaluation_summary_json": summaryJSON, "updated_at": updatedAt}).Error
+		result := tx.Model(&model.SkillVersion{}).Where("id = ?", evaluation.SkillVersionID).
+			Updates(map[string]any{"evaluation_summary_json": summaryJSON, "updated_at": updatedAt})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrSkillEvaluationTargetUnavailable
+		}
+		return nil
 	})
 }
 
@@ -432,17 +456,11 @@ func DeleteUnpublishedSkillDefinitionWithAudit(skillID string, audit model.Skill
 				return ErrSkillVersionReferenced
 			}
 		}
-		var definitionRefs int64
-		pattern := "%" + skill.ID + "%"
-		if err := tx.Model(&model.WorkflowVersion{}).Where("package_json LIKE ?", pattern).Count(&definitionRefs).Error; err != nil {
+		definitionReferenced, err := skillDefinitionReferenced(tx, skill.ID)
+		if err != nil {
 			return err
 		}
-		if definitionRefs == 0 {
-			if err := tx.Model(&model.AgentVersion{}).Where("default_skill_refs_json LIKE ? OR skill_access_policy_json LIKE ?", pattern, pattern).Count(&definitionRefs).Error; err != nil {
-				return err
-			}
-		}
-		if definitionRefs > 0 {
+		if definitionReferenced {
 			return ErrSkillDefinitionReferenced
 		}
 		if err := tx.Create(&audit).Error; err != nil {
@@ -464,8 +482,6 @@ func skillVersionReferenced(tx *gorm.DB, versionID string) (bool, error) {
 		{&model.SkillEvaluation{}, "skill_version_id = ? OR baseline_version_id = ?", []any{versionID, versionID}},
 		{&model.WorkflowStageSkillBinding{}, "skill_version_id = ?", []any{versionID}},
 		{&model.InvocationPreflightRevision{}, "skill_version_id = ?", []any{versionID}},
-		{&model.WorkflowVersion{}, "package_json LIKE ?", []any{"%" + versionID + "%"}},
-		{&model.AgentVersion{}, "default_skill_refs_json LIKE ?", []any{"%" + versionID + "%"}},
 	}
 	for _, check := range checks {
 		var count int64
@@ -474,6 +490,36 @@ func skillVersionReferenced(tx *gorm.DB, versionID string) (bool, error) {
 		}
 		if count > 0 {
 			return true, nil
+		}
+	}
+	var workflows []model.WorkflowVersion
+	if err := tx.Select("package_json").Find(&workflows).Error; err != nil {
+		return false, err
+	}
+	for _, workflow := range workflows {
+		refs, err := parseWorkflowSkillReferences(workflow.PackageJSON)
+		if err != nil {
+			return false, err
+		}
+		for _, ref := range refs {
+			if strings.TrimSpace(ref.SkillVersionID) == versionID {
+				return true, nil
+			}
+		}
+	}
+	var agents []model.AgentVersion
+	if err := tx.Select("default_skill_refs_json").Find(&agents).Error; err != nil {
+		return false, err
+	}
+	for _, agent := range agents {
+		refs, err := parseAgentSkillReferences(agent.DefaultSkillRefsJSON)
+		if err != nil {
+			return false, err
+		}
+		for _, ref := range refs {
+			if strings.TrimSpace(ref.SkillVersionID) == versionID {
+				return true, nil
+			}
 		}
 	}
 	return false, nil
@@ -492,21 +538,12 @@ func activeSkillVersionReferenced(tx *gorm.DB, versionID string) (bool, error) {
 		return false, err
 	}
 	for _, workflow := range workflows {
-		if strings.TrimSpace(workflow.PackageJSON) == "" {
-			continue
-		}
-		var packageValue struct {
-			Nodes []struct {
-				SkillBinding *struct {
-					SkillVersionID string `json:"skillVersionId"`
-				} `json:"skillBinding"`
-			} `json:"nodes"`
-		}
-		if err := json.Unmarshal([]byte(workflow.PackageJSON), &packageValue); err != nil {
+		refs, err := parseWorkflowSkillReferences(workflow.PackageJSON)
+		if err != nil {
 			return false, err
 		}
-		for _, node := range packageValue.Nodes {
-			if node.SkillBinding != nil && node.SkillBinding.SkillVersionID == versionID {
+		for _, ref := range refs {
+			if strings.TrimSpace(ref.SkillVersionID) == versionID {
 				return true, nil
 			}
 		}
@@ -516,17 +553,55 @@ func activeSkillVersionReferenced(tx *gorm.DB, versionID string) (bool, error) {
 		return false, err
 	}
 	for _, agent := range agents {
-		if strings.TrimSpace(agent.DefaultSkillRefsJSON) == "" {
-			continue
-		}
-		var refs []struct {
-			SkillVersionID string `json:"skillVersionId"`
-		}
-		if err := json.Unmarshal([]byte(agent.DefaultSkillRefsJSON), &refs); err != nil {
+		refs, err := parseAgentSkillReferences(agent.DefaultSkillRefsJSON)
+		if err != nil {
 			return false, err
 		}
 		for _, ref := range refs {
-			if ref.SkillVersionID == versionID {
+			if strings.TrimSpace(ref.SkillVersionID) == versionID {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+func skillDefinitionReferenced(tx *gorm.DB, skillID string) (bool, error) {
+	var workflows []model.WorkflowVersion
+	if err := tx.Select("package_json").Find(&workflows).Error; err != nil {
+		return false, err
+	}
+	for _, workflow := range workflows {
+		refs, err := parseWorkflowSkillReferences(workflow.PackageJSON)
+		if err != nil {
+			return false, err
+		}
+		for _, ref := range refs {
+			if strings.TrimSpace(ref.SkillID) == skillID {
+				return true, nil
+			}
+		}
+	}
+	var agents []model.AgentVersion
+	if err := tx.Select("default_skill_refs_json, skill_access_policy_json").Find(&agents).Error; err != nil {
+		return false, err
+	}
+	for _, agent := range agents {
+		refs, err := parseAgentSkillReferences(agent.DefaultSkillRefsJSON)
+		if err != nil {
+			return false, err
+		}
+		for _, ref := range refs {
+			if strings.TrimSpace(ref.SkillID) == skillID {
+				return true, nil
+			}
+		}
+		allowedSkillIDs, err := parseAgentAllowedSkillIDs(agent.SkillAccessPolicyJSON)
+		if err != nil {
+			return false, err
+		}
+		for _, allowedSkillID := range allowedSkillIDs {
+			if strings.TrimSpace(allowedSkillID) == skillID {
 				return true, nil
 			}
 		}

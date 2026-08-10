@@ -128,19 +128,6 @@ func UpdateWorkflowStageSkillBinding(adminID, stageKey string, input WorkflowSta
 	} else if scope != model.WorkflowStageSkillScopeProject || scopeID == "" {
 		return ResolvedSkill{}, safeMessageError{message: "Skill 绑定范围无效"}
 	}
-	if resolved.Skill.OwnerType == model.SkillOwnerProject {
-		if scope != model.WorkflowStageSkillScopeProject {
-			return ResolvedSkill{}, safeMessageError{message: "项目 Skill 不能绑定到全局范围"}
-		}
-		if resolved.Skill.OwnerProjectID != scopeID {
-			return ResolvedSkill{}, safeMessageError{message: "项目 Skill 只能绑定到所属项目"}
-		}
-		if resolved.Skill.OwnerUserID == "" || resolved.Skill.OwnerUserID != strings.TrimSpace(adminID) {
-			return ResolvedSkill{}, safeMessageError{message: "项目 Skill 只能由所属用户绑定"}
-		}
-	} else if resolved.Skill.OwnerType != model.SkillOwnerSystem {
-		return ResolvedSkill{}, safeMessageError{message: "Skill 所有者类型无效"}
-	}
 	if scope == model.WorkflowStageSkillScopeGlobal {
 		passed, err := repository.HasSkillProjectCanary(resolved.Version.ID, resolved.Version.ContentHash)
 		if err != nil {

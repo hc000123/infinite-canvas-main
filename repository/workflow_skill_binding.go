@@ -14,7 +14,12 @@ func SaveWorkflowStageSkillBinding(binding model.WorkflowStageSkillBinding) erro
 	if err != nil {
 		return err
 	}
-	return db.Save(&binding).Error
+	return db.Transaction(func(tx *gorm.DB) error {
+		if _, err := validatePublishedSystemSkillVersion(tx, binding.SkillVersionID); err != nil {
+			return err
+		}
+		return tx.Save(&binding).Error
+	})
 }
 
 func UpsertWorkflowStageSkillBinding(binding model.WorkflowStageSkillBinding) error {
@@ -22,7 +27,12 @@ func UpsertWorkflowStageSkillBinding(binding model.WorkflowStageSkillBinding) er
 	if err != nil {
 		return err
 	}
-	return upsertWorkflowStageSkillBinding(db, binding)
+	return db.Transaction(func(tx *gorm.DB) error {
+		if _, err := validatePublishedSystemSkillVersion(tx, binding.SkillVersionID); err != nil {
+			return err
+		}
+		return upsertWorkflowStageSkillBinding(tx, binding)
+	})
 }
 
 func UpsertWorkflowStageSkillBindingWithSkillAudit(binding model.WorkflowStageSkillBinding, audit model.SkillAuditLog) error {
@@ -31,6 +41,9 @@ func UpsertWorkflowStageSkillBindingWithSkillAudit(binding model.WorkflowStageSk
 		return err
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
+		if _, err := validatePublishedSystemSkillVersion(tx, binding.SkillVersionID); err != nil {
+			return err
+		}
 		if err := upsertWorkflowStageSkillBinding(tx, binding); err != nil {
 			return err
 		}
