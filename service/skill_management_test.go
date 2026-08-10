@@ -21,9 +21,16 @@ func TestImportOwnedSkillFolderCreatesStagePackageAndSourceSnapshot(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: WorkflowSkillStageScript, Snapshot: snapshot})
+	created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, ProjectID: "ignored-project", StageKey: WorkflowSkillStageScript, Snapshot: snapshot})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if created.Skill.OwnerType != model.SkillOwnerSystem || created.Skill.OwnerUserID != "" || created.Skill.OwnerProjectID != "" {
+		t.Fatalf("owner=%+v", created.Skill)
+	}
+	stored, ok, err := repository.GetSkillDefinition(created.Skill.ID)
+	if err != nil || !ok || stored.OwnerType != model.SkillOwnerSystem || stored.OwnerUserID != "" || stored.OwnerProjectID != "" {
+		t.Fatalf("stored=%+v ok=%v err=%v", stored, ok, err)
 	}
 	if created.Skill.Name != "Seedance 剧本整理" || created.Skill.Summary != "保留剧情" || created.Skill.StageKey != WorkflowSkillStageScript || created.Version.Version != "1.4.0" {
 		t.Fatalf("created=%+v", created)
@@ -49,6 +56,17 @@ func TestImportOwnedSkillFolderCreatesStagePackageAndSourceSnapshot(t *testing.T
 	content, err := GetManagedSkillSourceText("admin-1", created.Version.ID, "rules/preserve.md", true)
 	if err != nil || content != "保留全部台词" {
 		t.Fatalf("content=%q err=%v", content, err)
+	}
+}
+
+func TestImportManagedSkillFolderRejectsProjectOwner(t *testing.T) {
+	setupInvocationServiceTest(t)
+	snapshot, _ := ParseSkillFolder("script", []SkillFolderFile{{Path: "SKILL.md", Data: []byte("# Rules")}})
+	_, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{
+		OwnerType: model.SkillOwnerType("project"), ProjectID: "project-1", StageKey: WorkflowSkillStageScript, Snapshot: snapshot,
+	})
+	if err == nil || !strings.Contains(err.Error(), "项目 Skill 已停用") {
+		t.Fatalf("err=%v", err)
 	}
 }
 

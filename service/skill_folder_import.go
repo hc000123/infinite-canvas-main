@@ -234,7 +234,10 @@ func parseSkillFolderMetadata(content string) (SkillFolderMetadata, error) {
 }
 
 func ImportManagedSkillFolder(userID string, isAdmin bool, input SkillFolderImportInput) (ResolvedSkill, error) {
-	if !isAdmin && input.OwnerType == model.SkillOwnerSystem {
+	if input.OwnerType != model.SkillOwnerSystem {
+		return ResolvedSkill{}, safeMessageError{message: "项目 Skill 已停用，请由管理员在 Skill 中心统一管理"}
+	}
+	if !isAdmin {
 		return ResolvedSkill{}, safeMessageError{message: "只有管理员可以导入 System Skill"}
 	}
 	template, err := ResolveSkillStageTemplate(input.StageKey)
@@ -270,22 +273,13 @@ func ImportManagedSkillFolder(userID string, isAdmin bool, input SkillFolderImpo
 	if err != nil {
 		return ResolvedSkill{}, err
 	}
-	projectID := strings.TrimSpace(input.ProjectID)
-	ownerUserID := ""
-	if input.OwnerType == model.SkillOwnerSystem {
-		projectID = ""
-	} else if input.OwnerType == model.SkillOwnerProject && projectID != "" {
-		ownerUserID = strings.TrimSpace(userID)
-	} else {
-		return ResolvedSkill{}, safeMessageError{message: "项目 Skill 必须指定项目"}
-	}
 	if !skillSemanticVersionRegexp.MatchString(versionName) {
 		return ResolvedSkill{}, safeMessageError{message: "Skill 版本必须使用 x.y.z"}
 	}
 	stamp := now()
 	skill := model.SkillDefinition{
-		ID: newID("skill"), Name: name, Summary: summary, OwnerType: input.OwnerType, OwnerUserID: ownerUserID,
-		OwnerProjectID: projectID, StageKey: template.Key, Enabled: true, CreatedAt: stamp, UpdatedAt: stamp,
+		ID: newID("skill"), Name: name, Summary: summary, OwnerType: model.SkillOwnerSystem, OwnerUserID: "",
+		OwnerProjectID: "", StageKey: template.Key, Enabled: true, CreatedAt: stamp, UpdatedAt: stamp,
 	}
 	version := importedSkillVersion(newID("skillversion"), skill.ID, versionName, userID, stamp, packageValue, input.Snapshot, template)
 	if err := repository.CreateSkillAggregateWithAudit(skill, version, skillAudit(userID, "import_folder", skill, version.ID, stamp)); err != nil {
