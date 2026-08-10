@@ -102,7 +102,9 @@ func CreateSkillVersion(version model.SkillVersion) error {
 	if err != nil {
 		return err
 	}
-	return db.Create(&version).Error
+	return db.Transaction(func(tx *gorm.DB) error {
+		return createSystemSkillVersion(tx, version)
+	})
 }
 
 func CreateSkillVersionWithAudit(version model.SkillVersion, audit model.SkillAuditLog) error {
@@ -111,7 +113,7 @@ func CreateSkillVersionWithAudit(version model.SkillVersion, audit model.SkillAu
 		return err
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(&version).Error; err != nil {
+		if err := createSystemSkillVersion(tx, version); err != nil {
 			return err
 		}
 		return tx.Create(&audit).Error
@@ -119,11 +121,33 @@ func CreateSkillVersionWithAudit(version model.SkillVersion, audit model.SkillAu
 }
 
 func SaveSkillVersion(version model.SkillVersion) error {
+	version.SkillID = strings.TrimSpace(version.SkillID)
 	db, err := DB()
 	if err != nil {
 		return err
 	}
-	return db.Save(&version).Error
+	return db.Transaction(func(tx *gorm.DB) error {
+		skill, current, err := lockSkillVersionTarget(tx, version.ID)
+		if err != nil {
+			return err
+		}
+		if current.SkillID != version.SkillID || skill.ID != current.SkillID {
+			return ErrSkillReferenceTargetUnavailable
+		}
+		return tx.Save(&version).Error
+	})
+}
+
+func createSystemSkillVersion(tx *gorm.DB, version model.SkillVersion) error {
+	version.SkillID = strings.TrimSpace(version.SkillID)
+	skill, err := lockSkillDefinitionTarget(tx, version.SkillID)
+	if err != nil {
+		return err
+	}
+	if skill.OwnerType != model.SkillOwnerSystem {
+		return ErrSkillReferenceTargetUnavailable
+	}
+	return tx.Create(&version).Error
 }
 
 func GetSkillVersion(id string) (model.SkillVersion, bool, error) {
@@ -177,7 +201,14 @@ func PublishSkillVersionWithAudit(version model.SkillVersion, audit model.SkillA
 		return err
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
-		result := tx.Model(&model.SkillVersion{}).Where("id = ? AND status = ?", version.ID, model.SkillVersionDraft).
+		skill, current, err := lockSkillVersionTarget(tx, version.ID)
+		if err != nil {
+			return err
+		}
+		if skill.OwnerType != model.SkillOwnerSystem || !skill.Enabled || current.Status != model.SkillVersionDraft {
+			return errors.New("Skill 版本状态已变化")
+		}
+		result := tx.Model(&model.SkillVersion{}).Where("id = ? AND skill_id = ? AND status = ?", current.ID, skill.ID, model.SkillVersionDraft).
 			Updates(map[string]any{"status": model.SkillVersionPublished, "published_at": version.PublishedAt, "updated_at": version.UpdatedAt})
 		if result.Error != nil {
 			return result.Error
@@ -190,13 +221,22 @@ func PublishSkillVersionWithAudit(version model.SkillVersion, audit model.SkillA
 }
 
 func SetRecommendedSkillVersionWithAudit(skillID, versionID, updatedAt string, audit model.SkillAuditLog) error {
+	skillID, versionID = strings.TrimSpace(skillID), strings.TrimSpace(versionID)
 	db, err := DB()
 	if err != nil {
 		return err
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
-		result := tx.Model(&model.SkillDefinition{}).Where("id = ?", strings.TrimSpace(skillID)).
-			Updates(map[string]any{"recommended_version_id": strings.TrimSpace(versionID), "updated_at": updatedAt})
+		skills, versions, err := lockSkillTargets(tx, []string{skillID}, []string{versionID})
+		if err != nil {
+			return err
+		}
+		skill, version := skills[skillID], versions[versionID]
+		if skill.OwnerType != model.SkillOwnerSystem || !skill.Enabled || version.SkillID != skill.ID || version.Status != model.SkillVersionPublished {
+			return ErrSkillReferenceTargetUnavailable
+		}
+		result := tx.Model(&model.SkillDefinition{}).Where("id = ? AND owner_type = ? AND enabled = ?", skill.ID, model.SkillOwnerSystem, true).
+			Updates(map[string]any{"recommended_version_id": version.ID, "updated_at": updatedAt})
 		if result.Error != nil {
 			return result.Error
 		}

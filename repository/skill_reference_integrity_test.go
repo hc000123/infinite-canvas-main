@@ -81,8 +81,8 @@ func TestPublishAgentVersionRevalidatesSkillTargets(t *testing.T) {
 			setupRepositoryTestDB(t)
 			refs, access := item.prepare(t)
 			_, version := mustCreateAgentAggregate(t, model.AgentOwnerProject, "user-1", "project-1", "invalid-reference")
-			version.DefaultSkillRefsJSON, version.SkillAccessPolicyJSON = refs, access
-			if err := SaveAgentDraft(version); err != nil {
+			db, _ := DB()
+			if err := db.Model(&model.AgentVersion{}).Where("id = ?", version.ID).Updates(map[string]any{"default_skill_refs_json": refs, "skill_access_policy_json": access}).Error; err != nil {
 				t.Fatal(err)
 			}
 			version.PublishedAt, version.UpdatedAt = "later", "later"

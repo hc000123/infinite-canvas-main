@@ -139,6 +139,61 @@ func TestSetRecommendedSkillVersionIsAtomic(t *testing.T) {
 	}
 }
 
+func TestRecommendSkillVersionRejectsArchivedTargetWithoutAudit(t *testing.T) {
+	setupRepositoryTestDB(t)
+	skill := model.SkillDefinition{ID: "recommend-archived-skill", Name: "Archived", OwnerType: model.SkillOwnerSystem, Enabled: true}
+	version := model.SkillVersion{ID: "recommend-archived-version", SkillID: skill.ID, Version: "1.0.0", Status: model.SkillVersionPublished}
+	if err := CreateSkillAggregate(skill, version); err != nil {
+		t.Fatal(err)
+	}
+	if err := ArchiveSkillVersionWithAudit(version.ID, skill.ID, "archived", model.SkillAuditLog{ID: "archive-before-recommend"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetRecommendedSkillVersionWithAudit(skill.ID, version.ID, "later", model.SkillAuditLog{ID: "recommend-archived-audit"}); !errors.Is(err, ErrSkillReferenceTargetUnavailable) {
+		t.Fatalf("err=%v", err)
+	}
+	stored, ok, err := GetSkillDefinition(skill.ID)
+	if err != nil || !ok || stored.RecommendedVersionID != "" {
+		t.Fatalf("skill=%+v ok=%v err=%v", stored, ok, err)
+	}
+	db, _ := DB()
+	var audits int64
+	if err := db.Model(&model.SkillAuditLog{}).Where("id = ?", "recommend-archived-audit").Count(&audits).Error; err != nil || audits != 0 {
+		t.Fatalf("audits=%d err=%v", audits, err)
+	}
+}
+
+func TestCreateSkillVersionRejectsDeletedDefinitionWithoutPartialWrites(t *testing.T) {
+	setupRepositoryTestDB(t)
+	skill := model.SkillDefinition{ID: "deleted-version-parent", Name: "Deleted", OwnerType: model.SkillOwnerSystem, Enabled: true}
+	if err := CreateSkillDefinition(skill); err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteUnpublishedSkillDefinitionWithAudit(skill.ID, model.SkillAuditLog{ID: "delete-empty-definition"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, withAudit := range []bool{false, true} {
+		version := model.SkillVersion{ID: map[bool]string{false: "orphan-version", true: "orphan-version-audited"}[withAudit], SkillID: skill.ID, Version: "1.0.0", Status: model.SkillVersionDraft}
+		var err error
+		if withAudit {
+			err = CreateSkillVersionWithAudit(version, model.SkillAuditLog{ID: "orphan-version-audit"})
+		} else {
+			err = CreateSkillVersion(version)
+		}
+		if !errors.Is(err, ErrSkillReferenceTargetUnavailable) {
+			t.Fatalf("withAudit=%v err=%v", withAudit, err)
+		}
+		if _, ok, err := GetSkillVersion(version.ID); err != nil || ok {
+			t.Fatalf("version=%s ok=%v err=%v", version.ID, ok, err)
+		}
+	}
+	db, _ := DB()
+	var audits int64
+	if err := db.Model(&model.SkillAuditLog{}).Where("id = ?", "orphan-version-audit").Count(&audits).Error; err != nil || audits != 0 {
+		t.Fatalf("audits=%d err=%v", audits, err)
+	}
+}
+
 func TestArchiveSkillVersionRejectsPublishedWorkflowReference(t *testing.T) {
 	setupRepositoryTestDB(t)
 	skill := model.SkillDefinition{ID: "archive-workflow-skill", Name: "剧本", OwnerType: model.SkillOwnerSystem, Enabled: true, RecommendedVersionID: "archive-workflow-skill-version"}
@@ -268,6 +323,11 @@ func TestCreateSkillEvaluationUpdatesVersionSummary(t *testing.T) {
 
 func TestDeleteSkillDraftUsesStructuredVersionReferences(t *testing.T) {
 	setupRepositoryTestDB(t)
+	otherSkill := model.SkillDefinition{ID: "other-version-skill", Name: "Other", OwnerType: model.SkillOwnerSystem, Enabled: true}
+	otherVersion := model.SkillVersion{ID: "version-10", SkillID: otherSkill.ID, Version: "1.0.0", Status: model.SkillVersionDraft}
+	if err := CreateSkillAggregate(otherSkill, otherVersion); err != nil {
+		t.Fatal(err)
+	}
 	skill := model.SkillDefinition{ID: "delete-structured-skill", Name: "结构化删除", OwnerType: model.SkillOwnerSystem, Enabled: true}
 	version := model.SkillVersion{ID: "version-1", SkillID: skill.ID, Version: "1.0.0", Status: model.SkillVersionDraft}
 	if err := CreateSkillAggregate(skill, version); err != nil {
@@ -320,6 +380,14 @@ func TestDeleteSkillDefinitionUsesStructuredSkillReferences(t *testing.T) {
 	for _, source := range []string{"ignored values", "workflow skill", "workflow candidate", "agent default", "agent access"} {
 		t.Run(source, func(t *testing.T) {
 			setupRepositoryTestDB(t)
+			for _, definition := range []model.SkillDefinition{
+				{ID: "other-definition", Name: "Other", OwnerType: model.SkillOwnerSystem, Enabled: true},
+				{ID: "definition-10", Name: "Prefix", OwnerType: model.SkillOwnerSystem, Enabled: true},
+			} {
+				if err := CreateSkillDefinition(definition); err != nil {
+					t.Fatal(err)
+				}
+			}
 			skill := model.SkillDefinition{ID: "definition-1", Name: "Definition", OwnerType: model.SkillOwnerSystem, Enabled: true}
 			version := model.SkillVersion{ID: "definition-version", SkillID: skill.ID, Version: "1.0.0", Status: model.SkillVersionDraft}
 			if err := CreateSkillAggregate(skill, version); err != nil {
@@ -364,8 +432,12 @@ func TestDeleteSkillDefinitionUsesStructuredSkillReferences(t *testing.T) {
 
 func TestSkillLifecycleValidatesLockedTargetBeforeScanningReferences(t *testing.T) {
 	setupRepositoryTestDB(t)
-	workflow := model.WorkflowVersion{ID: "malformed-workflow-version", WorkflowID: "malformed-workflow", Version: "1.0.0", Status: model.WorkflowVersionPublished, PackageJSON: `{`}
+	workflow := model.WorkflowVersion{ID: "malformed-workflow-version", WorkflowID: "malformed-workflow", Version: "1.0.0", Status: model.WorkflowVersionPublished, PackageJSON: `{"nodes":[]}`}
 	if err := CreateWorkflowDefinitionAggregate(model.WorkflowDefinition{ID: workflow.WorkflowID, Name: "Malformed", OwnerType: model.WorkflowOwnerSystem}, workflow); err != nil {
+		t.Fatal(err)
+	}
+	db, _ := DB()
+	if err := db.Model(&model.WorkflowVersion{}).Where("id = ?", workflow.ID).Update("package_json", `{`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := ArchiveSkillVersionWithAudit("missing-version", "missing-skill", "later", model.SkillAuditLog{ID: "missing-archive-audit"}); !errors.Is(err, ErrSkillVersionMustBePublished) {
@@ -374,7 +446,6 @@ func TestSkillLifecycleValidatesLockedTargetBeforeScanningReferences(t *testing.
 	if err := DeleteUnreferencedSkillDraftWithAudit("missing-version", model.SkillAuditLog{ID: "missing-delete-audit"}); !errors.Is(err, ErrSkillVersionMustBeDraft) {
 		t.Fatalf("delete checked references before target: %v", err)
 	}
-	db, _ := DB()
 	var audits int64
 	if err := db.Model(&model.SkillAuditLog{}).Where("id IN ?", []string{"missing-archive-audit", "missing-delete-audit"}).Count(&audits).Error; err != nil || audits != 0 {
 		t.Fatalf("partial audits=%d err=%v", audits, err)

@@ -83,6 +83,41 @@ func TestAgentVersionTrackAndRecommendation(t *testing.T) {
 	}
 }
 
+func TestAgentDraftWritesRejectUnavailableSkillReferences(t *testing.T) {
+	setupRepositoryTestDB(t)
+	project := createReferenceTestSkill(t, "agent-draft-project", model.SkillOwnerProject, true, model.SkillVersionPublished)
+	agent := model.AgentDefinition{ID: "invalid-agent-create", Name: "Invalid", OwnerType: model.AgentOwnerProject}
+	version := model.AgentVersion{ID: "invalid-agent-create-version", AgentID: agent.ID, Version: "1.0.0", Status: model.AgentVersionDraft, SkillAccessPolicyJSON: `{"allowedSkillIds":["` + project.SkillID + `"]}`}
+	if err := CreateAgentAggregate(agent, version); !errors.Is(err, ErrSkillReferenceTargetUnavailable) {
+		t.Fatalf("aggregate err=%v", err)
+	}
+	if _, ok, _ := GetAgentDefinition(agent.ID); ok {
+		t.Fatal("invalid Agent definition persisted")
+	}
+
+	_, existing := mustCreateAgentAggregate(t, model.AgentOwnerProject, "user-1", "project-1", "invalid-draft-save")
+	originalRefs := existing.DefaultSkillRefsJSON
+	archived := createReferenceTestSkill(t, "agent-draft-archived", model.SkillOwnerSystem, true, model.SkillVersionArchived)
+	existing.DefaultSkillRefsJSON = `[{"skillVersionId":"` + archived.ID + `"}]`
+	if err := SaveAgentDraft(existing); !errors.Is(err, ErrSkillReferenceTargetUnavailable) {
+		t.Fatalf("save err=%v", err)
+	}
+	stored, ok, err := GetAgentVersion(existing.ID)
+	if err != nil || !ok || stored.DefaultSkillRefsJSON != originalRefs {
+		t.Fatalf("stored=%+v ok=%v err=%v", stored, ok, err)
+	}
+
+	createdVersion := existing
+	createdVersion.ID = "invalid-agent-new-version"
+	createdVersion.DefaultSkillRefsJSON = `[{"skillVersionId":"missing-agent-skill-version"}]`
+	if err := CreateAgentVersion(createdVersion); !errors.Is(err, ErrSkillReferenceTargetUnavailable) {
+		t.Fatalf("version err=%v", err)
+	}
+	if _, ok, _ := GetAgentVersion(createdVersion.ID); ok {
+		t.Fatal("invalid Agent version persisted")
+	}
+}
+
 func mustCreateAgentAggregate(t *testing.T, ownerType model.AgentOwnerType, userID, projectID, name string) (model.AgentDefinition, model.AgentVersion) {
 	t.Helper()
 	stamp := "2026-07-26T00:00:00Z"

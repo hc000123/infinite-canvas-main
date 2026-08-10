@@ -13,6 +13,7 @@ func TestPublishAgentRejectsSkillOutsideAccessPolicy(t *testing.T) {
 	_, skillVersion := seedInvocationSkill(t, invocationSkillSeed{
 		ID: "agent-access-skill", VersionID: "agent-access-skill-v1", Version: "1.0.0", Recommended: true,
 	})
+	seedInvocationSkill(t, invocationSkillSeed{ID: "another-skill", VersionID: "another-skill-v1", Version: "1.0.0", Recommended: true})
 	created, err := CreateProjectAgent("user-1", AgentCreateInput{
 		ProjectID: "project-1",
 		Name:      "导演",

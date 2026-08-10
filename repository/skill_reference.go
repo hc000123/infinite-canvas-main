@@ -173,6 +173,14 @@ func lockSkillTargets(tx *gorm.DB, skillIDs, versionIDs []string) (map[string]mo
 }
 
 func validateWorkflowSkillReferences(tx *gorm.DB, packageJSON string) error {
+	return validateWorkflowSkillReferencesForDraft(tx, packageJSON, false)
+}
+
+func validateWorkflowDraftSkillReferences(tx *gorm.DB, packageJSON string) error {
+	return validateWorkflowSkillReferencesForDraft(tx, packageJSON, true)
+}
+
+func validateWorkflowSkillReferencesForDraft(tx *gorm.DB, packageJSON string, allowDraftVersion bool) error {
 	refs, err := parseWorkflowSkillReferences(packageJSON)
 	if err != nil {
 		return err
@@ -191,7 +199,7 @@ func validateWorkflowSkillReferences(tx *gorm.DB, packageJSON string) error {
 		if strings.TrimSpace(ref.SkillVersionID) != "" {
 			version := versions[strings.TrimSpace(ref.SkillVersionID)]
 			skill := skills[version.SkillID]
-			if skill.OwnerType != model.SkillOwnerSystem || !skill.Enabled || version.Status != model.SkillVersionPublished {
+			if skill.OwnerType != model.SkillOwnerSystem || !skill.Enabled || (version.Status != model.SkillVersionPublished && (!allowDraftVersion || version.Status != model.SkillVersionDraft)) {
 				return ErrSkillReferenceTargetUnavailable
 			}
 			if strings.TrimSpace(ref.SkillID) != "" && skill.ID != strings.TrimSpace(ref.SkillID) {
@@ -216,6 +224,14 @@ func validateWorkflowSkillReferences(tx *gorm.DB, packageJSON string) error {
 }
 
 func validateAgentSkillReferences(tx *gorm.DB, defaultRefsJSON, accessPolicyJSON string) error {
+	return validateAgentSkillReferencesForDraft(tx, defaultRefsJSON, accessPolicyJSON, false)
+}
+
+func validateAgentDraftSkillReferences(tx *gorm.DB, defaultRefsJSON, accessPolicyJSON string) error {
+	return validateAgentSkillReferencesForDraft(tx, defaultRefsJSON, accessPolicyJSON, true)
+}
+
+func validateAgentSkillReferencesForDraft(tx *gorm.DB, defaultRefsJSON, accessPolicyJSON string, allowDraftVersion bool) error {
 	refs, err := parseAgentSkillReferences(defaultRefsJSON)
 	if err != nil {
 		return err
@@ -237,7 +253,7 @@ func validateAgentSkillReferences(tx *gorm.DB, defaultRefsJSON, accessPolicyJSON
 		if strings.TrimSpace(ref.SkillVersionID) != "" {
 			version := versions[strings.TrimSpace(ref.SkillVersionID)]
 			skill := skills[version.SkillID]
-			if skill.OwnerType != model.SkillOwnerSystem || !skill.Enabled || version.Status != model.SkillVersionPublished {
+			if skill.OwnerType != model.SkillOwnerSystem || !skill.Enabled || (version.Status != model.SkillVersionPublished && (!allowDraftVersion || version.Status != model.SkillVersionDraft)) {
 				return ErrSkillReferenceTargetUnavailable
 			}
 			if strings.TrimSpace(ref.SkillID) != "" && skill.ID != strings.TrimSpace(ref.SkillID) {
