@@ -93,58 +93,22 @@ func TestCreateImportedSkillVersionWithAuditIsAtomicAndDeduplicatesSource(t *tes
 	}
 }
 
-func TestListVisibleSkillDefinitionsIncludesSystemAndProject(t *testing.T) {
+func TestListSystemSkillDefinitionsExcludesLegacyProjectOwners(t *testing.T) {
 	setupRepositoryTestDB(t)
 	for _, skill := range []model.SkillDefinition{
 		{ID: "system", Name: "系统技能", OwnerType: model.SkillOwnerSystem, Enabled: true},
-		{ID: "project-1", Name: "项目技能", OwnerType: model.SkillOwnerProject, OwnerUserID: "user-1", OwnerProjectID: "p1", Enabled: true},
-		{ID: "project-2", Name: "其他项目", OwnerType: model.SkillOwnerProject, OwnerUserID: "user-1", OwnerProjectID: "p2", Enabled: true},
+		{ID: "legacy-project", Name: "遗留项目技能", OwnerType: model.SkillOwnerType("project"), OwnerUserID: "user-1", OwnerProjectID: "project-1", Enabled: true},
 	} {
 		if err := CreateSkillDefinition(skill); err != nil {
 			t.Fatal(err)
 		}
 	}
-	items, err := ListVisibleSkillDefinitions("user-1", "p1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(items) != 2 || items[0].ID != "system" || items[1].ID != "project-1" {
-		t.Fatalf("items=%+v", items)
-	}
-}
-
-func TestListVisibleSkillDefinitionsKeepsSystemSkillsGlobal(t *testing.T) {
-	setupRepositoryTestDB(t)
-	if err := CreateSkillDefinition(model.SkillDefinition{
-		ID: "system", Name: "系统技能", OwnerType: model.SkillOwnerSystem, Enabled: true,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	items, err := ListVisibleSkillDefinitions("any-user", "any-project")
+	items, err := ListSystemSkillDefinitions()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(items) != 1 || items[0].ID != "system" {
 		t.Fatalf("items=%+v", items)
-	}
-}
-
-func TestListVisibleSkillDefinitionsRequiresProjectOwnerUser(t *testing.T) {
-	setupRepositoryTestDB(t)
-	if err := CreateSkillDefinition(model.SkillDefinition{
-		ID: "project-user-1", Name: "用户一项目技能", OwnerType: model.SkillOwnerProject,
-		OwnerUserID: "user-1", OwnerProjectID: "project-1", Enabled: true,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	items, err := ListVisibleSkillDefinitions("user-2", "project-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, item := range items {
-		if item.ID == "project-user-1" {
-			t.Fatal("project id alone must not grant visibility")
-		}
 	}
 }
 

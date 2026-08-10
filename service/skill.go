@@ -152,18 +152,8 @@ func listSkillAdminItems(skills []model.SkillDefinition, includeManagementRelati
 	return items, nil
 }
 
-func CreateProjectSkill(userID, projectID, name, summary string, draft SkillDraftInput) (ResolvedSkill, error) {
-	return CreateSkill(userID, model.SkillOwnerProject, projectID, name, summary, draft)
-}
-
-func CreateSkill(userID string, ownerType model.SkillOwnerType, projectID, name, summary string, draft SkillDraftInput) (ResolvedSkill, error) {
-	projectID = strings.TrimSpace(projectID)
+func CreateSystemSkill(userID, name, summary string, draft SkillDraftInput) (ResolvedSkill, error) {
 	name = strings.TrimSpace(name)
-	if ownerType == model.SkillOwnerSystem {
-		projectID = ""
-	} else if ownerType != model.SkillOwnerProject || projectID == "" {
-		return ResolvedSkill{}, safeMessageError{message: "项目 Skill 必须指定项目"}
-	}
 	if name == "" {
 		return ResolvedSkill{}, safeMessageError{message: "缺少 Skill 名称"}
 	}
@@ -172,13 +162,9 @@ func CreateSkill(userID string, ownerType model.SkillOwnerType, projectID, name,
 		return ResolvedSkill{}, err
 	}
 	stamp := now()
-	ownerUserID := ""
-	if ownerType == model.SkillOwnerProject {
-		ownerUserID = strings.TrimSpace(userID)
-	}
 	skill := model.SkillDefinition{
-		ID: newID("skill"), Name: name, Summary: strings.TrimSpace(summary), OwnerType: ownerType,
-		OwnerUserID: ownerUserID, OwnerProjectID: projectID, Enabled: true, CreatedAt: stamp, UpdatedAt: stamp,
+		ID: newID("skill"), Name: name, Summary: strings.TrimSpace(summary), OwnerType: model.SkillOwnerSystem,
+		OwnerUserID: "", OwnerProjectID: "", Enabled: true, CreatedAt: stamp, UpdatedAt: stamp,
 	}
 	version := skillVersionFromPackage(newID("skillversion"), skill.ID, versionName, userID, stamp, packageValue)
 	if err := repository.CreateSkillAggregate(skill, version); err != nil {
@@ -346,7 +332,7 @@ func RecommendPublishedSkillVersion(adminID, skillID, versionID string) (Resolve
 }
 
 func ListSkillOptions(userID, projectID string, filter SkillOptionFilter) ([]SkillOption, error) {
-	skills, err := repository.ListVisibleSkillDefinitions(userID, projectID)
+	skills, err := repository.ListSystemSkillDefinitions()
 	if err != nil {
 		return nil, err
 	}
@@ -435,11 +421,8 @@ func resolvePublishedSkill(skill model.SkillDefinition, version model.SkillVersi
 	return ResolvedSkill{Skill: skill, Version: version, Package: packageValue}, nil
 }
 
-func skillVisibleTo(skill model.SkillDefinition, userID, projectID string) bool {
-	return skill.OwnerType == model.SkillOwnerSystem ||
-		(skill.OwnerType == model.SkillOwnerProject &&
-			skill.OwnerUserID == strings.TrimSpace(userID) &&
-			skill.OwnerProjectID == strings.TrimSpace(projectID))
+func skillVisibleTo(skill model.SkillDefinition, _, _ string) bool {
+	return skill.OwnerType == model.SkillOwnerSystem
 }
 
 func skillManifestMatches(manifest SkillManifest, filter SkillOptionFilter) bool {

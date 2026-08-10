@@ -1,7 +1,6 @@
 package service
 
 import (
-	"encoding/json"
 	"strings"
 
 	"github.com/basketikun/infinite-canvas/model"
@@ -9,7 +8,7 @@ import (
 )
 
 func ListVisibleSkillItems(userID, projectID string) ([]SkillAdminItem, error) {
-	skills, err := repository.ListVisibleSkillDefinitions(userID, projectID)
+	skills, err := repository.ListSystemSkillDefinitions()
 	if err != nil {
 		return nil, err
 	}
@@ -51,22 +50,17 @@ func GetManagedSkillVersionPackage(userID, versionID string, isAdmin bool) (mode
 }
 
 func CreateOwnedProjectSkill(userID, projectID, name, summary string, draft SkillDraftInput) (ResolvedSkill, error) {
-	result, err := CreateProjectSkill(userID, projectID, name, summary, draft)
-	if err != nil {
-		return result, err
-	}
-	audit := skillAudit(userID, "create_project_skill", result.Skill, result.Version.ID, now())
-	if err := repository.CreateSkillAuditLog(audit); err != nil {
-		return ResolvedSkill{}, err
-	}
-	return result, nil
+	return ResolvedSkill{}, safeMessageError{message: "项目 Skill 已停用，请由管理员在 Skill 中心统一管理"}
 }
 
 func CreateManagedSkill(userID string, isAdmin bool, ownerType model.SkillOwnerType, projectID, name, summary string, draft SkillDraftInput) (ResolvedSkill, error) {
 	if !isAdmin {
 		return ResolvedSkill{}, safeMessageError{message: "只有管理员可以创建 System Skill"}
 	}
-	result, err := CreateSkill(userID, ownerType, projectID, name, summary, draft)
+	if ownerType != model.SkillOwnerSystem {
+		return ResolvedSkill{}, safeMessageError{message: "只能创建 System Skill"}
+	}
+	result, err := CreateSystemSkill(userID, name, summary, draft)
 	if err != nil {
 		return result, err
 	}
@@ -168,31 +162,7 @@ func RecommendOwnedSkillVersion(userID string, isAdmin bool, skillID, versionID 
 }
 
 func CopySystemSkillToProject(userID string, isAdmin bool, systemSkillID, projectID, name, version string) (ResolvedSkill, error) {
-	source, ok, err := repository.GetSkillDefinition(strings.TrimSpace(systemSkillID))
-	if err != nil || !ok || source.OwnerType != model.SkillOwnerSystem || source.RecommendedVersionID == "" {
-		return ResolvedSkill{}, safeMessageError{message: "System Skill 没有可复制的推荐版本"}
-	}
-	if strings.TrimSpace(userID) == "" && !isAdmin {
-		return ResolvedSkill{}, safeMessageError{message: "未登录或权限不足"}
-	}
-	resolved, err := resolvePublishedSkillVersion(source, source.RecommendedVersionID)
-	if err != nil {
-		return ResolvedSkill{}, err
-	}
-	if strings.TrimSpace(name) == "" {
-		name = source.Name + "（项目版）"
-	}
-	result, err := CreateProjectSkill(userID, projectID, name, source.Summary, SkillDraftInput{Version: version, Package: resolved.Package})
-	if err != nil {
-		return result, err
-	}
-	detail, _ := json.Marshal(map[string]string{"sourceSkillId": source.ID, "sourceSkillVersionId": resolved.Version.ID})
-	audit := skillAudit(userID, "copy_from_system", result.Skill, result.Version.ID, now())
-	audit.DetailJSON = string(detail)
-	if err := repository.CreateSkillAuditLog(audit); err != nil {
-		return ResolvedSkill{}, err
-	}
-	return result, nil
+	return ResolvedSkill{}, safeMessageError{message: "项目 Skill 已停用，请由管理员在 Skill 中心统一管理"}
 }
 
 func ArchiveOwnedSkillVersion(userID string, isAdmin bool, versionID string) (model.SkillVersion, error) {

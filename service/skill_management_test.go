@@ -159,12 +159,22 @@ func TestUpdateSkillDraftRejectsFolderImportWithoutChangingSourceSnapshot(t *tes
 
 func TestProjectSkillManagementEnforcesOwnerAndLifecycle(t *testing.T) {
 	setupInvocationServiceTest(t)
-	pkg := validSkillTestPackage()
-	pkg.Manifest.EstimatedCostClass = "none"
-	created, err := CreateProjectSkill("user-owner", "project-1", "项目剧本", "项目专用", SkillDraftInput{Version: "1.0.0", Package: pkg})
+	input := validSkillTestPackage()
+	input.Manifest.EstimatedCostClass = "none"
+	pkg, err := ValidateInvocableSkillPackage(input)
 	if err != nil {
 		t.Fatal(err)
 	}
+	stamp := now()
+	skill := model.SkillDefinition{
+		ID: "legacy-project-skill", Name: "项目剧本", Summary: "项目专用", OwnerType: model.SkillOwnerType("project"),
+		OwnerUserID: "user-owner", OwnerProjectID: "project-1", Enabled: true, CreatedAt: stamp, UpdatedAt: stamp,
+	}
+	version := skillVersionFromPackage("legacy-project-version", skill.ID, "1.0.0", "user-owner", stamp, pkg)
+	if err := repository.CreateSkillAggregate(skill, version); err != nil {
+		t.Fatal(err)
+	}
+	created := ResolvedSkill{Skill: skill, Version: version, Package: pkg}
 	if _, err := UpdateOwnedSkillDefinition("user-other", false, created.Skill.ID, "越权改名", "", nil); err == nil {
 		t.Fatal("foreign project user mutated skill")
 	}
