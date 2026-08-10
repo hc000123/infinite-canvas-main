@@ -64,6 +64,21 @@ test("发现模型和手动模型会修剪、忽略空项并稳定去重", () =>
     assert.deepEqual(normalizeWizardModels([" gpt-5.5 ", "", "gpt-5.5", "manual-model "]), ["gpt-5.5", "manual-model"]);
 });
 
+test("单能力渠道的发现候选只保留当前渠道模型和匹配能力的发现结果", () => {
+    assert.deepEqual(
+        modelDiscoveryCandidates(
+            ["saved-custom-video"],
+            ["gpt-5.5", "gpt-image-2-all", "sd2-720p-fast", "minimax-h3-2k", "saved-custom-video"],
+            ["video", "video_query"],
+        ),
+        ["saved-custom-video", "sd2-720p-fast", "minimax-h3-2k"],
+    );
+    assert.deepEqual(
+        modelDiscoveryCandidates([], ["gpt-5.5", "gpt-image-2-all", "veo_3_1"], ["text", "image"]),
+        ["gpt-5.5", "gpt-image-2-all", "veo_3_1"],
+    );
+});
+
 test("编辑渠道保留 id、掩码密钥、权重和备注，手动模型保持原名称", () => {
     const result = buildWizardChannel(channel({ id: "saved-id", apiKey: "saved-secret", weight: 5, remark: "existing" }), {
         id: "   ",
@@ -679,6 +694,24 @@ test("异步发现集成只让当前请求写入局部候选和状态", async ()
     assert.deepEqual(configuredModels, ["configured-model"]);
     assert.deepEqual(selectedModels, ["manual-model"]);
     assert.equal(loading, false);
+});
+
+test("异步发现写入前按当前渠道的单一模型能力过滤", async () => {
+    const coordinator = createModelDiscoveryCoordinator();
+    const draft = channel({ capabilities: ["video", "video_query"], models: ["saved-video"] });
+    let discoveredModels: string[] = [];
+    let successModels: string[] = [];
+
+    await runModelDiscoveryRequest(coordinator, draft, {
+        discover: async () => ["gpt-5.5", "gpt-image-2-all", "sd2-720p-fast", "veo_3_1"],
+        getCurrentDraft: () => draft,
+        setDiscoveredModels: (models) => { discoveredModels = models; },
+        setLoading: () => undefined,
+        onSuccess: (models) => { successModels = models; },
+    });
+
+    assert.deepEqual(discoveredModels, ["sd2-720p-fast", "veo_3_1"]);
+    assert.deepEqual(successModels, discoveredModels);
 });
 
 test("基础候选只跟随权威保存响应，取消和保存失败不泄漏草稿，删除后可收缩", async () => {

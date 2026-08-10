@@ -17,7 +17,6 @@ type ModelChannelWizardProps = {
     existingChannel?: AdminModelChannel;
     siblingChannels: AdminModelChannel[];
     publicModelChannel: AdminPublicModelChannelSettings;
-    configuredModels: string[];
     saving: boolean;
     onCancel: () => void;
     onDiscoverModels: (draft: AdminModelChannel) => Promise<string[]>;
@@ -50,7 +49,6 @@ export function ModelChannelWizard({
     existingChannel,
     siblingChannels,
     publicModelChannel,
-    configuredModels,
     saving,
     onCancel,
     onDiscoverModels,
@@ -87,11 +85,11 @@ export function ModelChannelWizard({
     const capabilities = Form.useWatch("capabilities", form) || [];
     const publishedModels = Form.useWatch("publishedModels", form) || [];
     const enabled = Form.useWatch("enabled", form) ?? baseChannel.enabled;
-    const candidateModels = useMemo(() => modelDiscoveryCandidates(configuredModels, discoveredModels), [configuredModels, discoveredModels]);
     const channelModels = useMemo(
         () => (protocol === "volcengine-ark" ? normalizeWizardModels(endpointMappings.map((item) => item?.model || "")) : normalizeWizardModels(selectedModels)),
         [endpointMappings, protocol, selectedModels],
     );
+    const candidateModels = useMemo(() => modelDiscoveryCandidates(channelModels, discoveredModels, capabilities), [capabilities, channelModels, discoveredModels]);
     const prospectiveChannel = useMemo(() => buildWizardProspectiveChannel(baseChannel, { protocol, baseUrl, apiKey, models: channelModels, capabilities, enabled }), [apiKey, baseChannel, baseUrl, capabilities, channelModels, enabled, protocol]);
     const projectedPublication = useMemo(() => applyWizardPublication(publicModelChannel, existingChannel, prospectiveChannel, siblingChannels, {
         publishedModels,

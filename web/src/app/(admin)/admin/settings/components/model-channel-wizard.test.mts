@@ -162,7 +162,9 @@ test("wizard discovery keeps the existing channel index and normalized draft", (
     assert.match(pageSource, /fetchChannelModels\(token, \{ index: editingChannelIndex \?\? undefined, channel: normalizeChannel\(channel\) \}\)/);
     const callback = pageSource.match(/const discoverChannelModels = async[\s\S]*?\n\s*};/)?.[0] || "";
     assert.doesNotMatch(callback, /rememberModels|setKnownModels/);
-    assert.match(source, /modelDiscoveryCandidates\(configuredModels, discoveredModels\)/);
+    assert.match(source, /modelDiscoveryCandidates\(channelModels, discoveredModels, capabilities\)/);
+    assert.doesNotMatch(source, /configuredModels/);
+    assert.doesNotMatch(pageSource, /configuredModels=/);
     assert.doesNotMatch(pageSource, /\brememberKnownModels\b/);
     assert.doesNotMatch(pageSource, /rememberConfiguredChannelModels/);
     assert.match(pageSource, /syncConfiguredModelsFromAuthoritativeSettings/);

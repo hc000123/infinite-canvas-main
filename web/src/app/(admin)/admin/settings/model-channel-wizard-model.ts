@@ -1,4 +1,4 @@
-import type { AiModelKind } from "../../../../lib/ai-model-kind.ts";
+import { inferAiModelKind, type AiModelKind } from "../../../../lib/ai-model-kind.ts";
 import type { AdminModelChannel, AdminModelTextEndpoint, AdminPublicModelChannelSettings, AdminSettings } from "../../../../services/api/admin.ts";
 import { isRoutableModelChannel, modelChannelHasCapability, sanitizeModelChannelPublication } from "./model-channel-publication.ts";
 
@@ -287,8 +287,10 @@ export function createModelDiscoveryCoordinator() {
     };
 }
 
-export function modelDiscoveryCandidates(configuredModels: string[], discoveredModels: string[]) {
-    return normalizeWizardModels([...configuredModels, ...discoveredModels]);
+export function modelDiscoveryCandidates(channelModels: string[], discoveredModels: string[], capabilities: string[] = []) {
+    const modelCapabilities = normalizeWizardModels(capabilities.map((item) => item.toLowerCase())).filter((item): item is AiModelKind => item === "text" || item === "image" || item === "video");
+    const discovered = modelCapabilities.length === 1 ? discoveredModels.filter((model) => inferAiModelKind(model) === modelCapabilities[0]) : discoveredModels;
+    return normalizeWizardModels([...channelModels, ...discovered]);
 }
 
 export function configuredModelsFromSettings(settings: AdminSettings) {
@@ -408,7 +410,7 @@ export async function runModelDiscoveryRequest(
     const request = coordinator.begin(draft);
     actions.setLoading(true);
     try {
-        const result = normalizeWizardModels(await actions.discover(draft));
+        const result = modelDiscoveryCandidates([], normalizeWizardModels(await actions.discover(draft)), draft.capabilities);
         if (!coordinator.isCurrent(request, actions.getCurrentDraft())) return;
         actions.setDiscoveredModels(result);
         actions.onSuccess?.(result);
