@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyModelChannelPreset, JIMENG_MODELS, MODEL_CHANNEL_PRESETS, VOLCENGINE_ARK_MODELS, XINGLIAN_MODELS } from "./model-channel-presets.ts";
+import { applyModelChannelPreset, GEEKNOW_IMAGE_MODELS, GEEKNOW_TEXT_MODELS, GEEKNOW_VIDEO_MODELS, JIMENG_MODELS, MODEL_CHANNEL_PRESETS, VOLCENGINE_ARK_MODELS, XINGLIAN_MODELS } from "./model-channel-presets.ts";
 
 function emptySettings() {
     return {
@@ -69,6 +69,33 @@ test("applies all Xinglian models idempotently without changing billing or defau
     assert.equal(channels[0].apiKey, "new-key");
     assert.equal(second.settings.public.modelChannel.defaultVideoModel, "existing-video");
     assert.deepEqual(second.settings.public.modelChannel.modelCosts, [{ model: "sd2-720p-mini", credits: 18 }]);
+});
+
+test("creates three isolated GeekNow channels without publishing models", () => {
+    const result = applyModelChannelPreset(emptySettings(), "geeknow", { apiKey: "geek-key" });
+    const channels = result.settings.private.channels.filter((item) => item.id.startsWith("geeknow-"));
+
+    assert.deepEqual(channels.map((item) => item.id), ["geeknow-text", "geeknow-image", "geeknow-video"]);
+    assert.deepEqual(channels.map((item) => item.baseUrl), Array(3).fill("https://www.geeknow.top/v1"));
+    assert.deepEqual(channels.find((item) => item.id === "geeknow-text")?.models, GEEKNOW_TEXT_MODELS);
+    assert.deepEqual(channels.find((item) => item.id === "geeknow-image")?.models, GEEKNOW_IMAGE_MODELS);
+    assert.deepEqual(channels.find((item) => item.id === "geeknow-video")?.models, GEEKNOW_VIDEO_MODELS);
+    assert.deepEqual(channels.find((item) => item.id === "geeknow-video")?.capabilities, ["video", "video_query"]);
+    assert.deepEqual(result.settings.public.modelChannel.availableModels, []);
+});
+
+test("reapplies GeekNow idempotently and keeps saved data", () => {
+    const initial = emptySettings();
+    initial.private.channels = [channel({ id: "existing", apiKey: "existing-key", models: ["existing-model"] })];
+    initial.public.modelChannel.availableModels = ["existing-model"];
+
+    const first = applyModelChannelPreset(initial, "geeknow", { apiKey: "geek-key" });
+    const second = applyModelChannelPreset(first.settings, "geeknow", { apiKey: "" });
+
+    assert.equal(second.settings.private.channels.filter((item) => item.id.startsWith("geeknow-")).length, 3);
+    assert.equal(second.settings.private.channels.find((item) => item.id === "geeknow-text")?.apiKey, "geek-key");
+    assert.equal(second.settings.private.channels.find((item) => item.id === "existing")?.apiKey, "existing-key");
+    assert.deepEqual(second.settings.public.modelChannel.availableModels, ["existing-model"]);
 });
 
 test("migrates an existing Ark provider channel and preserves its key and EP", () => {

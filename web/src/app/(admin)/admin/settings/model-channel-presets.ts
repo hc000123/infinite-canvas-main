@@ -1,7 +1,7 @@
 import type { AdminModelChannel, AdminSettings } from "../../../../services/api/admin.ts";
 import { sanitizeModelChannelPublication } from "./model-channel-publication.ts";
 
-export type ModelChannelPresetId = "volcengine" | "xinglian" | "jimeng" | "comfly" | "openai-compatible";
+export type ModelChannelPresetId = "volcengine" | "xinglian" | "jimeng" | "comfly" | "geeknow" | "openai-compatible";
 export type ModelChannelPresetInput = {
     apiKey?: string;
     endpointId?: string;
@@ -31,12 +31,16 @@ export const JIMENG_MODELS = ["seedance2.0mini", "seedance2.0fast", "seedance2.0
 export const COMFLY_TEXT_MODELS = ["gpt-5.5-pro", "gpt-5.5", "gemini-3.1-pro-preview"] as const;
 export const COMFLY_IMAGE_MODELS = ["gemini-3.1-flash-image-preview", "nano-banana-pro", "nano-banana-2", "nano-banana-pro-2k", "gpt-image-2-all"] as const;
 export const COMFLY_VIDEO_MODELS = ["veo3.1-fast", "veo3.1"] as const;
+export const GEEKNOW_TEXT_MODELS = ["gpt-5.5", "gpt-5.4", "claude-opus-4-8", "claude-sonnet-5", "gemini-3.5-flash", "deepseek-v4-pro", "qwen-max"] as const;
+export const GEEKNOW_IMAGE_MODELS = ["gpt-image-2", "gpt-image-2-pro", "gpt-image-2-vip", "doubao-seedream-4-5-251128", "doubao-seedream-5-0-260128", "grok-4-2-image"] as const;
+export const GEEKNOW_VIDEO_MODELS = ["grok-imagine-video", "grok-imagine-video-1.5-preview", "sora-2", "veo_3_1", "veo_3_1-fast", "doubao-seedance-2-0-260128", "doubao-seedance-2-0-fast-260128", "minimax-h3-768p", "minimax-h3-2k", "minimax-h3-pro-768p", "minimax-h3-pro-2k", "manxue-2.5", "omni-fast", "omni-fast-v2v"] as const;
 
 export const MODEL_CHANNEL_PRESETS: readonly ModelChannelPresetDefinition[] = [
     { id: "volcengine", name: "火山 Ark", description: "Seedance 企业 API；只需 Key 和 EP。", tag: "视频" },
     { id: "xinglian", name: "星链云", description: "一次配置 9 个 SD2 视频模型到私有渠道。", tag: "视频" },
     { id: "jimeng", name: "即梦 CLI", description: "自动配置六个模型；普通用户需在个人配置完成即梦网页登录。", tag: "本地 CLI" },
     { id: "comfly", name: "Comfly", description: "一次 Key 自动拆分文本、图片和视频渠道。", tag: "整包" },
+    { id: "geeknow", name: "GeekNow", description: "一次 Key 配置文本、图片和视频三个私有渠道。", tag: "整包" },
     { id: "openai-compatible", name: "通用中转", description: "适用于其他 OpenAI 兼容服务。", tag: "自定义" },
 ];
 
@@ -47,6 +51,7 @@ export function applyModelChannelPreset(settings: AdminSettings, presetId: Model
     if (presetId === "xinglian") applyXinglian(next, input, summary);
     if (presetId === "jimeng") applyJimeng(next, summary);
     if (presetId === "comfly") applyComfly(next, input, summary);
+    if (presetId === "geeknow") applyGeekNow(next, input, summary);
     if (presetId === "openai-compatible") applyOpenAICompatible(next, input, summary);
     next.public.modelChannel = sanitizeModelChannelPublication(next.public.modelChannel, next.private.channels);
     summary.publishedModels = [...next.public.modelChannel.availableModels];
@@ -145,6 +150,21 @@ function applyComfly(settings: AdminSettings, input: ModelChannelPresetInput, su
     if (legacy?.enabled) {
         legacy.enabled = false;
         summary.disabled.push(legacy.name || legacy.id);
+    }
+}
+
+function applyGeekNow(settings: AdminSettings, input: ModelChannelPresetInput, summary: ModelChannelPresetResult["summary"]) {
+    const baseUrl = "https://www.geeknow.top/v1";
+    const saved = settings.private.channels.find((item) => item.id.startsWith("geeknow-") && item.apiKey);
+    const apiKey = credential(input.apiKey, saved?.apiKey);
+    requireValue(apiKey, "请填写 GeekNow API Key");
+    const templates = [
+        channelTemplate({ id: "geeknow-text", name: "GeekNow 文本", baseUrl, apiKey, models: [...GEEKNOW_TEXT_MODELS], capabilities: ["text"], remark: "厂商预设：GeekNow 文本" }),
+        channelTemplate({ id: "geeknow-image", name: "GeekNow 图片", baseUrl, apiKey, models: [...GEEKNOW_IMAGE_MODELS], capabilities: ["image"], remark: "厂商预设：GeekNow 图片" }),
+        channelTemplate({ id: "geeknow-video", name: "GeekNow 视频", baseUrl, apiKey, models: [...GEEKNOW_VIDEO_MODELS], capabilities: ["video", "video_query"], remark: "厂商预设：GeekNow 视频" }),
+    ];
+    for (const template of templates) {
+        upsertChannel(settings, settings.private.channels.findIndex((item) => item.id === template.id), template, summary);
     }
 }
 
