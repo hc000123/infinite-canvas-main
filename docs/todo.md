@@ -28,7 +28,7 @@
 
 ### Workflow + Skill + 画布总控 Runtime
 
-- Phase 1 通用 Skill Registry：已实现，待用户确认。Skill 管理已收口为管理员维护的 System Definition / Version、Manifest、评测、推荐版和工作流消费端绑定；遗留 Project Skill 不再进入管理列表、发布引用或绑定写路径。
+- Phase 1 通用 Skill Registry 边界：Skill Definition / Version、Manifest、评测、推荐版和消费绑定只由管理员在后台全局维护；启用、已发布且契约匹配的版本供所有已登录账号和项目共享。项目侧只在运行前选择并冻结精确版本，不再创建、复制或管理项目专属 Skill；本轮已实现变更和人工验收步骤统一记录在 `docs/pending-test.md`。
 - Phase 2 Artifact + Invocation Runtime：已实现，待用户确认。Skill 可独立预检、冻结版本与契约、运行、审核和幂等 Apply，所有产物统一进入不可变 Artifact 血缘。
 - Phase 3 正式视频 Workflow 迁移：已实现，待用户确认。视频工作流阶段已改为统一 Invocation / Artifact 执行真相，旧阶段表只保留工作台投影。
 - Phase 4 Agent Plan Runtime：作为画布总控临时计划与历史兼容底座保留，继续提供版本冻结、确认、逐步审核和幂等 Apply；固定岗位 Agent 不再进入正式生产链。
