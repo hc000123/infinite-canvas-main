@@ -11,7 +11,7 @@ import type { VolcengineReviewMetadata } from "@/services/volcengine-asset-metad
 import { assetFingerprintCandidates, buildBlobFingerprint, fallbackAssetFingerprint, findWorkflowAssetDuplicate, mergeAssetMetadata, mergeDuplicateAsset } from "./asset-dedupe";
 import { createAssetStoreHydrationGate, mergeHydratedAssetCollections } from "./asset-store-hydration";
 import { nextAssetSubjectCode } from "@/app/(user)/assets/asset-subjects";
-import { clearRemovedAssetFromVariants, createDefaultAssetVariant, duplicateAssetVariant, removeAssetSubjectCollections, removeAssetVariantCollections, renameAssetVariantCollections } from "./asset-workbench-state";
+import { clearRemovedAssetFromVariants, createDefaultAssetVariant, createSubjectFromAssetCollections, duplicateAssetVariant, organizeAssetCollections, removeAssetSubjectCollections, removeAssetVariantCollections, renameAssetVariantCollections } from "./asset-workbench-state";
 
 export type AssetKind = "text" | "image" | "video" | "audio";
 export type VolcengineAssetMetadata = VolcengineReviewMetadata;
@@ -122,6 +122,9 @@ type AssetStore = {
     removeWorkbenchImage: (id: string) => void;
     setVariantCurrentAsset: (variantId: string, assetId?: string) => void;
     bindAsset: (id: string, binding?: AssetBinding) => void;
+    organizeAsset: (input: { assetId: string; subjectId: string; variantId: string; allEpisodes?: boolean; episodeIds?: string[]; setCurrent?: boolean }) => void;
+    createSubjectFromAsset: (input: { assetId: string; projectId: string; category: AssetCategory; name: string }) => string;
+    promoteWorkbenchImage: (input: { candidateId: string; asset: AssetWriteInput }) => Promise<string>;
     cleanupImages: (extra?: unknown) => void;
 };
 
@@ -338,6 +341,53 @@ export const useAssetStore = create<AssetStore>()(
                 }),
             setVariantCurrentAsset: (variantId, currentAssetId) => set((state) => ({ variants: state.variants.map((variant) => (variant.id === variantId ? { ...variant, currentAssetId, updatedAt: new Date().toISOString() } : variant)) })),
             bindAsset: (id, assetBinding) => set((state) => ({ assets: state.assets.map((asset) => (asset.id === id ? ({ ...asset, assetBinding, updatedAt: new Date().toISOString() } as Asset) : asset)) })),
+            organizeAsset: (input) =>
+                set((state) => {
+                    const subject = state.subjects.find((item) => item.id === input.subjectId);
+                    if (!subject) throw new Error("资产主体不存在");
+                    return organizeAssetCollections({
+                        assets: state.assets,
+                        variants: state.variants,
+                        assetId: input.assetId,
+                        subject,
+                        variantId: input.variantId,
+                        allEpisodes: input.allEpisodes !== false,
+                        episodeIds: input.episodeIds || [],
+                        setCurrent: input.setCurrent !== false,
+                        now: new Date().toISOString(),
+                    });
+                }),
+            createSubjectFromAsset: (input) => {
+                const subjectId = nanoid();
+                const variantId = nanoid();
+                set((state) =>
+                    createSubjectFromAssetCollections({
+                        assets: state.assets,
+                        subjects: state.subjects,
+                        variants: state.variants,
+                        ...input,
+                        subjectId,
+                        variantId,
+                        now: new Date().toISOString(),
+                    }),
+                );
+                return subjectId;
+            },
+            promoteWorkbenchImage: async ({ candidateId, asset }) => {
+                const before = get();
+                const candidate = before.workbenchImages.find((image) => image.id === candidateId && image.role === "candidate");
+                if (!candidate) throw new Error("待选结果不存在");
+                if (candidate.selectedAssetId) return candidate.selectedAssetId;
+                const variant = before.variants.find((item) => item.id === candidate.variantId && item.subjectId === candidate.subjectId);
+                const subject = before.subjects.find((item) => item.id === candidate.subjectId);
+                if (!variant || !subject) throw new Error("待选结果的资产主体或形态不存在");
+                const assetId = await get().addAssetOnce(asset);
+                set((state) => {
+                    const organized = organizeAssetCollections({ assets: state.assets, variants: state.variants, assetId, subject, variantId: variant.id, allEpisodes: true, episodeIds: [], setCurrent: true, now: new Date().toISOString() });
+                    return { ...organized, workbenchImages: state.workbenchImages.map((image) => (image.id === candidateId ? { ...image, selectedAssetId: assetId } : image)) };
+                });
+                return assetId;
+            },
             cleanupImages: (extra) => {
                 if (typeof window === "undefined") return;
                 window.setTimeout(async () => {

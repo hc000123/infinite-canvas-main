@@ -11,17 +11,17 @@ export function AssetCandidateGrid({ candidates, running, slots = [], onCopy, on
         <section className="rounded-xl border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <h2 className="text-base font-semibold text-[var(--studio-text-primary)]">候选池</h2>
-                    <p className="mt-1 text-xs text-[var(--studio-text-muted)]">生成和上传的图片先在这里挑选，不会直接污染正式资产。</p>
+                    <h2 className="text-base font-semibold text-[var(--studio-text-primary)]">待选结果</h2>
+                    <p className="mt-1 text-xs text-[var(--studio-text-muted)]">生成和上传的图片先在这里挑选，确认后才成为当前版本。</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button icon={<Upload className="size-4" />} onClick={onUpload}>上传候选</Button>
-                    <Button type="primary" icon={<Sparkles className="size-4" />} loading={running} onClick={onGenerate}>生成候选</Button>
+                    <Button icon={<Upload className="size-4" />} onClick={onUpload}>上传待选结果</Button>
+                    <Button type="primary" icon={<Sparkles className="size-4" />} loading={running} onClick={onGenerate}>生成待选结果</Button>
                 </div>
             </div>
             {candidates.length || slots.length ? (
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-4">
-                    {slots.map((slot) => <div key={slot.id} className="flex aspect-square flex-col items-center justify-center rounded-lg border border-dashed border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4 text-center">{slot.status === "pending" ? <><LoaderCircle className="mb-3 size-6 animate-spin text-[var(--studio-accent)]" /><div className="text-sm font-medium">正在生成候选</div></> : <><div className="line-clamp-3 text-xs text-[var(--studio-danger)]">{slot.error || "生成失败"}</div><Button className="!mt-3" size="small" icon={<RefreshCw className="size-3.5" />} onClick={() => onRetry(slot.id)}>重试</Button></>}</div>)}
+                    {slots.map((slot) => <div key={slot.id} className="flex aspect-square flex-col items-center justify-center rounded-lg border border-dashed border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4 text-center">{slot.status === "pending" ? <><LoaderCircle className="mb-3 size-6 animate-spin text-[var(--studio-accent)]" /><div className="text-sm font-medium">正在生成待选结果</div></> : <><div className="line-clamp-3 text-xs text-[var(--studio-danger)]">{slot.error || "生成失败"}</div><Button className="!mt-3" size="small" icon={<RefreshCw className="size-3.5" />} onClick={() => onRetry(slot.id)}>重试</Button></>}</div>)}
                     {candidates.map((image) => {
                         const menu: MenuProps = {
                             items: [
@@ -29,7 +29,7 @@ export function AssetCandidateGrid({ candidates, running, slots = [], onCopy, on
                                 { key: "copy", icon: <Sparkles className="size-3.5" />, label: "复制到其他形态" },
                                 { key: "download", icon: <Download className="size-3.5" />, label: "下载" },
                                 { type: "divider" },
-                                { key: "delete", danger: true, icon: <Trash2 className="size-3.5" />, label: "删除候选" },
+                                { key: "delete", danger: true, icon: <Trash2 className="size-3.5" />, label: "删除待选结果" },
                             ],
                             onClick: ({ key }) => {
                                 if (key === "reference") onUseAsReference(image);
@@ -47,13 +47,13 @@ export function AssetCandidateGrid({ candidates, running, slots = [], onCopy, on
                                 </div>
                                 <div className="flex items-center justify-between gap-2 p-2.5">
                                     <div className="min-w-0"><div className="truncate text-sm font-medium">{image.title}</div><div className="mt-0.5 text-[11px] text-[var(--studio-text-muted)]">{image.width} × {image.height}</div></div>
-                                    <Button type={image.selectedAssetId ? "default" : "primary"} size="small" disabled={Boolean(image.selectedAssetId)} icon={<Check className="size-3.5" />} onClick={() => onPromote(image)}>{image.selectedAssetId ? "已选" : "选为资产"}</Button>
+                                    <Button type={image.selectedAssetId ? "default" : "primary"} size="small" disabled={Boolean(image.selectedAssetId)} icon={<Check className="size-3.5" />} onClick={() => onPromote(image)}>{image.selectedAssetId ? "当前版本" : "设为当前版本"}</Button>
                                 </div>
                             </article>
                         );
                     })}
                 </div>
-            ) : <Empty image={<ImagePlus className="mx-auto size-10 text-[var(--studio-text-muted)]" />} description="还没有候选图，上传图片或开始第一次生成" className="!my-14" />}
+            ) : <Empty image={<ImagePlus className="mx-auto size-10 text-[var(--studio-text-muted)]" />} description="还没有待选结果，上传图片或开始第一次生成" className="!my-14" />}
         </section>
     );
 }
@@ -61,6 +61,6 @@ export function AssetCandidateGrid({ candidates, running, slots = [], onCopy, on
 function downloadImage(image: AssetWorkbenchImage) {
     const anchor = document.createElement("a");
     anchor.href = image.dataUrl;
-    anchor.download = `${image.title || "候选图"}.png`;
+    anchor.download = `${image.title || "待选结果"}.png`;
     anchor.click();
 }

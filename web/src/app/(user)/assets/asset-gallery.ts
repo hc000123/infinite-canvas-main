@@ -1,4 +1,5 @@
-import type { Asset, AssetKind, AssetSubject, AssetVariant, AudioAsset, ImageAsset, VideoAsset } from "../../../stores/use-asset-store.ts";
+import type { Asset, AssetKind, AssetSubject, AssetVariant, AssetWorkbenchImage, AudioAsset, ImageAsset, VideoAsset } from "../../../stores/use-asset-store.ts";
+import { assetInProjectLibrary } from "./asset-project-library.ts";
 
 export type GalleryMediaAsset = ImageAsset | VideoAsset | AudioAsset;
 export type AssetSubjectSummary = {
@@ -6,6 +7,17 @@ export type AssetSubjectSummary = {
     coverAsset?: ImageAsset;
     variantCount: number;
     formalImageCount: number;
+};
+export type AssetCenterSubjectSummary = {
+    subject: AssetSubject;
+    variants: AssetVariant[];
+    primaryVariant: AssetVariant;
+    coverAsset?: ImageAsset;
+    variantCount: number;
+    pendingCount: number;
+    versionCount: number;
+    relatedMediaCount: number;
+    readiness: "empty" | "pending" | "ready";
 };
 
 export function isGalleryMediaAsset(asset: Asset): asset is GalleryMediaAsset {
@@ -22,6 +34,47 @@ export function buildAssetSubjectSummary(subject: AssetSubject, assets: Asset[],
         variantCount: subjectVariants.length,
         formalImageCount: formalImages.length,
     };
+}
+
+export function buildAssetCenterSubjects(input: {
+    subjects: AssetSubject[];
+    variants: AssetVariant[];
+    assets: Asset[];
+    workbenchImages: AssetWorkbenchImage[];
+    projectId: string;
+}) {
+    return input.subjects
+        .filter((subject) => !input.projectId || subject.projectId === input.projectId)
+        .map((subject): AssetCenterSubjectSummary | null => {
+            const variants = input.variants.filter((variant) => variant.subjectId === subject.id).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+            const primaryVariant = variants[0];
+            if (!primaryVariant) return null;
+            const formalImages = input.assets.filter((asset): asset is ImageAsset => asset.kind === "image" && asset.assetBinding?.subjectId === subject.id);
+            const coverAsset = formalImages.find((asset) => asset.id === primaryVariant.currentAssetId);
+            const pendingCount = input.workbenchImages.filter((image) => image.subjectId === subject.id && image.role === "candidate" && !image.selectedAssetId).length;
+            const relatedMediaCount = input.assets.filter((asset) => asset.kind !== "image" && asset.assetBinding?.subjectId === subject.id).length;
+            return {
+                subject,
+                variants,
+                primaryVariant,
+                coverAsset,
+                variantCount: variants.length,
+                pendingCount,
+                versionCount: formalImages.length,
+                relatedMediaCount,
+                readiness: coverAsset ? "ready" : pendingCount ? "pending" : "empty",
+            } satisfies AssetCenterSubjectSummary;
+        })
+        .filter((summary): summary is AssetCenterSubjectSummary => summary !== null);
+}
+
+export function unorganizedAssets(assets: Asset[], projectId: string) {
+    return assets.filter((asset) => {
+        if (asset.assetBinding?.subjectId) return false;
+        if (!projectId) return true;
+        const generation = asset.metadata?.generation;
+        return assetInProjectLibrary(asset, projectId) || (generation && typeof generation === "object" && "projectId" in generation && generation.projectId === projectId) || asset.metadata?.projectId === projectId;
+    });
 }
 
 export function visibleGallerySubjectGroups(input: {

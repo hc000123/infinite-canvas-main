@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { App, Button, Checkbox, Empty, Input, Modal, Pagination, Select, Spin, Tabs, Tag } from "antd";
+import { App, Button, Empty, Input, Modal, Pagination, Select, Spin, Tabs, Tag } from "antd";
 import { Check, Layers3, RotateCcw, Search } from "lucide-react";
 import axios from "axios";
 
@@ -10,10 +10,10 @@ import { cn } from "@/lib/utils";
 import { uploadMediaFile } from "@/services/file-storage";
 import { fetchAssetLibrary, type AssetLibraryItem } from "@/services/api/assets";
 import { useAssetStore, type Asset, type AssetCategory, type VolcengineAssetMetadata } from "@/stores/use-asset-store";
-import { buildWorkflowAssetCanonicalView } from "../../assets/workflow-asset-dedup";
-import { assetCategoryLabel, assetsForEpisode, subjectAssetGroups } from "../../assets/asset-subjects";
+import { assetCategoryLabel } from "../../assets/asset-subjects";
 import { buildInsertAssetPayload, type InsertAssetPayload } from "../utils/asset-insert-payload";
-import { filterAssetsForPicker, type AssetPickerCategoryFilter, type AssetPickerScopeFilter, type AssetPickerSort } from "../utils/asset-picker-filter";
+import { buildAssetSubjectPickerItems } from "../utils/asset-subject-picker";
+import { AssetSubjectPickerCard } from "./asset-subject-picker-card";
 
 export type AssetPickerTab = "episode-assets" | "my-assets" | "library";
 type AssetPickerKind = InsertAssetPayload["kind"];
@@ -116,9 +116,9 @@ export function AssetPickerModal({ open, title = "选择素材", defaultTab = "m
                 activeKey={activeTab}
                 onChange={(key) => setActiveTab(key as AssetPickerTab)}
                 items={[
-                    ...(projectId && episodeId ? [{ key: "episode-assets", label: "本集素材", children: <EpisodeAssetsTab projectId={projectId} episodeId={episodeId} selection={selection} /> }] : []),
-                    { key: "my-assets", label: "资产", children: <MyAssetsTab allowedKinds={allowedKinds} defaultKind={defaultKind} projectId={projectId} episodeId={episodeId} selection={selection} /> },
-                    { key: "library", label: "素材库", children: <LibraryTab allowedKinds={allowedKinds} defaultKind={defaultKind} selection={selection} /> },
+                    ...(projectId && episodeId ? [{ key: "episode-assets", label: "本集资产", children: <SubjectAssetsTab projectId={projectId} episodeId={episodeId} allowedKinds={allowedKinds} selection={selection} /> }] : []),
+                    { key: "my-assets", label: "全部资产", children: <SubjectAssetsTab projectId={projectId} allowedKinds={allowedKinds} selection={selection} /> },
+                    { key: "library", label: "外部素材库", children: <LibraryTab allowedKinds={allowedKinds} defaultKind={defaultKind} selection={selection} /> },
                 ]}
             />
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--studio-border-subtle)] pt-4">
@@ -139,112 +139,34 @@ export function AssetPickerModal({ open, title = "选择素材", defaultTab = "m
     );
 }
 
-function EpisodeAssetsTab({ projectId, episodeId, selection }: { projectId: string; episodeId: string; selection: SelectionControls }) {
+function SubjectAssetsTab({ projectId, episodeId, allowedKinds, selection }: { projectId?: string; episodeId?: string; allowedKinds?: AssetPickerKind[]; selection: SelectionControls }) {
     const assets = useAssetStore((state) => state.assets);
     const subjects = useAssetStore((state) => state.subjects);
-    const [category, setCategory] = useState<AssetCategory | "all">("all");
-    const [subjectId, setSubjectId] = useState("all");
-    const [range, setRange] = useState<"all" | "episode" | "shared">("all");
-    const [sort, setSort] = useState<AssetPickerSort>("title_asc");
+    const variants = useAssetStore((state) => state.variants);
     const [keyword, setKeyword] = useState("");
-    const subjectMap = useMemo(() => new Map(subjects.map((subject) => [subject.id, subject])), [subjects]);
-    const applicable = useMemo(() => assetsForEpisode(assets, projectId, episodeId), [assets, episodeId, projectId]);
-    const subjectOptions = useMemo(
-        () => subjects.filter((subject) => subject.projectId === projectId && (category === "all" || subject.category === category)).map((subject) => ({ label: `${subject.code} ${subject.name}`, value: subject.id })),
-        [category, projectId, subjects],
-    );
+    const [category, setCategory] = useState<AssetCategory | "all">("all");
+    const supportsImages = !allowedKinds || allowedKinds.includes("image");
+    const items = useMemo(() => supportsImages ? buildAssetSubjectPickerItems({ subjects, variants, assets, projectId, episodeId }) : [], [assets, episodeId, projectId, subjects, supportsImages, variants]);
     const visible = useMemo(() => {
-        const query = keyword.trim().toLowerCase().split(/\s+/).filter(Boolean);
-        const filtered = applicable
-            .filter((asset) => category === "all" || asset.assetBinding?.category === category)
-            .filter((asset) => subjectId === "all" || asset.assetBinding?.subjectId === subjectId)
-            .filter((asset) => range === "all" || (range === "shared" ? asset.assetBinding?.allEpisodes : !asset.assetBinding?.allEpisodes))
-            .filter((asset) => matchesTerms([asset.title, asset.assetBinding?.variantName, ...(asset.tags || []), asset.assetBinding?.subjectId ? subjectMap.get(asset.assetBinding.subjectId)?.name : ""], query));
-        return sortPickerAssets(filtered, sort);
-    }, [applicable, category, keyword, range, sort, subjectId, subjectMap]);
-    const groups = useMemo(() => subjectAssetGroups(subjects, visible, projectId), [projectId, subjects, visible]);
-    const visibleSelections = useMemo(() => visible.map(localAssetSelection), [visible]);
-    const allVisibleSelected = visibleSelections.length > 0 && visibleSelections.every((item) => selection.selectedKeys.has(item.key));
-
-    const reset = () => {
-        setCategory("all");
-        setSubjectId("all");
-        setRange("all");
-        setSort("title_asc");
-        setKeyword("");
-    };
+        const terms = keyword.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        return items.filter((item) => (category === "all" || item.subject.category === category) && matchesTerms([item.subject.name, item.subject.code, ...item.subject.tags, ...item.variants.map((variant) => variant.name)], terms));
+    }, [category, items, keyword]);
+    const currentSelections = useMemo(() => visible.flatMap((item) => item.currentAsset ? [localAssetSelection(item.currentAsset)] : []), [visible]);
+    const allCurrentSelected = currentSelections.length > 0 && currentSelections.every((item) => selection.selectedKeys.has(item.key));
 
     return (
         <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-                <Input
-                    className="min-w-56 flex-1"
-                    size="small"
-                    allowClear
-                    prefix={<Search className="size-3.5 text-[var(--studio-text-muted)]" />}
-                    placeholder="搜索角色、场景、道具、标签或形态"
-                    value={keyword}
-                    onChange={(event) => setKeyword(event.target.value)}
-                />
+                <Input className="min-w-56 flex-1" size="small" allowClear prefix={<Search className="size-3.5 text-[var(--studio-text-muted)]" />} placeholder="搜索资产主体、编号、标签或形态" value={keyword} onChange={(event) => setKeyword(event.target.value)} />
                 <div className="flex flex-wrap gap-1.5">
-                    {(["all", "character", "scene", "prop", "other"] as const).map((value) => (
-                        <Tag.CheckableTag
-                            key={value}
-                            checked={category === value}
-                            className={cn("prompt-filter-tag", category === value && "is-active")}
-                            onChange={() => {
-                                setCategory(value);
-                                setSubjectId("all");
-                            }}
-                        >
-                            {value === "all" ? "全部分类" : assetCategoryLabel(value)}
-                        </Tag.CheckableTag>
-                    ))}
+                    {(["all", "character", "scene", "prop", "blocking", "other"] as const).map((value) => <Tag.CheckableTag key={value} checked={category === value} className={cn("prompt-filter-tag", category === value && "is-active")} onChange={() => setCategory(value)}>{value === "all" ? "全部分类" : assetCategoryLabel(value)}</Tag.CheckableTag>)}
                 </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-2">
-                <Select size="small" className="min-w-40" showSearch optionFilterProp="label" value={subjectId} options={[{ label: "全部资产主体", value: "all" }, ...subjectOptions]} onChange={setSubjectId} />
-                <Select
-                    size="small"
-                    className="w-32"
-                    value={range}
-                    options={[
-                        { label: "全部适用范围", value: "all" },
-                        { label: "全剧通用", value: "shared" },
-                        { label: "仅本集", value: "episode" },
-                    ]}
-                    onChange={setRange}
-                />
-                <Select size="small" className="w-32" value={sort} options={sortOptions} onChange={setSort} />
-                <span className="text-xs text-[var(--studio-text-muted)]">筛选结果 {visible.length}</span>
-                <Button className="ml-auto" size="small" icon={<RotateCcw className="size-3.5" />} onClick={reset}>
-                    重置
-                </Button>
-                <Button size="small" disabled={!visibleSelections.length || selection.disabled} onClick={() => selection.onSetMany(visibleSelections, !allVisibleSelected)}>
-                    {allVisibleSelected ? "取消全选结果" : "全选筛选结果"}
-                </Button>
+            <div className="flex items-center justify-between rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-2">
+                <span className="text-xs text-[var(--studio-text-muted)]">{visible.length} 个主体 · 点击卡片默认选择基础形态当前版本</span>
+                <Button size="small" disabled={!currentSelections.length || selection.disabled} onClick={() => selection.onSetMany(currentSelections, !allCurrentSelected)}>{allCurrentSelected ? "取消全选" : "选择全部当前版本"}</Button>
             </div>
-            {groups.length ? (
-                <div className="grid max-h-[405px] gap-4 overflow-y-auto pr-1">
-                    {groups.map(({ subject, assets: variants }) => (
-                        <section key={subject.id} className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3">
-                            <div className="mb-3 flex items-center gap-2">
-                                <Tag className="m-0">{assetCategoryLabel(subject.category)}</Tag>
-                                <span className="text-xs text-[var(--studio-accent)]">{subject.code}</span>
-                                <span className="font-semibold text-[var(--studio-text-primary)]">{subject.name}</span>
-                                <span className="text-xs text-[var(--studio-text-muted)]">{variants.length} 个形态</span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-5">
-                                {variants.map((asset) => (
-                                    <LocalPickerCard key={asset.id} asset={asset} subtitle={asset.assetBinding?.variantName} selection={selection} />
-                                ))}
-                            </div>
-                        </section>
-                    ))}
-                </div>
-            ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合筛选条件的本集素材" className="py-16" />
-            )}
+            {visible.length ? <div className="grid max-h-[405px] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3 lg:grid-cols-4">{visible.map((item) => <AssetSubjectPickerCard key={item.subject.id} item={item} selectedKeys={selection.selectedKeys} disabled={selection.disabled} onSelect={(asset) => selection.onToggle(localAssetSelection(asset))} />)}</div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={supportsImages ? "没有符合条件的资产主体" : "当前插入类型不支持主体图片"} className="py-16" />}
         </div>
     );
 }
@@ -264,157 +186,6 @@ const sortOptions = [
     { label: "最近创建", value: "created_desc" },
     { label: "名称排序", value: "title_asc" },
 ];
-
-function MyAssetsTab({ allowedKinds, defaultKind = "all", projectId, episodeId, selection }: { allowedKinds?: AssetPickerKind[]; defaultKind?: AssetPickerKind | "all"; projectId?: string; episodeId?: string; selection: SelectionControls }) {
-    const rawAssets = useAssetStore((state) => state.assets);
-    const folders = useAssetStore((state) => state.folders);
-    const subjects = useAssetStore((state) => state.subjects);
-    const assets = useMemo(() => buildWorkflowAssetCanonicalView(rawAssets).assets, [rawAssets]);
-    const [keyword, setKeyword] = useState("");
-    const [kindFilter, setKindFilter] = useState<AssetPickerKind | "all">(defaultKind);
-    const [category, setCategory] = useState<AssetPickerCategoryFilter>("all");
-    const [scope, setScope] = useState<AssetPickerScopeFilter>("all");
-    const [folder, setFolder] = useState<string | "all" | "root">("all");
-    const [favoriteOnly, setFavoriteOnly] = useState(false);
-    const [sort, setSort] = useState<AssetPickerSort>("updated_desc");
-    const [page, setPage] = useState(1);
-    const allowedKindSet = useMemo<ReadonlySet<AssetPickerKind>>(() => new Set(allowedKinds || ["text", "image", "video", "audio"]), [allowedKinds]);
-    const filteredKindSet = useMemo<ReadonlySet<AssetPickerKind>>(() => (kindFilter === "all" ? allowedKindSet : new Set([kindFilter])), [allowedKindSet, kindFilter]);
-    const options = assetKindOptions(allowedKinds);
-    const folderProjectIdByFolderId = useMemo(() => new Map(folders.flatMap((item): Array<[string, string]> => (item.projectId ? [[item.id, item.projectId]] : []))), [folders]);
-    const subjectNameById = useMemo(() => new Map(subjects.map((subject) => [subject.id, subject.name])), [subjects]);
-    const filtered = useMemo(
-        () => filterAssetsForPicker(assets, { allowedKinds: filteredKindSet, category, episodeId, favoriteOnly, folder, folderProjectIdByFolderId, keyword, projectId, scope, sort, subjectNameById }),
-        [assets, category, episodeId, favoriteOnly, filteredKindSet, folder, folderProjectIdByFolderId, keyword, projectId, scope, sort, subjectNameById],
-    );
-    const visible = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page]);
-    const filteredSelections = useMemo(() => filtered.map(localAssetSelection), [filtered]);
-    const allFilteredSelected = filteredSelections.length > 0 && filteredSelections.every((item) => selection.selectedKeys.has(item.key));
-
-    useEffect(() => {
-        const maxPage = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-        setPage((value) => Math.min(value, maxPage));
-    }, [filtered.length]);
-
-    const reset = () => {
-        setKeyword("");
-        setKindFilter(defaultKind);
-        setCategory("all");
-        setScope("all");
-        setFolder("all");
-        setFavoriteOnly(false);
-        setSort("updated_desc");
-        setPage(1);
-    };
-
-    const scopeOptions = [{ label: "全部项目范围", value: "all" }, ...(projectId ? [{ label: "当前项目", value: "project" }] : []), ...(projectId && episodeId ? [{ label: "当前集可用", value: "episode" }] : []), { label: "未绑定项目", value: "unbound" }];
-
-    return (
-        <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-                <Input
-                    className="min-w-56 flex-1"
-                    size="small"
-                    prefix={<Search className="size-3.5 text-[var(--studio-text-muted)]" />}
-                    placeholder="搜索名称、标签、备注、来源、主体或形态"
-                    value={keyword}
-                    allowClear
-                    onChange={(event) => {
-                        setPage(1);
-                        setKeyword(event.target.value);
-                    }}
-                />
-                <div className="flex flex-wrap gap-1.5">
-                    {options.map((option) => (
-                        <Tag.CheckableTag
-                            key={option.value}
-                            checked={kindFilter === option.value}
-                            className={cn("prompt-filter-tag", kindFilter === option.value && "is-active")}
-                            onChange={() => {
-                                setPage(1);
-                                setKindFilter(option.value);
-                            }}
-                        >
-                            {option.label}
-                        </Tag.CheckableTag>
-                    ))}
-                </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-2">
-                <Select
-                    size="small"
-                    className="w-32"
-                    value={category}
-                    options={[
-                        { label: "全部资产分类", value: "all" },
-                        { label: "角色", value: "character" },
-                        { label: "场景", value: "scene" },
-                        { label: "道具", value: "prop" },
-                        { label: "其他", value: "other" },
-                        { label: "未分类", value: "unclassified" },
-                    ]}
-                    onChange={(value) => {
-                        setPage(1);
-                        setCategory(value);
-                    }}
-                />
-                <Select
-                    size="small"
-                    className="w-32"
-                    value={scope}
-                    options={scopeOptions}
-                    onChange={(value) => {
-                        setPage(1);
-                        setScope(value as AssetPickerScopeFilter);
-                    }}
-                />
-                <Select
-                    size="small"
-                    className="min-w-36"
-                    showSearch
-                    optionFilterProp="label"
-                    value={folder}
-                    options={[{ label: "全部文件夹", value: "all" }, { label: "未分组", value: "root" }, ...folders.map((item) => ({ label: item.name, value: item.id }))]}
-                    onChange={(value) => {
-                        setPage(1);
-                        setFolder(value);
-                    }}
-                />
-                <Select size="small" className="w-28" value={sort} options={sortOptions} onChange={setSort} />
-                <Checkbox
-                    checked={favoriteOnly}
-                    onChange={(event) => {
-                        setPage(1);
-                        setFavoriteOnly(event.target.checked);
-                    }}
-                >
-                    仅收藏
-                </Checkbox>
-                <span className="text-xs text-[var(--studio-text-muted)]">{filtered.length} 个结果</span>
-                <Button className="ml-auto" size="small" icon={<RotateCcw className="size-3.5" />} onClick={reset}>
-                    重置
-                </Button>
-                <Button size="small" disabled={!filteredSelections.length || selection.disabled} onClick={() => selection.onSetMany(filteredSelections, !allFilteredSelected)}>
-                    {allFilteredSelected ? "取消全选结果" : "全选筛选结果"}
-                </Button>
-            </div>
-            {visible.length ? (
-                <div className="grid max-h-[350px] grid-cols-3 gap-3 overflow-y-auto pr-1 sm:grid-cols-4">
-                    {visible.map((asset) => (
-                        <LocalPickerCard key={asset.id} asset={asset} subtitle={asset.assetBinding?.variantName} selection={selection} />
-                    ))}
-                </div>
-            ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合筛选条件的素材" className="py-12" />
-            )}
-            {filtered.length > PAGE_SIZE ? (
-                <div className="flex justify-center">
-                    <Pagination size="small" current={page} pageSize={PAGE_SIZE} total={filtered.length} onChange={setPage} showSizeChanger={false} />
-                </div>
-            ) : null}
-        </div>
-    );
-}
 
 function LibraryTab({ allowedKinds, defaultKind = "all", selection }: { allowedKinds?: AssetPickerKind[]; defaultKind?: AssetPickerKind | "all"; selection: SelectionControls }) {
     const [keyword, setKeyword] = useState("");
@@ -601,11 +372,6 @@ async function buildLibraryInsertPayload(asset: AssetLibraryItem): Promise<Inser
     }
     const media = await uploadMediaFile(await remoteAssetBlob(asset.url), "audio");
     return { kind: "audio", url: media.url, storageKey: media.storageKey, title: asset.title, bytes: media.bytes, mimeType: media.mimeType };
-}
-
-function sortPickerAssets<T extends Asset>(assets: T[], sort: AssetPickerSort) {
-    if (sort === "title_asc") return [...assets].sort((left, right) => left.title.localeCompare(right.title, "zh-Hans-CN", { numeric: true }));
-    return [...assets].sort((left, right) => (sort === "created_desc" ? right.createdAt.localeCompare(left.createdAt) : right.updatedAt.localeCompare(left.updatedAt)));
 }
 
 function matchesTerms(values: Array<string | undefined>, terms: string[]) {

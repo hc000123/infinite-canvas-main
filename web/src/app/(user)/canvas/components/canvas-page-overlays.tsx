@@ -126,7 +126,7 @@ export function CanvasPageOverlays({
 
             <ClearCanvasConfirmModal open={clearConfirmOpen} onCancel={onCloseClearConfirm} onConfirm={onClearCanvas} />
 
-            <AssetPickerModal open={assetPickerOpen} defaultTab={assetPickerTab} projectId={projectId} episodeId={episodeId} onInsert={onAssetInsert} onClose={onCloseAssetPicker} />
+            <AssetPickerModal open={assetPickerOpen} title="选择资产主体或外部素材" defaultTab={assetPickerTab} projectId={projectId} episodeId={episodeId} onInsert={onAssetInsert} onClose={onCloseAssetPicker} />
 
             <ScriptManagerDrawer open={scriptManagerOpen} projectId={projectId} projectTitle={projectTitle} initialEpisodeId={scriptInitialEpisodeId} onClose={onCloseScriptManager} onOpenStoryboardGroup={onOpenStoryboardGroup} />
 
