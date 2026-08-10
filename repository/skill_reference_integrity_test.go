@@ -14,8 +14,12 @@ func TestWorkflowStageBindingRevalidatesSkillTargetInWriteTransaction(t *testing
 		write   func(model.WorkflowStageSkillBinding) error
 	}{
 		{name: "save missing", prepare: func(*testing.T) string { return "missing-version" }, write: SaveWorkflowStageSkillBinding},
-		{name: "upsert project owner", prepare: func(t *testing.T) string { return createReferenceTestSkill(t, "project", model.SkillOwnerProject, true, model.SkillVersionPublished).ID }, write: UpsertWorkflowStageSkillBinding},
-		{name: "upsert with audit archived", prepare: func(t *testing.T) string { return createReferenceTestSkill(t, "archived", model.SkillOwnerSystem, true, model.SkillVersionArchived).ID }, write: func(binding model.WorkflowStageSkillBinding) error {
+		{name: "upsert project owner", prepare: func(t *testing.T) string {
+			return createReferenceTestSkill(t, "project", model.SkillOwnerType("project"), true, model.SkillVersionPublished).ID
+		}, write: UpsertWorkflowStageSkillBinding},
+		{name: "upsert with audit archived", prepare: func(t *testing.T) string {
+			return createReferenceTestSkill(t, "archived", model.SkillOwnerSystem, true, model.SkillVersionArchived).ID
+		}, write: func(binding model.WorkflowStageSkillBinding) error {
 			return UpsertWorkflowStageSkillBindingWithSkillAudit(binding, model.SkillAuditLog{ID: "invalid-binding-audit"})
 		}},
 	} {
@@ -44,10 +48,18 @@ func TestPublishWorkflowVersionRevalidatesStructuredSkillTargets(t *testing.T) {
 		reference func(string) string
 	}{
 		{name: "missing version", prepare: func(*testing.T) string { return "missing-version" }, reference: workflowVersionReferenceJSON},
-		{name: "project version", prepare: func(t *testing.T) string { return createReferenceTestSkill(t, "workflow-project", model.SkillOwnerProject, true, model.SkillVersionPublished).ID }, reference: workflowVersionReferenceJSON},
-		{name: "archived version", prepare: func(t *testing.T) string { return createReferenceTestSkill(t, "workflow-archived", model.SkillOwnerSystem, true, model.SkillVersionArchived).ID }, reference: workflowVersionReferenceJSON},
-		{name: "disabled skill id", prepare: func(t *testing.T) string { return createReferenceTestSkill(t, "workflow-disabled", model.SkillOwnerSystem, false, model.SkillVersionPublished).SkillID }, reference: workflowSkillReferenceJSON},
-		{name: "project candidate", prepare: func(t *testing.T) string { return createReferenceTestSkill(t, "workflow-project-candidate", model.SkillOwnerProject, true, model.SkillVersionPublished).SkillID }, reference: workflowCandidateReferenceJSON},
+		{name: "project version", prepare: func(t *testing.T) string {
+			return createReferenceTestSkill(t, "workflow-project", model.SkillOwnerType("project"), true, model.SkillVersionPublished).ID
+		}, reference: workflowVersionReferenceJSON},
+		{name: "archived version", prepare: func(t *testing.T) string {
+			return createReferenceTestSkill(t, "workflow-archived", model.SkillOwnerSystem, true, model.SkillVersionArchived).ID
+		}, reference: workflowVersionReferenceJSON},
+		{name: "disabled skill id", prepare: func(t *testing.T) string {
+			return createReferenceTestSkill(t, "workflow-disabled", model.SkillOwnerSystem, false, model.SkillVersionPublished).SkillID
+		}, reference: workflowSkillReferenceJSON},
+		{name: "project candidate", prepare: func(t *testing.T) string {
+			return createReferenceTestSkill(t, "workflow-project-candidate", model.SkillOwnerType("project"), true, model.SkillVersionPublished).SkillID
+		}, reference: workflowCandidateReferenceJSON},
 	} {
 		t.Run(item.name, func(t *testing.T) {
 			setupRepositoryTestDB(t)
@@ -73,9 +85,18 @@ func TestPublishAgentVersionRevalidatesSkillTargets(t *testing.T) {
 		prepare func(*testing.T) (string, string)
 	}{
 		{name: "missing version", prepare: func(*testing.T) (string, string) { return `[{"skillVersionId":"missing-version"}]`, `{}` }},
-		{name: "project version", prepare: func(t *testing.T) (string, string) { version := createReferenceTestSkill(t, "agent-project", model.SkillOwnerProject, true, model.SkillVersionPublished); return `[{"skillVersionId":"` + version.ID + `"}]`, `{}` }},
-		{name: "archived version", prepare: func(t *testing.T) (string, string) { version := createReferenceTestSkill(t, "agent-archived", model.SkillOwnerSystem, true, model.SkillVersionArchived); return `[{"skillVersionId":"` + version.ID + `"}]`, `{}` }},
-		{name: "project access id", prepare: func(t *testing.T) (string, string) { version := createReferenceTestSkill(t, "agent-access", model.SkillOwnerProject, true, model.SkillVersionPublished); return `[]`, `{"allowedSkillIds":["` + version.SkillID + `"]}` }},
+		{name: "project version", prepare: func(t *testing.T) (string, string) {
+			version := createReferenceTestSkill(t, "agent-project", model.SkillOwnerType("project"), true, model.SkillVersionPublished)
+			return `[{"skillVersionId":"` + version.ID + `"}]`, `{}`
+		}},
+		{name: "archived version", prepare: func(t *testing.T) (string, string) {
+			version := createReferenceTestSkill(t, "agent-archived", model.SkillOwnerSystem, true, model.SkillVersionArchived)
+			return `[{"skillVersionId":"` + version.ID + `"}]`, `{}`
+		}},
+		{name: "project access id", prepare: func(t *testing.T) (string, string) {
+			version := createReferenceTestSkill(t, "agent-access", model.SkillOwnerType("project"), true, model.SkillVersionPublished)
+			return `[]`, `{"allowedSkillIds":["` + version.SkillID + `"]}`
+		}},
 	} {
 		t.Run(item.name, func(t *testing.T) {
 			setupRepositoryTestDB(t)
@@ -103,8 +124,12 @@ func TestSkillEvaluationRevalidatesTargetsWithoutPartialWrites(t *testing.T) {
 		prepare func(*testing.T) string
 	}{
 		{name: "missing", prepare: func(*testing.T) string { return "missing-version" }},
-		{name: "project", prepare: func(t *testing.T) string { return createReferenceTestSkill(t, "evaluation-project", model.SkillOwnerProject, true, model.SkillVersionDraft).ID }},
-		{name: "archived", prepare: func(t *testing.T) string { return createReferenceTestSkill(t, "evaluation-archived", model.SkillOwnerSystem, true, model.SkillVersionArchived).ID }},
+		{name: "project", prepare: func(t *testing.T) string {
+			return createReferenceTestSkill(t, "evaluation-project", model.SkillOwnerType("project"), true, model.SkillVersionDraft).ID
+		}},
+		{name: "archived", prepare: func(t *testing.T) string {
+			return createReferenceTestSkill(t, "evaluation-archived", model.SkillOwnerSystem, true, model.SkillVersionArchived).ID
+		}},
 	} {
 		t.Run(item.name, func(t *testing.T) {
 			setupRepositoryTestDB(t)
@@ -146,8 +171,12 @@ func TestSkillEvaluationRejectsBlankPrimaryVersionWithoutPartialWrites(t *testin
 	}{
 		{name: "empty create", versionID: "", create: CreateSkillEvaluation},
 		{name: "whitespace create", versionID: "  ", create: CreateSkillEvaluation},
-		{name: "empty summary", versionID: "", create: func(evaluation model.SkillEvaluation) error { return CreateSkillEvaluationAndUpdateSummary(evaluation, "after", "later") }},
-		{name: "whitespace summary", versionID: "\t", create: func(evaluation model.SkillEvaluation) error { return CreateSkillEvaluationAndUpdateSummary(evaluation, "after", "later") }},
+		{name: "empty summary", versionID: "", create: func(evaluation model.SkillEvaluation) error {
+			return CreateSkillEvaluationAndUpdateSummary(evaluation, "after", "later")
+		}},
+		{name: "whitespace summary", versionID: "\t", create: func(evaluation model.SkillEvaluation) error {
+			return CreateSkillEvaluationAndUpdateSummary(evaluation, "after", "later")
+		}},
 	} {
 		t.Run(item.name, func(t *testing.T) {
 			setupRepositoryTestDB(t)

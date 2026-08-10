@@ -139,7 +139,7 @@ func setSkillTestScope(t *testing.T, version model.SkillVersion, userID, project
 	if err != nil || !ok {
 		t.Fatalf("skill=%+v ok=%v err=%v", skill, ok, err)
 	}
-	skill.OwnerType = model.SkillOwnerProject
+	skill.OwnerType = model.SkillOwnerType("project")
 	skill.OwnerUserID = userID
 	skill.OwnerProjectID = projectID
 	skill.Name += " " + version.ID

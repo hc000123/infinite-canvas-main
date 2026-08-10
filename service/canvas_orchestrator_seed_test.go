@@ -19,7 +19,7 @@ func TestEnsureCanvasOrchestratorSeedPublishesUniqueCatalogPlanner(t *testing.T)
 	if err != nil || !ok {
 		t.Fatalf("agent=%#v ok=%v err=%v", agent, ok, err)
 	}
-	if agent.OwnerType != model.AgentOwnerSystem || agent.RecommendedVersionID != "agent-version-system-canvas-orchestrator-1.0.0" {
+	if agent.OwnerType != model.AgentOwnerSystem || agent.RecommendedVersionID != "agent-version-system-canvas-orchestrator-1.1.0" {
 		t.Fatalf("agent=%#v", agent)
 	}
 	version, ok, err := repository.GetAgentVersion(agent.RecommendedVersionID)
@@ -30,8 +30,37 @@ func TestEnsureCanvasOrchestratorSeedPublishesUniqueCatalogPlanner(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if packageValue.PlannerMode != AgentPlannerCatalog || len(packageValue.DefaultSkillRefs) != 0 || !packageValue.ExecutionPolicy.AllowRuntimeSkillOverride || packageValue.ExecutionPolicy.MaxSteps != 12 {
+	if packageValue.PlannerMode != AgentPlannerCatalog || len(packageValue.DefaultSkillRefs) != 0 || !packageValue.ExecutionPolicy.AllowRuntimeSkillOverride || packageValue.ExecutionPolicy.MaxSteps != 12 || len(packageValue.SkillAccessPolicy.AllowedOwnerTypes) != 1 || packageValue.SkillAccessPolicy.AllowedOwnerTypes[0] != model.SkillOwnerSystem {
 		t.Fatalf("package=%#v", packageValue)
+	}
+}
+
+func TestEnsureCanvasOrchestratorSeedPreservesVersionOnePackage(t *testing.T) {
+	setupInvocationServiceTest(t)
+	stamp := now()
+	agent := model.AgentDefinition{
+		ID: canvasOrchestratorAgentID, Name: "画布总控", OwnerType: model.AgentOwnerSystem, Enabled: true,
+		RecommendedVersionID: "agent-version-system-canvas-orchestrator-1.0.0", CreatedAt: stamp, UpdatedAt: stamp,
+	}
+	legacy := model.AgentVersion{
+		ID: "agent-version-system-canvas-orchestrator-1.0.0", AgentID: agent.ID, Version: "1.0.0", Status: model.AgentVersionPublished,
+		RolePrompt: "legacy role", PlannerMode: AgentPlannerCatalog, DefaultSkillRefsJSON: `[]`, SkillAccessPolicyJSON: `{"allowedOwnerTypes":["system","project"]}`,
+		ModelPolicyJSON: `{}`, ToolPolicyJSON: `{}`, ExecutionPolicyJSON: `{"maxSteps":12,"allowRuntimeSkillOverride":true}`,
+		ContentHash: "legacy-hash", CreatedBy: "system", PublishedAt: stamp, CreatedAt: stamp, UpdatedAt: stamp,
+	}
+	if err := repository.CreateAgentAggregate(agent, legacy); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureCanvasOrchestratorSeed(); err != nil {
+		t.Fatal(err)
+	}
+	stored, ok, err := repository.GetAgentVersion(legacy.ID)
+	if err != nil || !ok || stored.RolePrompt != legacy.RolePrompt || stored.SkillAccessPolicyJSON != legacy.SkillAccessPolicyJSON || stored.ContentHash != legacy.ContentHash {
+		t.Fatalf("legacy=%#v ok=%v err=%v", stored, ok, err)
+	}
+	updated, ok, err := repository.GetAgentDefinition(agent.ID)
+	if err != nil || !ok || updated.RecommendedVersionID != canvasOrchestratorVersionID {
+		t.Fatalf("agent=%#v ok=%v err=%v", updated, ok, err)
 	}
 }
 
@@ -50,13 +79,13 @@ func TestCatalogPlannerRequiresRuntimeStepsForAgentPlan(t *testing.T) {
 	}
 }
 
-func TestCanvasOrchestratorCatalogUsesTheSameProjectSkillVersion(t *testing.T) {
+func TestCanvasOrchestratorCatalogUsesTheSameSystemSkillVersion(t *testing.T) {
 	setupInvocationServiceTest(t)
 	if err := EnsureCanvasOrchestratorSeed(); err != nil {
 		t.Fatal(err)
 	}
 	_, version := seedInvocationSkill(t, invocationSkillSeed{
-		ID: "canvas-cross-entry-skill", VersionID: "canvas-cross-entry-skill-v1", Version: "1.0.0", OwnerType: model.SkillOwnerProject, Recommended: true,
+		ID: "canvas-cross-entry-skill", VersionID: "canvas-cross-entry-skill-v1", Version: "1.0.0", Recommended: true,
 		Mutate: func(pkg *SkillPackage) { pkg.Manifest.Capabilities = []string{"workflow.stage.cross_entry"} },
 	})
 	agentVersion, ok, err := repository.GetAgentVersion(canvasOrchestratorVersionID)
@@ -80,7 +109,7 @@ func TestCanvasOrchestratorCatalogUsesTheSameProjectSkillVersion(t *testing.T) {
 	if len(resolved.Package.InputContract.ArtifactInputs) != len(option.InputBindings) || len(resolved.Package.OutputContract.ArtifactOutputs) != len(option.OutputBindings) {
 		t.Fatalf("canvas catalog contract drift option=%+v resolved=%+v", option, resolved.Package)
 	}
-	if _, err := resolveAgentSkillReference("user-2", "project-1", AgentSkillRef{SkillVersionID: version.ID}); err == nil {
-		t.Fatal("canvas Agent resolved another user's Project Skill")
+	if other, err := resolveAgentSkillReference("user-2", "project-2", AgentSkillRef{SkillVersionID: version.ID}); err != nil || other.Version.ID != version.ID {
+		t.Fatalf("system Skill was not globally resolvable: resolved=%+v err=%v", other, err)
 	}
 }

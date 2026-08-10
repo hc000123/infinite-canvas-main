@@ -85,7 +85,7 @@ func TestAgentVersionTrackAndRecommendation(t *testing.T) {
 
 func TestAgentDraftWritesRejectUnavailableSkillReferences(t *testing.T) {
 	setupRepositoryTestDB(t)
-	project := createReferenceTestSkill(t, "agent-draft-project", model.SkillOwnerProject, true, model.SkillVersionPublished)
+	project := createReferenceTestSkill(t, "agent-draft-project", model.SkillOwnerType("project"), true, model.SkillVersionPublished)
 	agent := model.AgentDefinition{ID: "invalid-agent-create", Name: "Invalid", OwnerType: model.AgentOwnerProject}
 	version := model.AgentVersion{ID: "invalid-agent-create-version", AgentID: agent.ID, Version: "1.0.0", Status: model.AgentVersionDraft, SkillAccessPolicyJSON: `{"allowedSkillIds":["` + project.SkillID + `"]}`}
 	if err := CreateAgentAggregate(agent, version); !errors.Is(err, ErrSkillReferenceTargetUnavailable) {

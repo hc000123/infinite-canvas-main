@@ -99,12 +99,26 @@ func TestNormalizeAgentPackageAllowsCatalogPlannerWithoutDefaultSteps(t *testing
 		RolePrompt:  "根据画布目标从已授权 Skill Catalog 形成临时计划。",
 		PlannerMode: AgentPlannerCatalog,
 		SkillAccessPolicy: AgentSkillAccessPolicy{
-			AllowedOwnerTypes: []model.SkillOwnerType{model.SkillOwnerSystem, model.SkillOwnerProject},
+			AllowedOwnerTypes: []model.SkillOwnerType{model.SkillOwnerSystem},
 		},
 		ExecutionPolicy: AgentExecutionPolicy{MaxSteps: 8, AllowRuntimeSkillOverride: true},
 	})
 	if err != nil || len(packageValue.DefaultSkillRefs) != 0 || packageValue.ExecutionPolicy.MaxSteps != 8 {
 		t.Fatalf("package=%#v err=%v", packageValue, err)
+	}
+}
+
+func TestNormalizeAgentPackageRejectsProjectSkillOwnerPolicy(t *testing.T) {
+	_, err := NormalizeAgentPackage(AgentPackage{
+		RolePrompt:  "根据画布目标从已授权 Skill Catalog 形成临时计划。",
+		PlannerMode: AgentPlannerCatalog,
+		SkillAccessPolicy: AgentSkillAccessPolicy{
+			AllowedOwnerTypes: []model.SkillOwnerType{model.SkillOwnerType("project")},
+		},
+		ExecutionPolicy: AgentExecutionPolicy{MaxSteps: 8, AllowRuntimeSkillOverride: true},
+	})
+	if err == nil || !strings.Contains(err.Error(), "Agent Skill 所有者范围无效") {
+		t.Fatalf("err=%v", err)
 	}
 }
 

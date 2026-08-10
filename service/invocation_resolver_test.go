@@ -38,32 +38,38 @@ func TestResolveInvocationSkillHonorsManualLockAndExplainsRejectedCandidates(t *
 func TestResolveInvocationSkillUsesSemverRankingTagsAndStableTieBreak(t *testing.T) {
 	setupInvocationServiceTest(t)
 	input := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "source_text", `{"text":"test"}`)
-	projectSkill, projectV1 := seedInvocationSkill(t, invocationSkillSeed{ID: "z-project", VersionID: "z-v1", Version: "1.4.0", OwnerType: model.SkillOwnerProject, ProjectTags: []string{"short_drama"}})
-	_, projectV2 := seedInvocationSkillVersion(t, projectSkill, invocationSkillSeed{VersionID: "z-v2", Version: "1.9.0"})
-	seedInvocationSkill(t, invocationSkillSeed{ID: "a-system", VersionID: "a-v1", Version: "1.9.0", ProjectTags: []string{"other"}})
+	taggedSkill, taggedV1 := seedInvocationSkill(t, invocationSkillSeed{ID: "z-tagged", VersionID: "z-v1", Version: "1.4.0", ProjectTags: []string{"short_drama", "vertical"}})
+	_, taggedV2 := seedInvocationSkillVersion(t, taggedSkill, invocationSkillSeed{VersionID: "z-v2", Version: "1.9.0"})
+	_, fallback := seedInvocationSkill(t, invocationSkillSeed{ID: "a-system", VersionID: "a-v1", Version: "1.9.0", ProjectTags: []string{"other"}})
 
 	byCapability, err := ResolveInvocationSkill("user-1", InvocationResolutionInput{
-		ProjectID: "project-1", Capability: "script.create", ProjectTags: []string{"short_drama"},
+		ProjectID: "project-1", Capability: "script.create", ProjectTags: []string{"short_drama", "vertical"},
 		ExpectedOutputArtifactType: "production_script", Inputs: []ResolvedArtifactBinding{{BindingName: "source", Artifact: input}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if byCapability.Resolved.Skill.ID != projectSkill.ID || byCapability.Resolved.Skill.OwnerType != model.SkillOwnerProject {
+	if byCapability.Resolved.Skill.ID != taggedSkill.ID || byCapability.Resolved.Skill.OwnerType != model.SkillOwnerSystem {
 		t.Fatalf("ranking winner=%+v trace=%+v", byCapability.Resolved, byCapability.Trace)
 	}
 	if len(byCapability.Trace.Candidates) < 2 || byCapability.Trace.Candidates[0].Score <= byCapability.Trace.Candidates[1].Score {
 		t.Fatalf("scores do not explain ordering: %+v", byCapability.Trace.Candidates)
 	}
+	if tagged := invocationTraceCandidate(byCapability.Trace, taggedV1.ID); tagged == nil || tagged.Score != 220 {
+		t.Fatalf("tagged score=%+v", tagged)
+	}
+	if untagged := invocationTraceCandidate(byCapability.Trace, fallback.ID); untagged == nil || untagged.Score != 20 {
+		t.Fatalf("recommended fallback score=%+v", untagged)
+	}
 
 	byConstraint, err := ResolveInvocationSkill("user-1", InvocationResolutionInput{
-		ProjectID: "project-1", SkillID: projectSkill.ID, SkillVersionConstraint: ">=1.0 <2.0",
+		ProjectID: "project-1", SkillID: taggedSkill.ID, SkillVersionConstraint: ">=1.0 <2.0",
 		ExpectedOutputArtifactType: "production_script", Inputs: []ResolvedArtifactBinding{{BindingName: "source", Artifact: input}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if byConstraint.Resolved.Version.ID != projectV2.ID || byConstraint.Resolved.Version.ID == projectV1.ID {
+	if byConstraint.Resolved.Version.ID != taggedV2.ID || byConstraint.Resolved.Version.ID == taggedV1.ID {
 		t.Fatalf("highest compatible semver not selected: %+v", byConstraint)
 	}
 }
@@ -71,7 +77,7 @@ func TestResolveInvocationSkillUsesSemverRankingTagsAndStableTieBreak(t *testing
 func TestResolveInvocationSkillEnforcesOwnerLegacyAndPersistedBindings(t *testing.T) {
 	setupInvocationServiceTest(t)
 	input := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "source_text", `{"text":"test"}`)
-	_, projectVersion := seedInvocationSkill(t, invocationSkillSeed{ID: "private", VersionID: "private-v1", Version: "1.0.0", OwnerType: model.SkillOwnerProject})
+	_, projectVersion := seedInvocationSkill(t, invocationSkillSeed{ID: "private", VersionID: "private-v1", Version: "1.0.0", OwnerType: model.SkillOwnerType("project")})
 
 	for _, selector := range []InvocationResolutionInput{
 		{ProjectID: "project-1", SkillVersionID: projectVersion.ID},
@@ -161,7 +167,7 @@ func TestResolveInvocationSkillValidatesOptionalRepeatedCardinalitySchemaAndOutp
 
 func TestResolveInvocationSkillKeepsRejectReasonOrderStable(t *testing.T) {
 	setupInvocationServiceTest(t)
-	skill, version := seedInvocationSkill(t, invocationSkillSeed{ID: "reason-order", VersionID: "reason-order-v1", Version: "1.0.0", OwnerType: model.SkillOwnerProject})
+	skill, version := seedInvocationSkill(t, invocationSkillSeed{ID: "reason-order", VersionID: "reason-order-v1", Version: "1.0.0", OwnerType: model.SkillOwnerType("project")})
 	skill.Enabled = false
 	if err := repository.SaveSkillDefinition(skill); err != nil {
 		t.Fatal(err)

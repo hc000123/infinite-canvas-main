@@ -365,14 +365,8 @@ func invocationCandidateScore(input InvocationResolutionInput, candidate invocat
 			score += 100
 		}
 	}
-	if candidate.skill.OwnerType == model.SkillOwnerProject {
-		score += 50
-	}
 	if candidate.version.ID == candidate.skill.RecommendedVersionID {
 		score += 20
-	}
-	if candidate.skill.OwnerType == model.SkillOwnerSystem {
-		score += 10
 	}
 	return score
 }

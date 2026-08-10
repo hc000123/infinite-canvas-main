@@ -386,7 +386,7 @@
 
 - 项目剧本导入与已有剧本优化现在直接创建 `source_text → Skill Invocation → production_script`，不再创建固定剧本 Agent Plan；Skill 版本、输入 Artifact、模型、额度、质量门、人工审核和 Apply 轨迹仍完整冻结。
 - 系统“标准 AIGC 生产 Workflow”当前为不可变 `2.4.0`，共 12 个内容 Skill 节点和 12 个固定转换节点；剧本节点改为运行前选择精确版本，Workflow 启动不再依赖岗位 Agent 种子，项目编辑器只能新增 Skill 节点，历史 Agent 节点保持只读。
-- 服务启动只注册唯一系统 Agent `agent-system-canvas-orchestrator` / `agent-version-system-canvas-orchestrator-1.0.0`。它使用 `catalog_plan`，发布包没有固定步骤，每次计划必须在运行时提供 1–12 个 Skill Step。
+- 服务启动只注册唯一系统 Agent `agent-system-canvas-orchestrator`，推荐不可变版本 `agent-version-system-canvas-orchestrator-1.1.0`；旧 `1.0.0` 包保持不变。它使用 `catalog_plan`，仅允许 System Skill，发布包没有固定步骤，每次计划必须在运行时提供 1–12 个 Skill Step。
 - 画布对话移除 Agent 下拉，固定显示“画布总控”。总控只能基于当前用户可见且符合访问策略的 Skill Catalog 返回直接回答或临时计划；直接回答不创建 Artifact / Agent Plan。已保存计划卡也不再携带可变 Agent ID / 名称，恢复后仍只读取固定总控。
 - 临时计划会拒绝未知 Skill Version、重复 Step Key、超限步骤、首步不接收 `source_text` 或相邻 Artifact 契约不兼容；客户端只接受模型给出的 Step Key、Skill Version、参数和理由，其余 ID、Capability、Binding 与输出类型全部从真实 Catalog 重建。
 - 计划通过校验后继续沿用 Agent Plan → Invocation → Artifact Runtime 的修订、预检、确认、逐步审核和幂等写回；项目详情已移除生产用“Agent 中心”入口，兼容 / 管理页面和历史数据仍保留。
