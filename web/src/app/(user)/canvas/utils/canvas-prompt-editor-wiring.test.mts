@@ -29,6 +29,13 @@ test("the prompt editor uses the canvas mention matcher instead of Lexical's whi
     assert.doesNotMatch(editor, /useBasicTypeaheadTriggerMatch/);
 });
 
+test("the prompt editor does not truncate connected reference suggestions at nine items", () => {
+    const editor = readCanvasFile("../components/canvas-prompt-editor.tsx");
+
+    assert.doesNotMatch(editor, /filterReferenceMentions\([^\n]+\)\.slice\(0,\s*9\)/);
+    assert.match(editor, /filterReferenceMentions\(options, query \|\| ""\)\.map/);
+});
+
 test("all prompt node panels expose connected media preview and exact unlink actions", () => {
     const layer = readCanvasFile("../components/canvas-nodes-layer.tsx");
     const promptPanel = readCanvasFile("../components/canvas-node-prompt-panel.tsx");

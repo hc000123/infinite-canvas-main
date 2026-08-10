@@ -179,7 +179,7 @@ function ReferenceTypeaheadPlugin({ options }: { options: CanvasReferenceMention
     const [editor] = useLexicalComposerContext();
     const [query, setQuery] = useState<string | null>(null);
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
-    const matches = useMemo(() => filterReferenceMentions(options, query || "").slice(0, 9).map((option) => new ReferenceMenuOption(option)), [options, query]);
+    const matches = useMemo(() => filterReferenceMentions(options, query || "").map((option) => new ReferenceMenuOption(option)), [options, query]);
 
     return (
         <LexicalTypeaheadMenuPlugin
