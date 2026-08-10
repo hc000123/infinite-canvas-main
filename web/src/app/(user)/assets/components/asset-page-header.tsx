@@ -74,18 +74,18 @@ export function AssetPageHeader({ kindFilter, keyword, projectContextFilter, pro
                 <span className="shrink-0 text-sm tabular-nums text-[var(--studio-text-muted)]">{projectOptions.length}</span>
             </div>
 
-            <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:flex xl:items-center xl:justify-end">
-                <Select className="min-w-0 xl:w-40" value={kindFilter} options={kindOptions} onChange={(value) => onKindFilterChange(value as AssetKind | "all")} />
-                <Input className="min-w-0 xl:w-56" allowClear prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />} value={keyword} placeholder="模糊搜索" onChange={(event) => onKeywordChange(event.target.value)} />
-                <Select className="min-w-0 xl:w-36" value={sortMode} options={sortOptions} onChange={(value) => onSortModeChange(value as AssetSortMode)} />
-                <Button className="studio-toolbar-button" icon={<Download className="size-4" />} onClick={onExportAll}>
+            <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:flex xl:flex-wrap xl:items-center xl:justify-end">
+                <Select className="min-w-0 xl:w-40 xl:shrink-0" value={kindFilter} options={kindOptions} onChange={(value) => onKindFilterChange(value as AssetKind | "all")} />
+                <Input className="min-w-0 xl:!w-56 xl:shrink-0" allowClear prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />} value={keyword} placeholder="模糊搜索" onChange={(event) => onKeywordChange(event.target.value)} />
+                <Select className="min-w-0 xl:w-36 xl:shrink-0" value={sortMode} options={sortOptions} onChange={(value) => onSortModeChange(value as AssetSortMode)} />
+                <Button className="studio-toolbar-button shrink-0" icon={<Download className="size-4" />} onClick={onExportAll}>
                     导出全部
                 </Button>
-                <Button className="studio-toolbar-button" icon={<Upload className="size-4" />} onClick={onImportClick}>
+                <Button className="studio-toolbar-button shrink-0" icon={<Upload className="size-4" />} onClick={onImportClick}>
                     批量导入
                 </Button>
                 <Dropdown menu={{ items: createItems, onClick: createFromMenu }} trigger={["click"]} placement="bottomRight">
-                    <Button className="studio-primary-action" type="primary" icon={<Plus className="size-4" />}>
+                    <Button className="studio-primary-action shrink-0" type="primary" icon={<Plus className="size-4" />}>
                         新建
                     </Button>
                 </Dropdown>

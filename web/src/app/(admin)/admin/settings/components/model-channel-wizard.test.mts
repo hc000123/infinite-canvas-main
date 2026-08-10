@@ -115,6 +115,17 @@ test("settings page preserves the unregistered text endpoint mapping while watch
     );
 });
 
+test("settings page preserves public model publication while editing private channels", () => {
+    assert.match(
+        pageSource,
+        /Form\.useWatch\(\["public", "modelChannel", "availableModels"\],\s*\{\s*form,\s*preserve:\s*true\s*\}\s*\)/,
+    );
+    assert.match(
+        pageSource,
+        /Form\.useWatch\(\["public", "modelChannel"\],\s*\{\s*form,\s*preserve:\s*true\s*\}\s*\)/,
+    );
+});
+
 test("settings page removes the legacy channel drawer and embedded model selector", () => {
     assert.doesNotMatch(pageSource, /\bDrawer\b/);
     assert.doesNotMatch(pageSource, /channelForm/);
