@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -93,14 +94,79 @@ func TestMiniMaxVideoContentQueriesTaskBeforeSafeDownload(t *testing.T) {
 	}
 }
 
+func TestMiniMaxVideoContentReturnsSafeDownload(t *testing.T) {
+	setupAIHandlerTestDB(t)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/query/video_generation/task-content" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"task":{"id":"task-content","status":"succeeded","content":{"url":"https://cdn.example.com/minimax.mp4"}}}`))
+	}))
+	defer upstream.Close()
+	saveMiniMaxHandlerSettings(t, upstream.URL)
+
+	originalDownloader := proxyMiniMaxVideoContent
+	t.Cleanup(func() { proxyMiniMaxVideoContent = originalDownloader })
+	proxyMiniMaxVideoContent = func(w http.ResponseWriter, _ context.Context, videoURL string) bool {
+		if videoURL != "https://cdn.example.com/minimax.mp4" {
+			t.Fatalf("video URL = %q", videoURL)
+		}
+		w.Header().Set("Content-Type", "video/mp4")
+		_, _ = w.Write([]byte("minimax-video"))
+		return true
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/videos/task-content/content?model=MiniMax-H3", nil)
+	request = request.WithContext(service.WithUser(request.Context(), model.AuthUser{ID: "user-minimax", Username: "minimax", Role: model.UserRoleUser}))
+	response := httptest.NewRecorder()
+	proxyAIGetRequest(response, request, "/videos/task-content/content")
+
+	if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "video/mp4" || response.Body.String() != "minimax-video" {
+		t.Fatalf("content response = %d %q %q", response.Code, response.Header().Get("Content-Type"), response.Body.String())
+	}
+}
+
+func TestMiniMaxVideoProxyRefundsRejectedUpstreamTask(t *testing.T) {
+	setupAIHandlerTestDB(t)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"message":"MiniMax rejected request"}}`))
+	}))
+	defer upstream.Close()
+	saveMiniMaxHandlerSettingsWithCredits(t, upstream.URL, 2)
+	now := time.Now().Format(time.RFC3339)
+	_, err := repository.SaveUser(model.User{ID: "user-minimax-refund", Username: "minimax-refund", Role: model.UserRoleUser, Status: model.UserStatusActive, Credits: 24, AffCode: "MMREFUND", CreatedAt: now, UpdatedAt: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/videos", strings.NewReader(`{"model":"MiniMax-H3","content":[{"type":"text","text":"一只猫在草地奔跑"}],"duration":6,"ratio":"16:9","resolution":"768P","aigc_watermark":false}`))
+	request.Header.Set("Content-Type", "application/json")
+	request = request.WithContext(service.WithUser(request.Context(), model.AuthUser{ID: "user-minimax-refund", Username: "minimax-refund", Role: model.UserRoleUser}))
+	response := httptest.NewRecorder()
+	proxyAIRequest(response, request, "/videos")
+
+	if !strings.Contains(response.Body.String(), "MiniMax rejected request") {
+		t.Fatalf("body = %s", response.Body.String())
+	}
+	user, ok, err := repository.GetUserByID("user-minimax-refund")
+	if err != nil || !ok || user.Credits != 24 {
+		t.Fatalf("user = %#v ok=%v err=%v, want refunded balance 24", user, ok, err)
+	}
+}
+
 func saveMiniMaxHandlerSettings(t *testing.T, upstreamURL string) {
+	saveMiniMaxHandlerSettingsWithCredits(t, upstreamURL, 0)
+}
+
+func saveMiniMaxHandlerSettingsWithCredits(t *testing.T, upstreamURL string, credits int) {
 	t.Helper()
 	now := time.Now().Format(time.RFC3339)
 	_, err := repository.SaveSettings(model.Settings{
 		Public: model.PublicSetting{ModelChannel: model.PublicModelChannelSetting{
 			AvailableModels:   []string{"MiniMax-H3"},
 			DefaultVideoModel: "MiniMax-H3",
-			ModelCosts:        []model.ModelCost{{Model: "MiniMax-H3", Credits: 0}},
+			ModelCosts:        []model.ModelCost{{Model: "MiniMax-H3", Credits: credits}},
 		}},
 		Private: model.PrivateSetting{Channels: []model.ModelChannel{{
 			Protocol:     string(model.ModelProtocolMiniMax),

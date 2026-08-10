@@ -581,7 +581,7 @@ func proxyMiniMaxVideoGetRequest(w http.ResponseWriter, ctx context.Context, cha
 			Fail(w, "视频任务尚未返回可下载地址")
 			return
 		}
-		if proxyArkVideoContent(w, ctx, videoURL) {
+		if proxyMiniMaxVideoContent(w, ctx, videoURL) {
 			if err := service.MarkArkVideoAITaskContentFetched(taskID); err != nil {
 				log.Printf("MiniMax video content record failed: task=%s err=%v", taskID, err)
 			}
@@ -592,6 +592,8 @@ func proxyMiniMaxVideoGetRequest(w http.ResponseWriter, ctx context.Context, cha
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(normalized)
 }
+
+var proxyMiniMaxVideoContent = proxyArkVideoContent
 
 func proxyArkVideoGetByConfig(w http.ResponseWriter, ctx context.Context, baseURL string, apiKey string, path string) {
 	proxyArkVideoGetByConfigWithClient(w, ctx, strings.TrimRight(baseURL, "/"), apiKey, path, &http.Client{Timeout: service.AIVideoTaskTimeout})
