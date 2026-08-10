@@ -15,9 +15,7 @@ func TestResolveInvocationSkillHonorsManualLockAndExplainsRejectedCandidates(t *
 	_, other := seedInvocationSkillVersion(t, skill, invocationSkillSeed{VersionID: "manual-v2", Version: "2.0.0"})
 	other.FilesJSON = `{broken`
 	other.ContentHash = "corrupt-rejected-candidate"
-	if err := repository.SaveSkillVersion(other); err != nil {
-		t.Fatal(err)
-	}
+	saveSkillVersionFixture(t, other)
 
 	result, err := ResolveInvocationSkill("user-1", InvocationResolutionInput{
 		ProjectID: "project-1", SkillVersionID: manual.ID, ExpectedOutputArtifactType: "production_script",
@@ -109,9 +107,7 @@ func TestResolveInvocationSkillEnforcesOwnerLegacyAndPersistedBindings(t *testin
 		t.Fatal(normalizeErr)
 	}
 	legacyVersion.ContentHash = normalized.ContentHash
-	if err := repository.SaveSkillVersion(legacyVersion); err != nil {
-		t.Fatal(err)
-	}
+	saveSkillVersionFixture(t, legacyVersion)
 	result, err := ResolveInvocationSkill("user-1", InvocationResolutionInput{ProjectID: "project-1", SkillVersionID: legacyVersion.ID, Inputs: []ResolvedArtifactBinding{{BindingName: "source", Artifact: input}}})
 	if err != nil {
 		t.Fatal(err)
@@ -174,9 +170,7 @@ func TestResolveInvocationSkillKeepsRejectReasonOrderStable(t *testing.T) {
 	version.ManifestJSON = `{`
 	version.InputContractJSON = `{"requiredInputs":["source"],"imagePolicy":{"required":false,"min":0,"max":0,"allowTextFallback":true,"allowedTypes":[]}}`
 	version.OutputContractJSON = `{"schemaVersion":"1.0.0","schema":{"type":"object"}}`
-	if err := repository.SaveSkillVersion(version); err != nil {
-		t.Fatal(err)
-	}
+	saveSkillVersionFixture(t, version)
 	result, err := ResolveInvocationSkill("foreign", InvocationResolutionInput{ProjectID: "project-1", Capability: "different.capability"})
 	if err != nil {
 		t.Fatal(err)
@@ -231,9 +225,7 @@ func TestResolveInvocationSkillFallsBackAfterFullPackageFailure(t *testing.T) {
 	input := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "source_text", `{"text":"test"}`)
 	_, corrupt := seedInvocationSkill(t, invocationSkillSeed{ID: "a-corrupt-package", VersionID: "a-corrupt-package-v1", Version: "1.0.0"})
 	corrupt.FilesJSON = `{broken`
-	if err := repository.SaveSkillVersion(corrupt); err != nil {
-		t.Fatal(err)
-	}
+	saveSkillVersionFixture(t, corrupt)
 	_, valid := seedInvocationSkill(t, invocationSkillSeed{ID: "z-valid-package", VersionID: "z-valid-package-v1", Version: "1.0.0"})
 	result, err := ResolveInvocationSkill("user-1", InvocationResolutionInput{ProjectID: "project-1", Capability: "script.create", ExpectedOutputArtifactType: "production_script", Inputs: []ResolvedArtifactBinding{{BindingName: "source", Artifact: input}}})
 	if err != nil {
@@ -253,9 +245,7 @@ func TestResolveInvocationSkillConstraintFallsBackAfterHighestPackageFailure(t *
 	skill, lower := seedInvocationSkill(t, invocationSkillSeed{ID: "constraint-fallback", VersionID: "constraint-v1", Version: "1.0.0"})
 	_, highest := seedInvocationSkillVersion(t, skill, invocationSkillSeed{VersionID: "constraint-v2", Version: "1.9.0"})
 	highest.FilesJSON = `{broken`
-	if err := repository.SaveSkillVersion(highest); err != nil {
-		t.Fatal(err)
-	}
+	saveSkillVersionFixture(t, highest)
 	result, err := ResolveInvocationSkill("user-1", InvocationResolutionInput{ProjectID: "project-1", SkillID: skill.ID, SkillVersionConstraint: ">=1.0 <2.0", ExpectedOutputArtifactType: "production_script", Inputs: []ResolvedArtifactBinding{{BindingName: "source", Artifact: input}}})
 	if err != nil {
 		t.Fatal(err)

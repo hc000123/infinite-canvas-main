@@ -42,3 +42,14 @@ func createSkillTestDraft(t *testing.T, capability, versionName string) model.Sk
 	}
 	return version
 }
+
+func saveSkillVersionFixture(t *testing.T, version model.SkillVersion) {
+	t.Helper()
+	database, err := repository.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Save(&version).Error; err != nil {
+		t.Fatal(err)
+	}
+}

@@ -134,6 +134,9 @@ func SaveSkillVersion(version model.SkillVersion) error {
 		if current.SkillID != version.SkillID || skill.ID != current.SkillID {
 			return ErrSkillReferenceTargetUnavailable
 		}
+		if current.Status != model.SkillVersionDraft || version.Status != model.SkillVersionDraft {
+			return ErrSkillVersionMustBeDraft
+		}
 		return tx.Save(&version).Error
 	})
 }

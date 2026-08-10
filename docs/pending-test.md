@@ -9,7 +9,7 @@
 - 后台 Skill 管理列表、版本解析、评测详情和阶段绑定只接受 System Skill；遗留 Project Skill 不再通过管理或发布路径。
 - 后台新增 Definition 删除接口，只允许管理员删除没有发布 / 归档历史、种子保护和真实引用的普通 System Definition；仅包含空草稿时会连同草稿安全删除。
 - Workflow / Agent JSON 引用按 `skillId`、`skillVersionId`、`candidateSkillIds` 和 `allowedSkillIds` 结构化字段判断，条件值、parameters 内容及相似 ID 不再误阻止删除。
-- Skill 版本创建 / 发布 / 推荐、Workflow / Agent 草稿创建 / 保存 / 发布、阶段绑定、Skill Evaluation 和 Skill 生命周期变更在同一数据库事务内按 `SkillDefinition → SkillVersion` 顺序锁定并复验 System owner、启用状态和版本状态；目标在预检后被删除、归档或改为不可用时，不写入版本、绑定、审计、草稿包、发布状态、评测或摘要等部分数据。
+- Skill 版本创建 / 保存 / 发布 / 推荐、Workflow / Agent 草稿创建 / 保存 / 发布、阶段绑定、Skill Evaluation 和 Skill 生命周期变更在同一数据库事务内按 `SkillDefinition → SkillVersion` 顺序锁定并复验 System owner、启用状态和版本状态；目标在预检后被删除、归档或改为不可用时，不写入版本、绑定、审计、草稿包、发布状态、评测或摘要等部分数据。
 - 人工验收：用管理员删除一个只有空草稿的普通 System Skill，确认成功；再分别尝试删除种子、已有发布历史及被 Workflow / Agent 真实字段引用的 Skill，确认显示明确阻断原因。用普通用户或无登录状态请求删除和评测详情，确认均被拒绝。
 
 ### 模型渠道快捷编辑与来源分组

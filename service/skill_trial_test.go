@@ -192,9 +192,7 @@ func TestTrialImportedSkillRejectsStageSnapshotFromDifferentValidPackage(t *test
 	}
 	tampered := script.Version
 	tampered.ImportMetadataJSON = art.Version.ImportMetadataJSON
-	if err := repository.SaveSkillVersion(tampered); err != nil {
-		t.Fatal(err)
-	}
+	saveSkillVersionFixture(t, tampered)
 	if _, err := TrialSkill("admin-1", script.Version.ID, SkillTrialInput{InputText: "原稿", ConfirmAPICost: true}); err == nil || !strings.Contains(err.Error(), "冻结") {
 		t.Fatalf("cross-package snapshot err=%v", err)
 	}
@@ -240,9 +238,7 @@ func TestTrialImportedSkillRejectsDamagedOrMismatchedStageSnapshot(t *testing.T)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := repository.SaveSkillVersion(test.mutate(created.Version)); err != nil {
-				t.Fatal(err)
-			}
+			saveSkillVersionFixture(t, test.mutate(created.Version))
 			restore := useSkillEvaluationExecutor(t, fakeSkillExecutor{output: `{"productionScript":"结果"}`})
 			defer restore()
 			if _, err := TrialSkill("admin-1", created.Version.ID, SkillTrialInput{InputText: "原稿", ConfirmAPICost: true}); err == nil || !strings.Contains(err.Error(), test.want) {

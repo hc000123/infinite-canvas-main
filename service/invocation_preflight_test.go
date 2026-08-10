@@ -500,9 +500,7 @@ func TestPreflightInvocationExactInvalidPackageBlocksWithoutAgentRun(t *testing.
 	input := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "source_text", `{"text":"test"}`)
 	_, version := seedInvocationSkill(t, invocationSkillSeed{ID: "exact-invalid", VersionID: "exact-invalid-v1", Version: "1.0.0"})
 	version.ContentHash = "wrong-content-hash"
-	if err := repository.SaveSkillVersion(version); err != nil {
-		t.Fatal(err)
-	}
+	saveSkillVersionFixture(t, version)
 	result, err := PreflightInvocation("user-1", InvocationRequest{Source: "direct", ProjectID: "project-1", EpisodeID: "episode-1", SkillVersionID: version.ID, ExpectedOutputArtifactType: "production_script", InputArtifactRefs: []ArtifactRefInput{{BindingName: "source", ArtifactID: input.Artifact.ID, ContentHash: input.Artifact.ContentHash}}})
 	if err != nil {
 		t.Fatal(err)

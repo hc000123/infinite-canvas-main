@@ -267,9 +267,7 @@ func mustImportPublishedFolderSkill(t *testing.T, stageKey string) ResolvedSkill
 	}
 	created.Version.Status = model.SkillVersionPublished
 	created.Skill.RecommendedVersionID = created.Version.ID
-	if err := repository.SaveSkillVersion(created.Version); err != nil {
-		t.Fatal(err)
-	}
+	saveSkillVersionFixture(t, created.Version)
 	if err := repository.SaveSkillDefinition(created.Skill); err != nil {
 		t.Fatal(err)
 	}

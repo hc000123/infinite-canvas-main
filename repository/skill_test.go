@@ -139,6 +139,28 @@ func TestSetRecommendedSkillVersionIsAtomic(t *testing.T) {
 	}
 }
 
+func TestSaveSkillVersionRejectsStaleDraftAfterPublish(t *testing.T) {
+	setupRepositoryTestDB(t)
+	skill := model.SkillDefinition{ID: "stale-save-skill", Name: "Stale", OwnerType: model.SkillOwnerSystem, Enabled: true}
+	stale := model.SkillVersion{ID: "stale-save-version", SkillID: skill.ID, Version: "1.0.0", Status: model.SkillVersionDraft, ContentHash: "draft"}
+	if err := CreateSkillAggregate(skill, stale); err != nil {
+		t.Fatal(err)
+	}
+	published := stale
+	published.PublishedAt, published.UpdatedAt = "published", "published"
+	if err := PublishSkillVersionWithAudit(published, model.SkillAuditLog{ID: "stale-save-publish-audit"}); err != nil {
+		t.Fatal(err)
+	}
+	stale.ContentHash, stale.UpdatedAt = "stale-overwrite", "later"
+	if err := SaveSkillVersion(stale); !errors.Is(err, ErrSkillVersionMustBeDraft) {
+		t.Fatalf("err=%v", err)
+	}
+	stored, ok, err := GetSkillVersion(stale.ID)
+	if err != nil || !ok || stored.Status != model.SkillVersionPublished || stored.ContentHash != "draft" || stored.UpdatedAt != "published" {
+		t.Fatalf("stored=%+v ok=%v err=%v", stored, ok, err)
+	}
+}
+
 func TestRecommendSkillVersionRejectsArchivedTargetWithoutAudit(t *testing.T) {
 	setupRepositoryTestDB(t)
 	skill := model.SkillDefinition{ID: "recommend-archived-skill", Name: "Archived", OwnerType: model.SkillOwnerSystem, Enabled: true}

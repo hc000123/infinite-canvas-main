@@ -294,9 +294,7 @@ func TestEnsureSkillSeedsKeepsCustomWorkflowBinding(t *testing.T) {
 	}
 	custom := createSkillTestDraft(t, "workflow.stage.art", "9.0.0")
 	custom.Status = model.SkillVersionPublished
-	if err := repository.SaveSkillVersion(custom); err != nil {
-		t.Fatal(err)
-	}
+	saveSkillVersionFixture(t, custom)
 	if err := repository.UpsertWorkflowStageSkillBinding(model.WorkflowStageSkillBinding{ID: "custom", StageKey: "art", Scope: model.WorkflowStageSkillScopeGlobal, SkillVersionID: custom.ID}); err != nil {
 		t.Fatal(err)
 	}
