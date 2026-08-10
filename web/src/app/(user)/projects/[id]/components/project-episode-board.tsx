@@ -121,7 +121,7 @@ export function ProjectEpisodeBoard({
                         onClick={onOpenAgentWorkspace}
                     >
                         <Bot className="size-4" />
-                        项目 Agent
+                        生产总控
                     </button>
                     <button
                         type="button"

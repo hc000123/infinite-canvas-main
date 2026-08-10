@@ -69,7 +69,7 @@ export function AgentWorkspace() {
         attention: views.reduce((total, project) => total + project.failureCount + project.warningCount, 0),
     }), [views]);
 
-    if (!projectsHydrated || !scriptsHydrated) return <main className="studio-shell grid min-h-[calc(100dvh-3.5rem)] place-items-center"><Spin description="正在读取 Agent 工作区" /></main>;
+    if (!projectsHydrated || !scriptsHydrated) return <main className="studio-shell grid min-h-[calc(100dvh-3.5rem)] place-items-center"><Spin description="正在读取生产总控" /></main>;
 
     return (
         <main className="studio-shell min-h-[calc(100dvh-3.5rem)] text-[var(--studio-text-primary)]">
@@ -77,7 +77,7 @@ export function AgentWorkspace() {
                 <header className="flex flex-wrap items-end justify-between gap-5 border-b border-[var(--studio-border-subtle)] pb-5">
                     <div>
                         <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--studio-text-muted)]">Production control</p>
-                        <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">项目 Agent</h1>
+                        <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">生产总控</h1>
                         <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--studio-text-secondary)]">跨项目查看生产进度，在每个阶段确认结果后再继续。视频生成始终由你手动启动。</p>
                     </div>
                     {projectId ? <Button icon={<ArrowLeft className="size-4" />} onClick={() => router.push("/agent")}>所有项目</Button> : null}

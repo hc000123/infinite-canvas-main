@@ -1,13 +1,13 @@
 import { Boxes, Check, Circle, CircleAlert, Film, Image, ListTree, LoaderCircle, ScrollText, WandSparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import type { ProductionStageStatus, ProductionStageView } from "../../../../../production-stage-projection";
 
 import type { WorkflowStageKey } from "../workflow-route-state";
-import type { WorkflowStageView, WorkflowViewStatus } from "../workflow-view-types";
 
 const stageIcons = { script: ScrollText, "asset-extraction": ListTree, "asset-production": Image, storyboard: Boxes, prompt: WandSparkles, video: Film };
 
-export function WorkflowStageRail(props: { active: WorkflowStageKey; onSelect: (stage: WorkflowStageKey) => void; stages: WorkflowStageView[] }) {
+export function WorkflowStageRail(props: { active: WorkflowStageKey; onSelect: (stage: WorkflowStageKey) => void; stages: ProductionStageView[] }) {
     return (
         <nav aria-label="视频工作流阶段" className="hidden min-h-0 border-r border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] px-2 py-3 xl:block">
             <div className="mb-2 px-2 text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--studio-text-muted)]">Production</div>
@@ -39,15 +39,15 @@ export function WorkflowStageRail(props: { active: WorkflowStageKey; onSelect: (
     );
 }
 
-function StatusIcon({ status }: { status: WorkflowViewStatus }) {
+function StatusIcon({ status }: { status: ProductionStageStatus }) {
     if (["approved", "applied", "complete"].includes(status)) return <Check className="size-3 text-[var(--studio-success)]" />;
     if (["queued", "running", "cancel_requested"].includes(status)) return <LoaderCircle className="size-3 animate-spin text-[var(--studio-accent)]" />;
     if (["blocked", "failed", "rejected"].includes(status)) return <CircleAlert className="size-3 text-[var(--studio-warning)]" />;
     return <Circle className="size-3" />;
 }
 
-function statusLabel(status: WorkflowViewStatus) {
-    const labels: Record<WorkflowViewStatus, string> = {
+function statusLabel(status: ProductionStageStatus) {
+    const labels: Record<ProductionStageStatus, string> = {
         applied: "已写入",
         approved: "已通过",
         blocked: "被阻断",
@@ -61,6 +61,7 @@ function statusLabel(status: WorkflowViewStatus) {
         ready: "可开始",
         rejected: "需修改",
         running: "进行中",
+        warning: "有占位",
     };
     return labels[status];
 }

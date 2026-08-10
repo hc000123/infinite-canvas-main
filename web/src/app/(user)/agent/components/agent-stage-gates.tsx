@@ -7,13 +7,16 @@ import type { AgentEpisodeView, AgentStageStatus } from "../agent-workspace-mode
 const statusMeta: Record<AgentStageStatus, { label: string; className: string; icon: typeof Circle }> = {
     idle: { label: "未开始", className: "text-[var(--studio-text-muted)]", icon: Circle },
     ready: { label: "可开始", className: "text-[var(--studio-accent)]", icon: Clock3 },
+    queued: { label: "排队中", className: "text-[var(--studio-accent)]", icon: LoaderCircle },
     running: { label: "运行中", className: "text-[var(--studio-accent)]", icon: LoaderCircle },
+    cancel_requested: { label: "停止中", className: "text-[var(--studio-text-muted)]", icon: LoaderCircle },
     needs_review: { label: "待审核", className: "text-[var(--studio-warning)]", icon: AlertCircle },
     approved: { label: "已批准", className: "text-[var(--studio-success)]", icon: Check },
     applied: { label: "已应用", className: "text-[var(--studio-success)]", icon: Check },
     warning: { label: "有占位", className: "text-[var(--studio-warning)]", icon: TriangleAlert },
     blocked: { label: "已阻塞", className: "text-[var(--studio-text-muted)]", icon: Circle },
     failed: { label: "失败", className: "text-[var(--studio-danger)]", icon: AlertCircle },
+    rejected: { label: "需修改", className: "text-[var(--studio-warning)]", icon: AlertCircle },
     cancelled: { label: "已取消", className: "text-[var(--studio-text-muted)]", icon: Circle },
     complete: { label: "已完成", className: "text-[var(--studio-success)]", icon: Check },
 };
@@ -39,7 +42,7 @@ export function AgentStageGates({ episode }: { episode: AgentEpisodeView }) {
                         <Link key={stage.key} href={href} className={cn("group relative min-h-36 border-b border-[var(--studio-border-subtle)] p-4 transition hover:bg-[var(--studio-hover-bg)] md:border-r xl:border-b-0", index === episode.stages.length - 1 && "md:border-r-0")}>
                             <div className="flex items-start justify-between gap-3">
                                 <span className="font-mono text-xs text-[var(--studio-text-muted)]">{String(index + 1).padStart(2, "0")}</span>
-                                <span className={cn("inline-flex items-center gap-1 text-xs font-medium", meta.className)}><Icon className={cn("size-3.5", stage.status === "running" && "animate-spin")} />{meta.label}</span>
+                                <span className={cn("inline-flex items-center gap-1 text-xs font-medium", meta.className)}><Icon className={cn("size-3.5", ["queued", "running", "cancel_requested"].includes(stage.status) && "animate-spin")} />{meta.label}</span>
                             </div>
                             <h3 className="mt-5 text-sm font-semibold text-[var(--studio-text-primary)]">{stage.label}</h3>
                             <p className="mt-1.5 text-xs leading-5 text-[var(--studio-text-muted)]">{stage.blockingReason || stage.description}</p>

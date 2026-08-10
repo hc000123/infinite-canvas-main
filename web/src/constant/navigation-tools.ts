@@ -9,8 +9,8 @@ export const navigationTools = [
     },
     {
         slug: "agent",
-        label: "Agent 制作总控",
-        shortLabel: "Agent",
+        label: "生产总控",
+        shortLabel: "总控",
         icon: Route,
     },
     {

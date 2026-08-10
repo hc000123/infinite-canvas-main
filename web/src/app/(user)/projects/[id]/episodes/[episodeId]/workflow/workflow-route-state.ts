@@ -1,6 +1,7 @@
-export const workflowStageKeys = ["script", "asset-extraction", "asset-production", "storyboard", "prompt", "video"] as const;
+import { productionStageKeys, type ProductionStageKey } from "../../../../production-stage-projection.ts";
 
-export type WorkflowStageKey = (typeof workflowStageKeys)[number];
+export const workflowStageKeys = productionStageKeys;
+export type WorkflowStageKey = ProductionStageKey;
 export type WorkflowRouteShotStatus = "blocked" | "review" | "running" | "incomplete" | "complete";
 export type WorkflowRouteShot = { id: string; status?: WorkflowRouteShotStatus };
 export type WorkflowRouteState = { shot: string; stage: WorkflowStageKey };
