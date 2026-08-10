@@ -45,7 +45,7 @@ export function buildAssetCenterSubjects(input: {
 }) {
     return input.subjects
         .filter((subject) => !input.projectId || subject.projectId === input.projectId)
-        .map((subject) => {
+        .map((subject): AssetCenterSubjectSummary | null => {
             const variants = input.variants.filter((variant) => variant.subjectId === subject.id).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
             const primaryVariant = variants[0];
             if (!primaryVariant) return null;
@@ -65,7 +65,7 @@ export function buildAssetCenterSubjects(input: {
                 readiness: coverAsset ? "ready" : pendingCount ? "pending" : "empty",
             } satisfies AssetCenterSubjectSummary;
         })
-        .filter((summary): summary is AssetCenterSubjectSummary => Boolean(summary));
+        .filter((summary): summary is AssetCenterSubjectSummary => summary !== null);
 }
 
 export function unorganizedAssets(assets: Asset[], projectId: string) {

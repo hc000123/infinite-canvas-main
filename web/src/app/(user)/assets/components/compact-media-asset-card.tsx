@@ -1,6 +1,6 @@
 "use client";
 
-import { AudioLines, CheckSquare, Download, PencilLine, RefreshCw, ShieldCheck, Sparkles, Square, Star, Trash2 } from "lucide-react";
+import { AudioLines, CheckSquare, Download, FileText, PencilLine, RefreshCw, ShieldCheck, Sparkles, Square, Star, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { canSubmitVolcengineReview, isVolcengineReviewProcessing, shouldShowVolcengineReviewAction } from "@/services/volcengine-asset-metadata";
@@ -64,7 +64,7 @@ export function CompactMediaAssetCard(props: {
                         <img src={imageUrl} alt={asset.title} className="size-full object-cover" />
                     ) : asset.kind === "video" ? (
                         <video src={videoPreviewUrl(asset.data.url)} muted playsInline preload="metadata" className="size-full object-cover" />
-                    ) : <span className="flex size-full flex-col items-center justify-center gap-2 text-[var(--studio-text-muted)]"><AudioLines className="size-8" /><span className="text-xs font-medium">音频</span></span>}
+                    ) : asset.kind === "audio" ? <span className="flex size-full flex-col items-center justify-center gap-2 text-[var(--studio-text-muted)]"><AudioLines className="size-8" /><span className="text-xs font-medium">音频</span></span> : asset.kind === "text" ? <span className="flex size-full flex-col items-center justify-center gap-2 px-5 text-[var(--studio-text-muted)]"><FileText className="size-8" /><span className="line-clamp-4 text-xs leading-5">{asset.data.content || "文本"}</span></span> : <span className="flex size-full items-center justify-center text-xs text-[var(--studio-text-muted)]">暂无预览</span>}
                 </button>
                 <div
                     className={cn(
@@ -74,7 +74,7 @@ export function CompactMediaAssetCard(props: {
                 >
                     <AssetIconButton title="编辑" icon={<PencilLine className="size-3.5" />} onClick={props.onEdit} />
                     {asset.kind === "image" && props.onReviseImage ? <AssetIconButton title="进入生图修改" icon={<Sparkles className="size-3.5" />} onClick={props.onReviseImage} /> : null}
-                    <AssetIconButton title="下载" icon={<Download className="size-3.5" />} onClick={props.onDownload} />
+                    {asset.kind !== "text" ? <AssetIconButton title="下载" icon={<Download className="size-3.5" />} onClick={props.onDownload} /> : null}
                     {shouldShowVolcengineReviewAction(asset.kind) ? (
                         asset.metadata?.volcengineAsset?.assetId && !canSubmitVolcengineReview(asset.metadata.volcengineAsset) ? (
                             <AssetIconButton
@@ -91,7 +91,7 @@ export function CompactMediaAssetCard(props: {
                 </div>
             </div>
             <button type="button" className="block w-full p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--studio-accent)]" title={asset.title} onClick={props.onOpen}>
-                <span className="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-[var(--studio-text-primary)]">{asset.title || (asset.kind === "image" ? "未命名图片" : asset.kind === "video" ? "未命名视频" : "未命名音频")}</span>
+                <span className="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-[var(--studio-text-primary)]">{asset.title || (asset.kind === "image" ? "未命名图片" : asset.kind === "video" ? "未命名视频" : asset.kind === "audio" ? "未命名音频" : "未命名文本")}</span>
                 <span className="mt-2 block truncate text-[11px] text-[var(--studio-text-muted)]">{assetMediaInfo(asset)}</span>
                 <span className="mt-1 flex min-w-0 items-center gap-2 text-[11px] text-[var(--studio-text-secondary)]">
                     {asset.source ? <span className="truncate">{asset.source}</span> : null}

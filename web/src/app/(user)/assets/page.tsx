@@ -9,10 +9,14 @@ import { useAssetStore, type Asset, type AssetCategory, type AssetKind } from "@
 import { useScriptStore } from "../canvas/stores/use-script-store";
 import type { ProductionBibleItem } from "../canvas/utils/production-bible";
 import { normalizeCanvasAssetTitles } from "./asset-canvas-title";
+import { buildAssetCenterSubjects, unorganizedAssets } from "./asset-gallery";
 import { assetEpisodeTitle } from "./asset-episode";
 import { buildAssetImageRevisionHref } from "./asset-image-revision";
 import type { AssetFormValues } from "./components/asset-editor-modal";
+import { AssetCenterNav, type AssetCenterView } from "./components/asset-center-nav";
 import { AssetFilterPanel } from "./components/asset-filter-panel";
+import { AssetInboxSection } from "./components/asset-inbox-section";
+import { AssetOrganizeModal } from "./components/asset-organize-modal";
 import { AssetPageHeader } from "./components/asset-page-header";
 import { AssetSubjectCreateModal } from "./components/asset-subject-create-modal";
 import { AssetPageOverlays } from "./components/asset-page-overlays";
@@ -25,6 +29,7 @@ import { useAssetFolderActions } from "./use-asset-folder-actions";
 import { useAssetImportDropzone } from "./use-asset-import-dropzone";
 import { useAssetMediaActions } from "./use-asset-media-actions";
 import { useAssetOutdatedReferenceActions } from "./use-asset-outdated-reference-actions";
+import { useAssetOrganizeActions } from "./use-asset-organize-actions";
 import { useAssetPageQuery } from "./use-asset-page-query";
 import { useAssetPageStores } from "./use-asset-page-stores";
 import { useAssetSelection } from "./use-asset-selection";
@@ -62,6 +67,9 @@ function AssetsPageContent() {
         ensureProjectFolder,
         ensureSubject,
         folders,
+        workbenchImages,
+        organizeAsset,
+        createSubjectFromAsset,
         productionBibleItems,
         projects,
         removeAsset,
@@ -94,6 +102,7 @@ function AssetsPageContent() {
     const [matchKeyword, setMatchKeyword] = useState("");
     const [pendingClassificationIds, setPendingClassificationIds] = useState<string[]>([]);
     const [subjectCreateCategory, setSubjectCreateCategory] = useState<AssetCategory | null>(null);
+    const [centerView, setCenterView] = useState<AssetCenterView>("all");
 
     useEffect(() => {
         if (!requestedAssetId || openedRequestedAssetId === requestedAssetId) return;
@@ -176,6 +185,24 @@ function AssetsPageContent() {
         storyboardTableShots,
         subjects,
     });
+    const subjectSummaries = useMemo(() => buildAssetCenterSubjects({ subjects, variants, assets, workbenchImages, projectId: projectContextFilter }), [assets, projectContextFilter, subjects, variants, workbenchImages]);
+    const inboxAssets = useMemo(() => {
+        const filteredIds = new Set(filteredAssets.map((asset) => asset.id));
+        return unorganizedAssets(assets, projectContextFilter).filter((asset) => filteredIds.has(asset.id));
+    }, [assets, filteredAssets, projectContextFilter]);
+    const visibleSubjectSummaries = useMemo(() => {
+        const query = keyword.trim().toLowerCase();
+        return subjectSummaries.filter((summary) => (centerView === "all" || centerView === "inbox" || summary.subject.category === centerView) && (!query || [summary.subject.name, summary.subject.code, ...summary.subject.tags].join(" ").toLowerCase().includes(query)));
+    }, [centerView, keyword, subjectSummaries]);
+    const subjectCounts = useMemo(() => ({
+        all: subjectSummaries.length,
+        character: subjectSummaries.filter((summary) => summary.subject.category === "character").length,
+        scene: subjectSummaries.filter((summary) => summary.subject.category === "scene").length,
+        prop: subjectSummaries.filter((summary) => summary.subject.category === "prop").length,
+        blocking: subjectSummaries.filter((summary) => summary.subject.category === "blocking").length,
+        other: subjectSummaries.filter((summary) => summary.subject.category === "other").length,
+    }), [subjectSummaries]);
+    const { organizingAsset, openOrganize, closeOrganize, submitOrganize } = useAssetOrganizeActions({ projectId: projectContextFilter, organizeAsset, createSubjectFromAsset });
     const { deleteFolder, editingFolder, folderDialogOpen, folderName, openCreateFolder, openEditFolder, saveFolder, setFolderDialogOpen, setFolderName } = useAssetFolderActions({
         addFolder,
         creativeProjects,
@@ -519,67 +546,37 @@ function AssetsPageContent() {
                     />
                 </div>
 
-                <AssetResultsSection
-                    allFilteredSelected={allFilteredSelected}
-                    allVisibleProductionBibleSelected={allVisibleProductionBibleSelected}
-                    bulkReviewAction={bulkReviewAction}
-                    filteredCount={filteredAssets.length}
-                    hasScopedAssetFilter={hasScopedAssetFilter}
-                    kindFilter={kindFilter}
-                    keyword={keyword}
-                    page={page}
-                    pageCount={pageCount}
-                    productionBibleCount={visibleProductionBibleItems.length}
-                    projectContextFilter={projectContextFilter}
-                    referenceVersionFilter={referenceVersionFilter}
-                    refreshingReviewId={refreshingReviewId}
-                    selectedAssetIds={selectedAssetIds}
-                    selectedAssetSummary={selectedAssetSummary}
-                    selectedAssetsCount={selectedAssets.length}
-                    selectedInFilteredCount={selectedInFilteredCount}
-                    selectedOutdatedUsageIds={selectedOutdatedUsageIds}
-                    selectedProductionBibleCount={selectedProductionBibleItems.length}
-                    selectedProductionBibleInVisibleCount={selectedProductionBibleInVisibleCount}
-                    selectedProductionBibleItemIds={selectedProductionBibleItemIds}
-                    selectedProductionBibleSummary={selectedProductionBibleItemSummary}
-                    selectedVolcengineRefreshCount={selectedVolcengineRefreshAssets.length}
-                    selectedVolcengineSubmitCount={selectedVolcengineSubmitAssets.length}
-                    subjects={subjects}
-                    submittingReviewId={submittingReviewId}
-                    usages={outdatedAssetVersionUsages}
-                    variants={variants}
-                    visibleAssetGroups={visibleAssetGroups}
-                    onAddToProjectLibrary={addSelectedToProjectLibrary}
-                    onBulkDelete={openBulkDelete}
-                    onBulkDeleteProductionBibleItems={openBulkProductionBibleDelete}
-                    onBulkMove={openBulkMove}
-                    onBulkTag={openBulkTag}
-                    onClearOutdatedSelection={clearSelectedOutdatedUsages}
-                    onClearSelected={clearSelectedAssets}
-                    onClearSelectedProductionBibleItems={clearSelectedProductionBibleItems}
-                    onDeleteAsset={setDeletingAsset}
-                    onDeleteProductionBibleItem={setDeletingProductionBibleItem}
-                    onDownloadAsset={downloadMedia}
-                    onEditAsset={openEdit}
-                    onExportSelected={() => void exportSelectedAssets()}
-                    onOpenAsset={setPreviewAsset}
-                    onOpenBulkOutdated={() => setBulkOutdatedOpen(true)}
-                    onPageChange={setPage}
-                    onRefreshAssetReview={(asset) => void refreshImageReview(asset)}
-                    onRefreshSelectedReviews={() => void refreshSelectedVolcengineReviews()}
-                    onRemoveFromProjectLibrary={removeSelectedFromProjectLibrary}
-                    onReviseImage={reviseImageAsset}
-                    onSelectFiltered={selectFilteredAssets}
-                    onSelectOutdatedUsages={selectAllOutdatedUsages}
-                    onSelectVisibleProductionBibleItems={selectVisibleProductionBibleItems}
-                    onSubmitAssetReview={(asset) => void submitImageReview(asset)}
-                    onSubmitSelectedReviews={() => void submitSelectedVolcengineReviews()}
-                    onToggleAsset={toggleAssetSelected}
-                    onToggleFavorite={toggleFavorite}
-                    onToggleOutdatedUsage={toggleOutdatedUsageSelected}
-                    onToggleProductionBibleItem={toggleProductionBibleItemSelected}
-                    onUpdateOutdatedUsage={updateOutdatedUsageToLatest}
-                />
+                <AssetCenterNav value={centerView} counts={subjectCounts} inboxCount={inboxAssets.length} onChange={setCenterView} />
+                {centerView === "inbox" && referenceVersionFilter !== "outdated" ? (
+                    <AssetInboxSection
+                        assets={inboxAssets}
+                        selectedIds={selectedAssetIds}
+                        refreshingReviewId={refreshingReviewId}
+                        submittingReviewId={submittingReviewId}
+                        onOrganize={openOrganize}
+                        onSelect={toggleAssetSelected}
+                        onOpen={setPreviewAsset}
+                        onEdit={openEdit}
+                        onToggleFavorite={toggleFavorite}
+                        onDownload={downloadMedia}
+                        onDelete={setDeletingAsset}
+                        onReview={(asset) => void submitImageReview(asset)}
+                        onRefreshReview={(asset) => void refreshImageReview(asset)}
+                        onReviseImage={reviseImageAsset}
+                    />
+                ) : (
+                    <AssetResultsSection
+                        summaries={visibleSubjectSummaries}
+                        referenceVersionFilter={referenceVersionFilter}
+                        usages={outdatedAssetVersionUsages}
+                        selectedOutdatedUsageIds={selectedOutdatedUsageIds}
+                        onToggleOutdatedUsage={toggleOutdatedUsageSelected}
+                        onSelectOutdatedUsages={selectAllOutdatedUsages}
+                        onClearOutdatedSelection={clearSelectedOutdatedUsages}
+                        onUpdateOutdatedUsage={updateOutdatedUsageToLatest}
+                        onOpenBulkOutdated={() => setBulkOutdatedOpen(true)}
+                    />
+                )}
             </main>
 
             <AssetSubjectCreateModal
@@ -589,6 +586,16 @@ function AssetsPageContent() {
                 projects={creativeProjects}
                 onCancel={() => setSubjectCreateCategory(null)}
                 onCreate={createSubject}
+            />
+
+            <AssetOrganizeModal
+                asset={organizingAsset}
+                projectId={projectContextFilter}
+                subjects={subjects}
+                variants={variants}
+                open={Boolean(organizingAsset)}
+                onCancel={closeOrganize}
+                onSubmit={submitOrganize}
             />
 
             <AssetPageOverlays
