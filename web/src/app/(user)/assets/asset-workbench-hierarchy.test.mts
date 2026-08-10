@@ -14,4 +14,7 @@ test("presents current, pending, history, and references in one hierarchy", () =
     assert.doesNotMatch(`${page}\n${candidates}\n${versions}`, /候选资产|生成候选/);
     assert.match(page, /compact=\{subjectVariants\.length === 1\}/);
     assert.match(page, /promoteWorkbenchImage/);
+    assert.match(page, /image\.role === "candidate" && !image\.selectedAssetId/);
+    assert.match(page, /<AssetRelatedMediaPanel/);
+    assert.match(versions, /assets\.filter\(\(asset\) => asset\.id !== currentAssetId\)/);
 });

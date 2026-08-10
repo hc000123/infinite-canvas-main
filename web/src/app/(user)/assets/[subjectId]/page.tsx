@@ -17,6 +17,7 @@ import { useCreativeProjectStore } from "../../projects/use-creative-project-sto
 import { assetCategoryLabel } from "../asset-subjects";
 import { buildAssetImageRevisionHref } from "../asset-image-revision";
 import { AssetCandidateGrid } from "./components/asset-candidate-grid";
+import { AssetRelatedMediaPanel } from "./components/asset-related-media-panel";
 import { AssetReferencePanel } from "./components/asset-reference-panel";
 import { AssetReferencePicker } from "./components/asset-reference-picker";
 import { AssetVariantNav } from "./components/asset-variant-nav";
@@ -66,8 +67,9 @@ function AssetSubjectWorkbench({ subject }: { subject: AssetSubject }) {
     const project = projects.find((item) => item.id === subject.projectId);
     const generationVariant: AssetVariant = activeVariant || { id: "", subjectId: subject.id, name: "", prompt: "", referenceImageIds: [], createdAt: "", updatedAt: "" };
     const references = workbenchImages.filter((image) => image.variantId === generationVariant.id && generationVariant.referenceImageIds.includes(image.id));
-    const candidates = workbenchImages.filter((image) => image.variantId === generationVariant.id && image.role === "candidate");
+    const candidates = workbenchImages.filter((image) => image.variantId === generationVariant.id && image.role === "candidate" && !image.selectedAssetId);
     const formalAssets = assets.filter((asset) => asset.kind === "image" && asset.assetBinding?.subjectId === subject.id && (asset.assetBinding.variantId === generationVariant.id || (!asset.assetBinding.variantId && asset.assetBinding.variantName === generationVariant.name)));
+    const relatedMedia = assets.filter((asset) => asset.kind !== "image" && asset.assetBinding?.subjectId === subject.id);
     const currentAsset = formalAssets.find((asset) => asset.id === generationVariant.currentAssetId);
     const generation = useAssetWorkbenchGeneration({ addWorkbenchImage, projectTitle: project ? project.title || "未命名项目" : undefined, references: references.map(workbenchImageReference), subject, variant: generationVariant });
     const savedVariantConfig = activeVariant?.config;
@@ -182,6 +184,7 @@ function AssetSubjectWorkbench({ subject }: { subject: AssetSubject }) {
                         </section>
                         <AssetCandidateGrid candidates={candidates} running={generation.running} slots={generation.slots} onCopy={openCopyCandidate} onDelete={(image) => removeWorkbenchImage(image.id)} onGenerate={() => void generation.generate()} onPromote={(candidate) => void promoteCandidate(candidate)} onRetry={(slotId) => void generation.retrySlot(slotId)} onUpload={() => candidateInputRef.current?.click()} onUseAsReference={useCandidateAsReference} />
                         <AssetVersionPanel assets={formalAssets} currentAssetId={activeVariant.currentAssetId} onRevise={(asset) => { if (asset.kind === "image") router.push(buildAssetImageRevisionHref(asset, `/assets/${subject.id}`)); }} onSetCurrent={(assetId) => setVariantCurrentAsset(activeVariant.id, assetId)} />
+                        <AssetRelatedMediaPanel assets={relatedMedia} projectId={subject.projectId} />
                     </div>
                 </div>
             </main>

@@ -117,7 +117,7 @@ export function AssetPickerModal({ open, title = "选择素材", defaultTab = "m
                 onChange={(key) => setActiveTab(key as AssetPickerTab)}
                 items={[
                     ...(projectId && episodeId ? [{ key: "episode-assets", label: "本集资产", children: <SubjectAssetsTab projectId={projectId} episodeId={episodeId} allowedKinds={allowedKinds} selection={selection} /> }] : []),
-                    { key: "my-assets", label: "全部资产", children: <SubjectAssetsTab allowedKinds={allowedKinds} selection={selection} /> },
+                    { key: "my-assets", label: "全部资产", children: <SubjectAssetsTab projectId={projectId} allowedKinds={allowedKinds} selection={selection} /> },
                     { key: "library", label: "外部素材库", children: <LibraryTab allowedKinds={allowedKinds} defaultKind={defaultKind} selection={selection} /> },
                 ]}
             />

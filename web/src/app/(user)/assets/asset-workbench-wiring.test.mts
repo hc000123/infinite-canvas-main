@@ -23,7 +23,7 @@ test("provides a safe missing-subject state and responsive production layout", (
 });
 
 test("keeps all workbench components private to the subject route", () => {
-    for (const file of ["asset-variant-nav.tsx", "asset-reference-panel.tsx", "asset-candidate-grid.tsx", "asset-version-panel.tsx"]) {
+    for (const file of ["asset-variant-nav.tsx", "asset-reference-panel.tsx", "asset-candidate-grid.tsx", "asset-version-panel.tsx", "asset-related-media-panel.tsx"]) {
         assert.equal(existsSync(new URL(`./[subjectId]/components/${file}`, import.meta.url)), true, file);
     }
 });

@@ -3,6 +3,7 @@ import test from "node:test";
 
 import type { Asset, AssetSubject, AssetVariant } from "../../../../stores/use-asset-store.ts";
 import { buildAssetSubjectPickerItems, resolveSubjectPickerAsset } from "./asset-subject-picker.ts";
+import { readFileSync } from "node:fs";
 
 const now = "2026-08-10T00:00:00.000Z";
 const subjects: AssetSubject[] = [
@@ -36,4 +37,9 @@ test("excludes unbound inbox media from formal subject items", () => {
     const loose = { ...image("loose", "base", "基础形象"), assetBinding: undefined } as Asset;
     const items = buildAssetSubjectPickerItems({ subjects, variants, assets: [...assets, loose], projectId: "project-1" });
     assert.equal(items[0].assets.some((asset) => asset.id === "loose"), false);
+});
+
+test("keeps the all-assets tab inside the current project when context exists", () => {
+    const picker = readFileSync(new URL("../components/asset-picker-modal.tsx", import.meta.url), "utf8");
+    assert.match(picker, /key: "my-assets"[^\n]+<SubjectAssetsTab projectId=\{projectId\}/);
 });
