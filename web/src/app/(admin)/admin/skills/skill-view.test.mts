@@ -76,6 +76,13 @@ test("new version import compares against the selected version", () => {
     assert.match(page, /previousVersionId=\{folderImportMode === "version" \? activeVersionId : undefined\}/);
 });
 
+test("admin Skill deletion uses the protected lifecycle endpoint and confirmation", () => {
+    const page = fs.readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
+    for (const text of ["deleteAdminSkill,", "deleteAdminSkill(token, activeItem!.skill.id)", "confirmSkillDelete", "删除 Skill", "仅有空草稿时会一并删除", "deleteSkillMutation.mutateAsync()"]) {
+        assert.ok(page.includes(text), `missing Skill deletion wiring ${text}`);
+    }
+});
+
 test("folder-imported admin versions keep technical contracts read-only", () => {
     const page = fs.readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
     assert.match(page, /const importedFolderVersion = activeVersion\?\.sourceKind === "folder_import";/);

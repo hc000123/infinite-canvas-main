@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
     archiveAdminSkillVersion,
+    deleteAdminSkill,
     deleteAdminSkillVersion,
     fetchAdminSkills,
     fetchAdminSkillVersion,
@@ -113,6 +114,7 @@ export default function AdminSkillsPage() {
     const validateMutation = useMutation({ mutationFn: () => validateAdminSkillVersion(token, activeVersionId), onSuccess: (result) => message.success(`契约校验通过：${shortSkillHash(result.contentHash)}`), onError: mutationError });
     const publishMutation = useMutation({ mutationFn: () => publishAdminSkillVersion(token, activeVersionId), onSuccess: async () => { await invalidateAll(); message.success("不可变版本已发布，推荐版保持不变"); }, onError: mutationError });
     const recommendMutation = useMutation({ mutationFn: () => recommendAdminSkillVersion(token, activeItem!.skill.id, activeVersionId), onSuccess: async () => { await invalidateAll(); message.success("推荐版本已切换"); }, onError: mutationError });
+    const deleteSkillMutation = useMutation({ mutationFn: () => deleteAdminSkill(token, activeItem!.skill.id), onSuccess: async () => { setActiveSkillId(""); setActiveVersionId(""); await invalidateAll(); message.success("Skill 已删除"); }, onError: mutationError });
     const deleteVersionMutation = useMutation({ mutationFn: () => deleteAdminSkillVersion(token, activeVersionId), onSuccess: async () => { setActiveVersionId(""); await invalidateAll(); message.success("草稿版本已删除"); }, onError: mutationError });
     const archiveVersionMutation = useMutation({ mutationFn: () => archiveAdminSkillVersion(token, activeVersionId), onSuccess: async () => { setActiveVersionId(""); await invalidateAll(); message.success("已发布版本已停用"); }, onError: mutationError });
     const enabledMutation = useMutation({ mutationFn: (enabled: boolean) => updateAdminSkill(token, activeItem!.skill.id, { enabled }), onSuccess: invalidateAll, onError: mutationError });
@@ -128,6 +130,17 @@ export default function AdminSkillsPage() {
     const recommendedVersion = activeItem?.versions.find((version) => version.id === activeItem.skill.recommendedVersionId);
     const recommendationAction = activeVersion?.status === "published" && activeVersion.id !== activeItem?.skill.recommendedVersionId ? (recommendedVersion && activeVersion.createdAt < recommendedVersion.createdAt ? "回滚推荐到此版" : "设为推荐版") : "";
     const openDefinitionEdit = () => { setDefinitionForm({ name: activeItem?.skill.name || "", summary: activeItem?.skill.summary || "" }); setDefinitionOpen(true); };
+    const confirmSkillDelete = () => {
+        if (!activeItem) return;
+        modal.confirm({
+            title: `删除 Skill“${activeItem.skill.name}”？`,
+            content: "只有从未发布、没有停用历史、没有真实引用且不受种子保护的 Skill 才能删除；仅有空草稿时会一并删除。服务端会再次校验并拒绝不安全的删除。",
+            okText: "删除 Skill",
+            cancelText: "取消",
+            okButtonProps: { danger: true },
+            onOk: () => deleteSkillMutation.mutateAsync(),
+        });
+    };
     const confirmVersionLifecycle = () => {
         if (!activeVersion || activeVersion.status === "archived") return;
         const deleting = activeVersion.status === "draft";
@@ -180,7 +193,7 @@ export default function AdminSkillsPage() {
 
                         <Flex vertical gap={12} className="min-h-0 xl:max-h-[calc(100dvh-250px)] xl:overflow-y-auto xl:pr-1" style={{ minWidth: 0 }}>
                             <Card className="studio-panel" variant="borderless" styles={{ body: { padding: 14 } }}>
-                                <Flex justify="space-between" align="center" gap={12} wrap><div><Flex gap={8} align="center" wrap><Typography.Title level={4} style={{ margin: 0 }}>{activeItem.skill.name} · v{activeVersion?.version || "-"}</Typography.Title><Button type="text" size="small" icon={<EditOutlined />} onClick={openDefinitionEdit}>编辑名称</Button><Tag color={activeVersion?.status === "draft" ? "warning" : activeVersion?.status === "published" ? "success" : "default"}>{activeVersion ? skillLifecycleLabel(activeVersion, Boolean(passingEvaluation), activeVersion.id === activeItem.skill.recommendedVersionId) : "未选择版本"}</Tag></Flex><Typography.Text type="secondary">{activeItem.skill.summary}</Typography.Text></div><Space wrap><Button icon={<ExperimentOutlined />} disabled={!activeVersion || activeVersion.status === "archived"} onClick={() => setTrialOpen(true)}>独立试运行</Button>{activeVersion?.status === "draft" ? <Button type="primary" icon={<CloudUploadOutlined />} disabled={!publishReady} loading={publishMutation.isPending} onClick={() => publishMutation.mutate()}>设为可用</Button> : null}{recommendationAction ? <Button type="primary" onClick={() => recommendMutation.mutate()} loading={recommendMutation.isPending}>{recommendationAction}</Button> : null}{activeVersion?.status === "draft" ? <Button danger icon={<DeleteOutlined />} loading={deleteVersionMutation.isPending} onClick={confirmVersionLifecycle}>删除草稿</Button> : null}{activeVersion?.status === "published" ? <Button danger icon={<StopOutlined />} loading={archiveVersionMutation.isPending} onClick={confirmVersionLifecycle}>停用版本</Button> : null}</Space></Flex>
+                                <Flex justify="space-between" align="center" gap={12} wrap><div><Flex gap={8} align="center" wrap><Typography.Title level={4} style={{ margin: 0 }}>{activeItem.skill.name} · v{activeVersion?.version || "-"}</Typography.Title><Button type="text" size="small" icon={<EditOutlined />} onClick={openDefinitionEdit}>编辑名称</Button><Tag color={activeVersion?.status === "draft" ? "warning" : activeVersion?.status === "published" ? "success" : "default"}>{activeVersion ? skillLifecycleLabel(activeVersion, Boolean(passingEvaluation), activeVersion.id === activeItem.skill.recommendedVersionId) : "未选择版本"}</Tag></Flex><Typography.Text type="secondary">{activeItem.skill.summary}</Typography.Text></div><Space wrap><Button icon={<ExperimentOutlined />} disabled={!activeVersion || activeVersion.status === "archived"} onClick={() => setTrialOpen(true)}>独立试运行</Button>{activeVersion?.status === "draft" ? <Button type="primary" icon={<CloudUploadOutlined />} disabled={!publishReady} loading={publishMutation.isPending} onClick={() => publishMutation.mutate()}>设为可用</Button> : null}{recommendationAction ? <Button type="primary" onClick={() => recommendMutation.mutate()} loading={recommendMutation.isPending}>{recommendationAction}</Button> : null}{activeVersion?.status === "draft" ? <Button danger icon={<DeleteOutlined />} loading={deleteVersionMutation.isPending} onClick={confirmVersionLifecycle}>删除草稿</Button> : null}{activeVersion?.status === "published" ? <Button danger icon={<StopOutlined />} loading={archiveVersionMutation.isPending} onClick={confirmVersionLifecycle}>停用版本</Button> : null}<Button danger icon={<DeleteOutlined />} loading={deleteSkillMutation.isPending} onClick={confirmSkillDelete}>删除 Skill</Button></Space></Flex>
                             </Card>
                             {activeVersion?.sourceKind === "folder_import" ? <Card className="studio-panel" variant="borderless" title="导入内容"><SkillSourceBrowser token={token} versionId={activeVersion.id} /></Card> : null}
                             {detailQuery.isLoading ? <Skeleton active paragraph={{ rows: 12 }} /> : detailQuery.data ? <Collapse items={[{ key: "technical", label: "技术详情与底层契约", children: <><SkillEditor value={editorValue} readOnly={activeVersion?.status !== "draft" || importedFolderVersion} onChange={setEditorValue} />{activeVersion?.status === "draft" && !importedFolderVersion ? <Flex justify="flex-end" gap={8} className="mt-3"><Button icon={<CheckCircleOutlined />} loading={validateMutation.isPending} onClick={() => validateMutation.mutate()}>校验契约</Button><Button icon={<SaveOutlined />} disabled={!isDirty} loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>保存底层修改</Button></Flex> : null}</> }]} /> : <Empty description="请选择版本" />}
