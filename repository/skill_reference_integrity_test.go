@@ -47,6 +47,7 @@ func TestPublishWorkflowVersionRevalidatesStructuredSkillTargets(t *testing.T) {
 		{name: "project version", prepare: func(t *testing.T) string { return createReferenceTestSkill(t, "workflow-project", model.SkillOwnerProject, true, model.SkillVersionPublished).ID }, reference: workflowVersionReferenceJSON},
 		{name: "archived version", prepare: func(t *testing.T) string { return createReferenceTestSkill(t, "workflow-archived", model.SkillOwnerSystem, true, model.SkillVersionArchived).ID }, reference: workflowVersionReferenceJSON},
 		{name: "disabled skill id", prepare: func(t *testing.T) string { return createReferenceTestSkill(t, "workflow-disabled", model.SkillOwnerSystem, false, model.SkillVersionPublished).SkillID }, reference: workflowSkillReferenceJSON},
+		{name: "project candidate", prepare: func(t *testing.T) string { return createReferenceTestSkill(t, "workflow-project-candidate", model.SkillOwnerProject, true, model.SkillVersionPublished).SkillID }, reference: workflowCandidateReferenceJSON},
 	} {
 		t.Run(item.name, func(t *testing.T) {
 			setupRepositoryTestDB(t)
@@ -153,4 +154,8 @@ func workflowVersionReferenceJSON(versionID string) string {
 
 func workflowSkillReferenceJSON(skillID string) string {
 	return `{"nodes":[{"skillBinding":{"skillId":"` + skillID + `"}}]}`
+}
+
+func workflowCandidateReferenceJSON(skillID string) string {
+	return `{"nodes":[{"skillBinding":{"candidateSkillIds":["` + skillID + `"]}}]}`
 }

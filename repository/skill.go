@@ -6,6 +6,7 @@ import (
 
 	"github.com/basketikun/infinite-canvas/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var (
@@ -212,13 +213,12 @@ func CreateSkillEvaluation(evaluation model.SkillEvaluation) error {
 		return err
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
-		if err := validateEvaluationSkillVersion(tx, evaluation.SkillVersionID); err != nil {
-			return err
-		}
+		versionIDs := []string{evaluation.SkillVersionID}
 		if strings.TrimSpace(evaluation.BaselineVersionID) != "" {
-			if err := validateEvaluationSkillVersion(tx, evaluation.BaselineVersionID); err != nil {
-				return err
-			}
+			versionIDs = append(versionIDs, evaluation.BaselineVersionID)
+		}
+		if err := validateEvaluationSkillVersions(tx, versionIDs); err != nil {
+			return err
 		}
 		return tx.Create(&evaluation).Error
 	})
@@ -230,13 +230,12 @@ func CreateSkillEvaluationAndUpdateSummary(evaluation model.SkillEvaluation, sum
 		return err
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
-		if err := validateEvaluationSkillVersion(tx, evaluation.SkillVersionID); err != nil {
-			return err
-		}
+		versionIDs := []string{evaluation.SkillVersionID}
 		if strings.TrimSpace(evaluation.BaselineVersionID) != "" {
-			if err := validateEvaluationSkillVersion(tx, evaluation.BaselineVersionID); err != nil {
-				return err
-			}
+			versionIDs = append(versionIDs, evaluation.BaselineVersionID)
+		}
+		if err := validateEvaluationSkillVersions(tx, versionIDs); err != nil {
+			return err
 		}
 		if err := tx.Create(&evaluation).Error; err != nil {
 			return err
@@ -377,6 +376,23 @@ func ArchiveSkillVersionWithAudit(versionID, skillID, updatedAt string, audit mo
 		return err
 	}
 	return database.Transaction(func(tx *gorm.DB) error {
+		skill, err := lockSkillDefinitionTarget(tx, skillID)
+		if errors.Is(err, ErrSkillReferenceTargetUnavailable) {
+			return ErrSkillVersionMustBePublished
+		}
+		if err != nil {
+			return err
+		}
+		var version model.SkillVersion
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&version, "id = ?", strings.TrimSpace(versionID)).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrSkillVersionMustBePublished
+			}
+			return err
+		}
+		if version.SkillID != skill.ID || version.Status != model.SkillVersionPublished {
+			return ErrSkillVersionMustBePublished
+		}
 		referenced, err := activeSkillVersionReferenced(tx, strings.TrimSpace(versionID))
 		if err != nil {
 			return err
@@ -406,8 +422,11 @@ func DeleteUnreferencedSkillDraftWithAudit(versionID string, audit model.SkillAu
 		return err
 	}
 	return database.Transaction(func(tx *gorm.DB) error {
-		var version model.SkillVersion
-		if err := tx.First(&version, "id = ?", strings.TrimSpace(versionID)).Error; err != nil {
+		_, version, err := lockSkillVersionTarget(tx, versionID)
+		if errors.Is(err, ErrSkillReferenceTargetUnavailable) {
+			return ErrSkillVersionMustBeDraft
+		}
+		if err != nil {
 			return err
 		}
 		if version.Status != model.SkillVersionDraft {
@@ -433,15 +452,15 @@ func DeleteUnpublishedSkillDefinitionWithAudit(skillID string, audit model.Skill
 		return err
 	}
 	return database.Transaction(func(tx *gorm.DB) error {
-		var skill model.SkillDefinition
-		if err := tx.First(&skill, "id = ?", strings.TrimSpace(skillID)).Error; err != nil {
+		skill, err := lockSkillDefinitionTarget(tx, skillID)
+		if err != nil {
 			return err
 		}
 		if strings.HasPrefix(skill.ID, "skill-system-") {
 			return ErrSkillDefinitionSeedProtected
 		}
 		var versions []model.SkillVersion
-		if err := tx.Where("skill_id = ?", skill.ID).Find(&versions).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("skill_id = ?", skill.ID).Order("id asc").Find(&versions).Error; err != nil {
 			return err
 		}
 		for _, version := range versions {
@@ -579,6 +598,11 @@ func skillDefinitionReferenced(tx *gorm.DB, skillID string) (bool, error) {
 		for _, ref := range refs {
 			if strings.TrimSpace(ref.SkillID) == skillID {
 				return true, nil
+			}
+			for _, candidateSkillID := range ref.CandidateSkillIDs {
+				if strings.TrimSpace(candidateSkillID) == skillID {
+					return true, nil
+				}
 			}
 		}
 	}

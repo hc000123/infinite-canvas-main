@@ -317,7 +317,7 @@ func TestDeleteSkillDraftRejectsRealStructuredVersionReferences(t *testing.T) {
 }
 
 func TestDeleteSkillDefinitionUsesStructuredSkillReferences(t *testing.T) {
-	for _, source := range []string{"ignored values", "workflow skill", "agent default", "agent access"} {
+	for _, source := range []string{"ignored values", "workflow skill", "workflow candidate", "agent default", "agent access"} {
 		t.Run(source, func(t *testing.T) {
 			setupRepositoryTestDB(t)
 			skill := model.SkillDefinition{ID: "definition-1", Name: "Definition", OwnerType: model.SkillOwnerSystem, Enabled: true}
@@ -326,10 +326,12 @@ func TestDeleteSkillDefinitionUsesStructuredSkillReferences(t *testing.T) {
 				t.Fatal(err)
 			}
 			switch source {
-			case "ignored values", "workflow skill":
-				binding := `{"skillId":"other-definition"}`
+			case "ignored values", "workflow skill", "workflow candidate":
+				binding := `{"skillId":"other-definition","candidateSkillIds":["definition-10"]}`
 				if source == "workflow skill" {
 					binding = `{"skillId":"definition-1"}`
+				} else if source == "workflow candidate" {
+					binding = `{"candidateSkillIds":["definition-1"]}`
 				}
 				workflow := model.WorkflowVersion{ID: "definition-workflow-version", WorkflowID: "definition-workflow", Version: "1.0.0", Status: model.WorkflowVersionDraft, PackageJSON: `{"nodes":[{"skillBinding":` + binding + `,"condition":{"value":"definition-1"}}]}`}
 				if err := CreateWorkflowDefinitionAggregate(model.WorkflowDefinition{ID: workflow.WorkflowID, Name: "Workflow", OwnerType: model.WorkflowOwnerSystem}, workflow); err != nil {
@@ -357,6 +359,25 @@ func TestDeleteSkillDefinitionUsesStructuredSkillReferences(t *testing.T) {
 				t.Fatalf("err=%v", err)
 			}
 		})
+	}
+}
+
+func TestSkillLifecycleValidatesLockedTargetBeforeScanningReferences(t *testing.T) {
+	setupRepositoryTestDB(t)
+	workflow := model.WorkflowVersion{ID: "malformed-workflow-version", WorkflowID: "malformed-workflow", Version: "1.0.0", Status: model.WorkflowVersionPublished, PackageJSON: `{`}
+	if err := CreateWorkflowDefinitionAggregate(model.WorkflowDefinition{ID: workflow.WorkflowID, Name: "Malformed", OwnerType: model.WorkflowOwnerSystem}, workflow); err != nil {
+		t.Fatal(err)
+	}
+	if err := ArchiveSkillVersionWithAudit("missing-version", "missing-skill", "later", model.SkillAuditLog{ID: "missing-archive-audit"}); !errors.Is(err, ErrSkillVersionMustBePublished) {
+		t.Fatalf("archive checked references before target: %v", err)
+	}
+	if err := DeleteUnreferencedSkillDraftWithAudit("missing-version", model.SkillAuditLog{ID: "missing-delete-audit"}); !errors.Is(err, ErrSkillVersionMustBeDraft) {
+		t.Fatalf("delete checked references before target: %v", err)
+	}
+	db, _ := DB()
+	var audits int64
+	if err := db.Model(&model.SkillAuditLog{}).Where("id IN ?", []string{"missing-archive-audit", "missing-delete-audit"}).Count(&audits).Error; err != nil || audits != 0 {
+		t.Fatalf("partial audits=%d err=%v", audits, err)
 	}
 }
 

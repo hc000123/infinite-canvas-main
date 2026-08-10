@@ -3,6 +3,7 @@ package repository
 import (
 	"encoding/json"
 	"errors"
+	"sort"
 	"strings"
 
 	"github.com/basketikun/infinite-canvas/model"
@@ -16,8 +17,9 @@ var (
 )
 
 type persistedSkillReference struct {
-	SkillID        string `json:"skillId"`
-	SkillVersionID string `json:"skillVersionId"`
+	SkillID           string   `json:"skillId"`
+	SkillVersionID    string   `json:"skillVersionId"`
+	CandidateSkillIDs []string `json:"candidateSkillIds"`
 }
 
 func parseWorkflowSkillReferences(packageJSON string) ([]persistedSkillReference, error) {
@@ -66,24 +68,34 @@ func parseAgentAllowedSkillIDs(accessPolicyJSON string) ([]string, error) {
 }
 
 func validatePublishedSystemSkillVersion(tx *gorm.DB, versionID string) (model.SkillDefinition, error) {
-	var version model.SkillVersion
-	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&version, "id = ?", strings.TrimSpace(versionID)).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return model.SkillDefinition{}, ErrSkillReferenceTargetUnavailable
-		}
-		return model.SkillDefinition{}, err
-	}
-	skill, err := validateSystemSkillDefinition(tx, version.SkillID, true)
+	skill, version, err := lockSkillVersionTarget(tx, versionID)
 	if err != nil {
 		return model.SkillDefinition{}, err
 	}
-	if version.Status != model.SkillVersionPublished {
+	if skill.OwnerType != model.SkillOwnerSystem || !skill.Enabled || version.Status != model.SkillVersionPublished {
 		return model.SkillDefinition{}, ErrSkillReferenceTargetUnavailable
 	}
 	return skill, nil
 }
 
-func validateSystemSkillDefinition(tx *gorm.DB, skillID string, requireEnabled bool) (model.SkillDefinition, error) {
+func validateEvaluationSkillVersions(tx *gorm.DB, versionIDs []string) error {
+	skills, versions, err := lockSkillTargets(tx, nil, versionIDs)
+	if errors.Is(err, ErrSkillReferenceTargetUnavailable) {
+		return ErrSkillEvaluationTargetUnavailable
+	}
+	if err != nil {
+		return err
+	}
+	for _, version := range versions {
+		skill := skills[version.SkillID]
+		if skill.OwnerType != model.SkillOwnerSystem || version.Status != model.SkillVersionDraft && version.Status != model.SkillVersionPublished {
+			return ErrSkillEvaluationTargetUnavailable
+		}
+	}
+	return nil
+}
+
+func lockSkillDefinitionTarget(tx *gorm.DB, skillID string) (model.SkillDefinition, error) {
 	var skill model.SkillDefinition
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&skill, "id = ?", strings.TrimSpace(skillID)).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -91,31 +103,73 @@ func validateSystemSkillDefinition(tx *gorm.DB, skillID string, requireEnabled b
 		}
 		return skill, err
 	}
-	if skill.OwnerType != model.SkillOwnerSystem || requireEnabled && !skill.Enabled {
-		return skill, ErrSkillReferenceTargetUnavailable
-	}
 	return skill, nil
 }
 
-func validateEvaluationSkillVersion(tx *gorm.DB, versionID string) error {
-	var version model.SkillVersion
-	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&version, "id = ?", strings.TrimSpace(versionID)).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrSkillEvaluationTargetUnavailable
+func lockSkillVersionTarget(tx *gorm.DB, versionID string) (model.SkillDefinition, model.SkillVersion, error) {
+	versionID = strings.TrimSpace(versionID)
+	skills, versions, err := lockSkillTargets(tx, nil, []string{versionID})
+	version := versions[versionID]
+	return skills[version.SkillID], version, err
+}
+
+func lockSkillTargets(tx *gorm.DB, skillIDs, versionIDs []string) (map[string]model.SkillDefinition, map[string]model.SkillVersion, error) {
+	skillIDSet, versionIDSet := map[string]bool{}, map[string]bool{}
+	for _, skillID := range skillIDs {
+		if skillID = strings.TrimSpace(skillID); skillID != "" {
+			skillIDSet[skillID] = true
 		}
-		return err
 	}
-	skill, err := validateSystemSkillDefinition(tx, version.SkillID, false)
-	if errors.Is(err, ErrSkillReferenceTargetUnavailable) {
-		return ErrSkillEvaluationTargetUnavailable
+	for _, versionID := range versionIDs {
+		if versionID = strings.TrimSpace(versionID); versionID != "" {
+			versionIDSet[versionID] = true
+		}
 	}
-	if err != nil {
-		return err
+	orderedVersionIDs := make([]string, 0, len(versionIDSet))
+	for versionID := range versionIDSet {
+		orderedVersionIDs = append(orderedVersionIDs, versionID)
 	}
-	if skill.OwnerType != model.SkillOwnerSystem || version.Status != model.SkillVersionDraft && version.Status != model.SkillVersionPublished {
-		return ErrSkillEvaluationTargetUnavailable
+	sort.Strings(orderedVersionIDs)
+	identities := make(map[string]model.SkillVersion, len(orderedVersionIDs))
+	for _, versionID := range orderedVersionIDs {
+		var identity model.SkillVersion
+		if err := tx.Select("id, skill_id").First(&identity, "id = ?", versionID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, nil, ErrSkillReferenceTargetUnavailable
+			}
+			return nil, nil, err
+		}
+		identities[versionID] = identity
+		skillIDSet[identity.SkillID] = true
 	}
-	return nil
+	orderedSkillIDs := make([]string, 0, len(skillIDSet))
+	for skillID := range skillIDSet {
+		orderedSkillIDs = append(orderedSkillIDs, skillID)
+	}
+	sort.Strings(orderedSkillIDs)
+	skills := make(map[string]model.SkillDefinition, len(orderedSkillIDs))
+	for _, skillID := range orderedSkillIDs {
+		skill, err := lockSkillDefinitionTarget(tx, skillID)
+		if err != nil {
+			return nil, nil, err
+		}
+		skills[skillID] = skill
+	}
+	versions := make(map[string]model.SkillVersion, len(orderedVersionIDs))
+	for _, versionID := range orderedVersionIDs {
+		var version model.SkillVersion
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&version, "id = ?", versionID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, nil, ErrSkillReferenceTargetUnavailable
+			}
+			return nil, nil, err
+		}
+		if version.SkillID != identities[versionID].SkillID {
+			return nil, nil, ErrSkillReferenceTargetUnavailable
+		}
+		versions[versionID] = version
+	}
+	return skills, versions, nil
 }
 
 func validateWorkflowSkillReferences(tx *gorm.DB, packageJSON string) error {
@@ -123,20 +177,38 @@ func validateWorkflowSkillReferences(tx *gorm.DB, packageJSON string) error {
 	if err != nil {
 		return err
 	}
+	skillIDs, versionIDs := []string{}, []string{}
+	for _, ref := range refs {
+		skillIDs = append(skillIDs, ref.SkillID)
+		skillIDs = append(skillIDs, ref.CandidateSkillIDs...)
+		versionIDs = append(versionIDs, ref.SkillVersionID)
+	}
+	skills, versions, err := lockSkillTargets(tx, skillIDs, versionIDs)
+	if err != nil {
+		return err
+	}
 	for _, ref := range refs {
 		if strings.TrimSpace(ref.SkillVersionID) != "" {
-			skill, err := validatePublishedSystemSkillVersion(tx, ref.SkillVersionID)
-			if err != nil {
-				return err
+			version := versions[strings.TrimSpace(ref.SkillVersionID)]
+			skill := skills[version.SkillID]
+			if skill.OwnerType != model.SkillOwnerSystem || !skill.Enabled || version.Status != model.SkillVersionPublished {
+				return ErrSkillReferenceTargetUnavailable
 			}
 			if strings.TrimSpace(ref.SkillID) != "" && skill.ID != strings.TrimSpace(ref.SkillID) {
 				return ErrSkillReferenceTargetUnavailable
 			}
-			continue
+		} else if strings.TrimSpace(ref.SkillID) != "" {
+			skill := skills[strings.TrimSpace(ref.SkillID)]
+			if skill.OwnerType != model.SkillOwnerSystem || !skill.Enabled {
+				return ErrSkillReferenceTargetUnavailable
+			}
 		}
-		if strings.TrimSpace(ref.SkillID) != "" {
-			if _, err := validateSystemSkillDefinition(tx, ref.SkillID, true); err != nil {
-				return err
+		for _, skillID := range ref.CandidateSkillIDs {
+			if skillID = strings.TrimSpace(skillID); skillID != "" {
+				skill := skills[skillID]
+				if skill.OwnerType != model.SkillOwnerSystem || !skill.Enabled {
+					return ErrSkillReferenceTargetUnavailable
+				}
 			}
 		}
 	}
@@ -148,11 +220,25 @@ func validateAgentSkillReferences(tx *gorm.DB, defaultRefsJSON, accessPolicyJSON
 	if err != nil {
 		return err
 	}
+	allowedSkillIDs, err := parseAgentAllowedSkillIDs(accessPolicyJSON)
+	if err != nil {
+		return err
+	}
+	skillIDs, versionIDs := append([]string{}, allowedSkillIDs...), []string{}
+	for _, ref := range refs {
+		skillIDs = append(skillIDs, ref.SkillID)
+		versionIDs = append(versionIDs, ref.SkillVersionID)
+	}
+	skills, versions, err := lockSkillTargets(tx, skillIDs, versionIDs)
+	if err != nil {
+		return err
+	}
 	for _, ref := range refs {
 		if strings.TrimSpace(ref.SkillVersionID) != "" {
-			skill, err := validatePublishedSystemSkillVersion(tx, ref.SkillVersionID)
-			if err != nil {
-				return err
+			version := versions[strings.TrimSpace(ref.SkillVersionID)]
+			skill := skills[version.SkillID]
+			if skill.OwnerType != model.SkillOwnerSystem || !skill.Enabled || version.Status != model.SkillVersionPublished {
+				return ErrSkillReferenceTargetUnavailable
 			}
 			if strings.TrimSpace(ref.SkillID) != "" && skill.ID != strings.TrimSpace(ref.SkillID) {
 				return ErrSkillReferenceTargetUnavailable
@@ -160,18 +246,18 @@ func validateAgentSkillReferences(tx *gorm.DB, defaultRefsJSON, accessPolicyJSON
 			continue
 		}
 		if strings.TrimSpace(ref.SkillID) != "" {
-			if _, err := validateSystemSkillDefinition(tx, ref.SkillID, true); err != nil {
-				return err
+			skill := skills[strings.TrimSpace(ref.SkillID)]
+			if skill.OwnerType != model.SkillOwnerSystem || !skill.Enabled {
+				return ErrSkillReferenceTargetUnavailable
 			}
 		}
 	}
-	allowedSkillIDs, err := parseAgentAllowedSkillIDs(accessPolicyJSON)
-	if err != nil {
-		return err
-	}
 	for _, skillID := range allowedSkillIDs {
-		if _, err := validateSystemSkillDefinition(tx, skillID, true); err != nil {
-			return err
+		if skillID = strings.TrimSpace(skillID); skillID != "" {
+			skill := skills[skillID]
+			if skill.OwnerType != model.SkillOwnerSystem || !skill.Enabled {
+				return ErrSkillReferenceTargetUnavailable
+			}
 		}
 	}
 	return nil
