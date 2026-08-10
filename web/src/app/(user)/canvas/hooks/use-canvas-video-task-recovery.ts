@@ -83,7 +83,7 @@ async function recoverVideoTaskNode({
 }) {
     try {
         const generationConfig = buildGenerationConfig(canvasAiConfig, node, "video", defaultConfig);
-        const task = await refreshVideoTask(generationConfig, node.metadata?.taskId || "");
+        const task = await refreshVideoTask(generationConfig, node.metadata?.taskId || "", node.metadata?.aiTaskId);
         const nextStatus = recoveredVideoTaskNodeStatus(task.status);
         if (nextStatus !== "success") {
             setNodes((prev) =>

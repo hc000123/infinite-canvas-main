@@ -19,6 +19,7 @@ type AITask struct {
 	TaskType              string                   `json:"taskType" gorm:"index"`
 	ActionType            string                   `json:"actionType" gorm:"index"`
 	Provider              string                   `json:"provider"`
+	ChannelID             string                   `json:"channelId" gorm:"index"`
 	Protocol              string                   `json:"protocol"`
 	Model                 string                   `json:"model" gorm:"index"`
 	Path                  string                   `json:"path"`

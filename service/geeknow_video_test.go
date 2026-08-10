@@ -141,6 +141,16 @@ func TestNormalizeGeekNowVideoTaskResponseKeepsFailureAndDirectURL(t *testing.T)
 	}
 }
 
+func TestGeekNowVideoTaskStatusReadsNormalizedTerminalStatus(t *testing.T) {
+	for _, status := range []model.AITaskStatus{model.AITaskStatusFailed, model.AITaskStatusCancelled} {
+		t.Run(string(status), func(t *testing.T) {
+			if got := GeekNowVideoTaskStatus([]byte(`{"id":"task-1","status":"` + string(status) + `"}`)); got != status {
+				t.Fatalf("status = %q, want %q", got, status)
+			}
+		})
+	}
+}
+
 func geekNowMultipartBody(t *testing.T, modelName string, roles []string) ([]byte, string) {
 	t.Helper()
 	var body bytes.Buffer

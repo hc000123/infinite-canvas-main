@@ -38,6 +38,25 @@ export function aiTaskTraceHeaders(_config: AiConfig, trace?: AiTaskTrace): Reco
     return compact ? { "X-Infinite-Canvas-Trace": JSON.stringify(compact) } : {};
 }
 
+export function aiTaskRequestHeaders(aiTaskId?: string): Record<string, string> {
+    const id = aiTaskId?.trim();
+    return id ? { "X-AI-Task-ID": id } : {};
+}
+
+export function preserveVideoTaskLedger<T extends AiTaskLedger & { status?: string }>(task: T, previous: AiTaskLedger): T {
+    return {
+        ...task,
+        aiTaskId: task.aiTaskId || previous.aiTaskId,
+        upstreamTaskId: task.upstreamTaskId || previous.upstreamTaskId,
+        aiTaskStatus: task.aiTaskStatus || task.status || previous.aiTaskStatus,
+        aiTaskCredits: task.aiTaskCredits ?? previous.aiTaskCredits,
+        creditLogId: task.creditLogId || previous.creditLogId,
+        creditsRefunded: task.creditsRefunded ?? previous.creditsRefunded,
+        refundedAt: task.refundedAt || previous.refundedAt,
+        finishedAt: task.finishedAt || previous.finishedAt,
+    };
+}
+
 export function readAiTaskLedgerFromHeaders(headers: RawAxiosResponseHeaders | AxiosResponseHeaders): AiTaskLedger {
     return {
         aiTaskId: readHeader(headers, "x-ai-task-id"),

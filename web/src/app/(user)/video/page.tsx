@@ -496,7 +496,7 @@ export default function VideoPage() {
             },
         });
         try {
-            const latestTask = await refreshVideoTask(config, taskId);
+            const latestTask = await refreshVideoTask(config, taskId, item.generation?.aiTaskId);
             updatePackage(item, { generation: generationFromTask(latestTask) });
             if (latestTask.status !== "succeeded") {
                 message.info(`${item.id} 当前任务状态：${generationStatusLabel(latestTask.status as PackageGenerationStatus)}`);

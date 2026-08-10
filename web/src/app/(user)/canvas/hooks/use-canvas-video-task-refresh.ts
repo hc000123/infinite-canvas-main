@@ -40,7 +40,7 @@ export function useCanvasVideoTaskRefresh({
             }
             try {
                 const generationConfig = buildGenerationConfig(canvasAiConfig, node, "video", defaultConfig);
-                const task = await refreshVideoTask(generationConfig, node.metadata.taskId);
+                const task = await refreshVideoTask(generationConfig, node.metadata.taskId, node.metadata.aiTaskId);
                 if (task.status === "succeeded") {
                     const video = await uploadMediaFile(await fetchVideoTaskContent(generationConfig, task), "video");
                     const cachedVideo = await cacheUploadedCanvasMedia(video, node);

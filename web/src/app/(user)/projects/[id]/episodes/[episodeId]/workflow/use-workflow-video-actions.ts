@@ -242,7 +242,7 @@ export function useWorkflowVideoActions(packages: ProductionPackage[]) {
         const key = scopeKey(item);
         setGenerating((current) => ({ ...current, [key]: true }));
         try {
-            const task = await refreshVideoTask(config, taskId);
+            const task = await refreshVideoTask(config, taskId, item.generation?.aiTaskId);
             updatePackage(item, { generation: generationFromTask(task) });
             if (task.status !== "succeeded") {
                 message.info(`${item.id} 当前状态：${task.status}`);

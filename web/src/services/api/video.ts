@@ -8,7 +8,7 @@ import { isRemoteOrInlineMediaUrl, normalizeSeedanceRatio, normalizeSeedanceReso
 import { buildSeedanceVideoTaskPayload, defaultSeedanceImageRole, seedanceAssetURIFromImageReference, seedanceAssetURIFromVideoReference, type SeedanceImageReferenceInput, type SeedanceOrderedReferenceInput } from "@/services/api/video-reference";
 import { buildDreaminaVideoPayload } from "@/services/api/dreamina-video-payload";
 import { buildXinglianVideoPayload } from "@/services/api/xinglian-video-payload";
-import { aiTaskTraceHeaders, readAiTaskLedgerFromHeaders, type AiTaskLedger, type AiTaskTrace } from "@/services/api/ai-task-trace";
+import { aiTaskRequestHeaders, aiTaskTraceHeaders, preserveVideoTaskLedger, readAiTaskLedgerFromHeaders, type AiTaskLedger, type AiTaskTrace } from "@/services/api/ai-task-trace";
 import { type AiConfig } from "@/stores/use-config-store";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio } from "@/types/audio";
@@ -124,8 +124,8 @@ export async function preflightVideoGeneration(config: AiConfig) {
     }
 }
 
-export async function refreshVideoTask(config: AiConfig, taskId: string) {
-    return queryVideoTask(config, taskId, resolveVideoRequestModel(config));
+export async function refreshVideoTask(config: AiConfig, taskId: string, aiTaskId?: string) {
+    return queryVideoTask(config, taskId, resolveVideoRequestModel(config), aiTaskId);
 }
 
 export async function fetchVideoTaskContent(config: AiConfig, task: NormalizedVideoTask) {
@@ -197,7 +197,7 @@ async function requestOpenAICompatibleVideoGeneration(config: AiConfig, prompt: 
         const initialTask = await createVideoTask(config, prompt, normalizedReferences, model, options.trace).catch((error) => {
             throw new Error(normalizeAiError(error, "视频任务创建失败"));
         });
-        const task = await pollVideoTask(initialTask, (taskId) => queryVideoTask(config, taskId, model), options);
+        const task = await pollVideoTask(initialTask, (taskId) => queryVideoTask(config, taskId, model, initialTask.aiTaskId), options);
         const blob = await fetchVideoContent(config, model, task).catch((error) => {
             if (isTransientVideoRequestError(error)) throw new RecoverableVideoTaskError("网络中断，视频已生成，恢复连接后会继续回填。", task, error);
             throw error;
@@ -227,15 +227,15 @@ async function createVideoTask(config: AiConfig, prompt: string, references: Nor
     return task;
 }
 
-async function queryVideoTask(config: AiConfig, taskId: string, model: string) {
+async function queryVideoTask(config: AiConfig, taskId: string, model: string, aiTaskId?: string) {
     const url = aiApiUrl(config, `/videos/${taskId}`);
     const params: Record<string, string> = { model };
     const response = await axios.get<ApiVideoResponse>(url, {
-        headers: aiHeaders(config),
+        headers: { ...aiHeaders(config), ...aiTaskRequestHeaders(aiTaskId) },
         params,
         timeout: isLongRunningVideoProtocol(config.videoProtocol) ? AI_VIDEO_TASK_TIMEOUT_MS : AI_REQUEST_TIMEOUT_MS,
     });
-    return normalizeVideoTask(unwrapVideoResponse(response.data));
+    return { ...normalizeVideoTask(unwrapVideoResponse(response.data)), aiTaskId: aiTaskId?.trim() || undefined };
 }
 
 function shouldPreflightVideoProtocol(protocol: AiConfig["videoProtocol"]) {
@@ -282,21 +282,6 @@ function mergeVideoTaskLedger(task: NormalizedVideoTask, ledger: AiTaskLedger): 
         creditsRefunded: ledger.creditsRefunded,
         refundedAt: ledger.refundedAt,
         finishedAt: ledger.finishedAt,
-    };
-}
-
-function preserveVideoTaskLedger(task: NormalizedVideoTask, previous: NormalizedVideoTask): NormalizedVideoTask {
-    if (task.aiTaskId || task.upstreamTaskId) return task;
-    return {
-        ...task,
-        aiTaskId: previous.aiTaskId,
-        upstreamTaskId: previous.upstreamTaskId,
-        aiTaskStatus: previous.aiTaskStatus || task.status,
-        aiTaskCredits: previous.aiTaskCredits,
-        creditLogId: previous.creditLogId,
-        creditsRefunded: previous.creditsRefunded,
-        refundedAt: previous.refundedAt,
-        finishedAt: previous.finishedAt,
     };
 }
 
@@ -522,12 +507,12 @@ function blobToDataUrl(blob: Blob) {
 }
 
 async function fetchVideoContent(config: AiConfig, model: string, task: NormalizedVideoTask) {
-    return fetchVideoContentDirect(config, model, task.id);
+    return fetchVideoContentDirect(config, model, task.id, task.aiTaskId);
 }
 
-async function fetchVideoContentDirect(config: AiConfig, model: string, taskId: string) {
+async function fetchVideoContentDirect(config: AiConfig, model: string, taskId: string, aiTaskId?: string) {
     const content = await axios.get<Blob>(aiApiUrl(config, `/videos/${taskId}/content`), {
-        headers: aiHeaders(config),
+        headers: { ...aiHeaders(config), ...aiTaskRequestHeaders(aiTaskId) },
         params: { model },
         responseType: "blob",
         timeout: AI_VIDEO_CONTENT_TIMEOUT_MS,

@@ -71,6 +71,84 @@ func TestAITaskSuccessStoresSanitizedResponse(t *testing.T) {
 	}
 }
 
+func TestAITaskPersistsChannelID(t *testing.T) {
+	setupAITaskTestDB(t)
+	task, err := CreateAITask(CreateAITaskInput{UserID: "user-channel", ChannelID: "geeknow-video", Model: "grok-imagine-video", Path: "/videos"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved, ok, err := repository.GetAITask(task.ID)
+	if err != nil || !ok || saved.ChannelID != "geeknow-video" {
+		t.Fatalf("task = %#v ok=%v err=%v", saved, ok, err)
+	}
+}
+
+func TestAITaskLegacyChannelSelectionFallsBackToModel(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := repository.SaveSettings(model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{{
+		ID: "ordinary-video", Protocol: "openai", Name: "ordinary", BaseURL: "https://ordinary.example.com", APIKey: "ordinary-key",
+		Models: []string{"grok-imagine-video"}, Capabilities: []string{"video"}, Weight: 1, Enabled: true,
+	}}}}, now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := CreateAITask(CreateAITaskInput{UserID: "user-legacy", Model: "grok-imagine-video", Path: "/videos"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := MarkAITaskArkCreated(task.ID, []byte(`{"id":"task-legacy","status":"queued"}`)); err != nil {
+		t.Fatal(err)
+	}
+	channel, err := SelectVideoTaskModelChannel("task-legacy", "grok-imagine-video")
+	if err != nil || channel.ID != "ordinary-video" {
+		t.Fatalf("channel = %#v err=%v", channel, err)
+	}
+}
+
+func TestAITaskBoundChannelSelectionKeepsOtherProtocol(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := repository.SaveSettings(model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{
+		{ID: "geeknow-video", Protocol: "openai", Name: "GeekNow", BaseURL: "https://geeknow.example.com", APIKey: "geeknow-key", Models: []string{"shared-video"}, Capabilities: []string{"video"}, Weight: 100, Enabled: true},
+		{ID: "ark-video", Protocol: string(model.ModelProtocolVolcengineArk), Name: "Ark", BaseURL: "https://ark.example.com", APIKey: "ark-key", Models: []string{"shared-video"}, Weight: 1, Enabled: true},
+	}}}, now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := CreateAITask(CreateAITaskInput{UserID: "user-ark-channel", ChannelID: "ark-video", Model: "shared-video", Path: "/videos"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := MarkAITaskArkCreated(task.ID, []byte(`{"id":"task-ark-bound","status":"queued"}`)); err != nil {
+		t.Fatal(err)
+	}
+	channel, err := SelectVideoTaskModelChannel("task-ark-bound", "shared-video")
+	if err != nil || channel.ID != "ark-video" || channel.Protocol != string(model.ModelProtocolVolcengineArk) {
+		t.Fatalf("channel = %#v err=%v", channel, err)
+	}
+}
+
+func TestAITaskBoundChannelSelectionKeepsLegacyOpenAIVideo(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := repository.SaveSettings(model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{{
+		ID: "legacy-openai-video", Protocol: "openai", Name: "legacy", BaseURL: "https://legacy.example.com", APIKey: "legacy-key",
+		Models: []string{"legacy-video-model"}, Weight: 1, Enabled: true,
+	}}}}, now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := CreateAITask(CreateAITaskInput{UserID: "user-legacy-bound", ChannelID: "legacy-openai-video", Model: "legacy-video-model", Path: "/videos"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := MarkAITaskArkCreated(task.ID, []byte(`{"id":"task-legacy-bound","status":"queued"}`)); err != nil {
+		t.Fatal(err)
+	}
+	channel, err := SelectVideoTaskModelChannel("task-legacy-bound", "legacy-video-model")
+	if err != nil || channel.ID != "legacy-openai-video" {
+		t.Fatalf("channel = %#v err=%v", channel, err)
+	}
+}
+
 func TestSanitizeAIJSONKeepsTextEventStream(t *testing.T) {
 	sanitized := SanitizeAIJSON([]byte(`data: {"choices":[{"delta":{"content":"优化稿"}}]}`), "text/event-stream")
 	if strings.Contains(sanitized, "media redacted") {

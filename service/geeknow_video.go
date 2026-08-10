@@ -239,6 +239,14 @@ func GeekNowTaskVideoURL(body []byte) string {
 	return geekNowVideoURL(unwrapGeekNowTask(payload))
 }
 
+func GeekNowVideoTaskStatus(body []byte) model.AITaskStatus {
+	var payload map[string]any
+	if json.Unmarshal(body, &payload) != nil {
+		return model.AITaskStatusCreated
+	}
+	return normalizeAITaskStatus(aiTaskStringValue(payload, "status"))
+}
+
 func geekNowDuration(value string) int {
 	duration, _ := strconv.Atoi(strings.TrimSpace(value))
 	if duration < 1 {

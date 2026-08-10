@@ -4,7 +4,7 @@ import type { AdminAITaskDetailResponse } from "./admin";
 import { compactTrace, type FrontendArtifactTrace } from "./ai-task-trace-utils";
 
 export type { AiTaskLedger, AiTaskTrace, FrontendArtifactTrace } from "./ai-task-trace-utils";
-export { aiTaskLedgerFromGeneration, aiTaskTraceHeaders, buildGenerationTaskLedger, generationTaskSummary, readAiTaskLedgerFromHeaders } from "./ai-task-trace-utils";
+export { aiTaskLedgerFromGeneration, aiTaskRequestHeaders, aiTaskTraceHeaders, buildGenerationTaskLedger, generationTaskSummary, preserveVideoTaskLedger, readAiTaskLedgerFromHeaders } from "./ai-task-trace-utils";
 
 export async function fetchUserAITaskDetail(aiTaskId: string) {
     const token = useUserStore.getState().token;
