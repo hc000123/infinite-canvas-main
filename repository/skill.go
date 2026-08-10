@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 
@@ -479,23 +480,55 @@ func skillVersionReferenced(tx *gorm.DB, versionID string) (bool, error) {
 }
 
 func activeSkillVersionReferenced(tx *gorm.DB, versionID string) (bool, error) {
-	pattern := "%\"" + versionID + "\"%"
-	checks := []struct {
-		model any
-		query string
-		args  []any
-	}{
-		{&model.WorkflowStageSkillBinding{}, "skill_version_id = ?", []any{versionID}},
-		{&model.WorkflowVersion{}, "status = ? AND package_json LIKE ?", []any{model.WorkflowVersionPublished, pattern}},
-		{&model.AgentVersion{}, "status = ? AND default_skill_refs_json LIKE ?", []any{model.AgentVersionPublished, pattern}},
+	var bindingCount int64
+	if err := tx.Model(&model.WorkflowStageSkillBinding{}).Where("skill_version_id = ?", versionID).Count(&bindingCount).Error; err != nil {
+		return false, err
 	}
-	for _, check := range checks {
-		var count int64
-		if err := tx.Model(check.model).Where(check.query, check.args...).Count(&count).Error; err != nil {
+	if bindingCount > 0 {
+		return true, nil
+	}
+	var workflows []model.WorkflowVersion
+	if err := tx.Select("package_json").Where("status = ?", model.WorkflowVersionPublished).Find(&workflows).Error; err != nil {
+		return false, err
+	}
+	for _, workflow := range workflows {
+		if strings.TrimSpace(workflow.PackageJSON) == "" {
+			continue
+		}
+		var packageValue struct {
+			Nodes []struct {
+				SkillBinding *struct {
+					SkillVersionID string `json:"skillVersionId"`
+				} `json:"skillBinding"`
+			} `json:"nodes"`
+		}
+		if err := json.Unmarshal([]byte(workflow.PackageJSON), &packageValue); err != nil {
 			return false, err
 		}
-		if count > 0 {
-			return true, nil
+		for _, node := range packageValue.Nodes {
+			if node.SkillBinding != nil && node.SkillBinding.SkillVersionID == versionID {
+				return true, nil
+			}
+		}
+	}
+	var agents []model.AgentVersion
+	if err := tx.Select("default_skill_refs_json").Where("status = ?", model.AgentVersionPublished).Find(&agents).Error; err != nil {
+		return false, err
+	}
+	for _, agent := range agents {
+		if strings.TrimSpace(agent.DefaultSkillRefsJSON) == "" {
+			continue
+		}
+		var refs []struct {
+			SkillVersionID string `json:"skillVersionId"`
+		}
+		if err := json.Unmarshal([]byte(agent.DefaultSkillRefsJSON), &refs); err != nil {
+			return false, err
+		}
+		for _, ref := range refs {
+			if ref.SkillVersionID == versionID {
+				return true, nil
+			}
 		}
 	}
 	return false, nil

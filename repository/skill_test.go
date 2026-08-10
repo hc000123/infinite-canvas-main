@@ -146,7 +146,7 @@ func TestArchiveSkillVersionRejectsPublishedWorkflowReference(t *testing.T) {
 	if err := CreateSkillAggregate(skill, version); err != nil {
 		t.Fatal(err)
 	}
-	workflowVersion := model.WorkflowVersion{ID: "published-workflow-version", WorkflowID: "published-workflow", Version: "1.0.0", Status: model.WorkflowVersionPublished, PackageJSON: `{"nodes":[{"skillVersionId":"archive-workflow-skill-version"}]}`}
+	workflowVersion := model.WorkflowVersion{ID: "published-workflow-version", WorkflowID: "published-workflow", Version: "1.0.0", Status: model.WorkflowVersionPublished, PackageJSON: `{"nodes":[{"skillBinding":{"skillVersionId":"archive-workflow-skill-version"}}]}`}
 	if err := CreateWorkflowDefinitionAggregate(model.WorkflowDefinition{ID: workflowVersion.WorkflowID, Name: "Workflow", OwnerType: model.WorkflowOwnerSystem, Enabled: true, RecommendedVersionID: workflowVersion.ID}, workflowVersion); err != nil {
 		t.Fatal(err)
 	}
@@ -188,6 +188,36 @@ func TestArchiveSkillVersionRejectsPublishedAgentReference(t *testing.T) {
 	storedAgent, ok, err := GetAgentVersion(agentVersion.ID)
 	if err != nil || !ok || storedAgent.Status != model.AgentVersionPublished || storedAgent.DefaultSkillRefsJSON != agentVersion.DefaultSkillRefsJSON {
 		t.Fatalf("agent version=%+v ok=%v err=%v", storedAgent, ok, err)
+	}
+}
+
+func TestArchiveSkillVersionIgnoresNonReferenceJSONValues(t *testing.T) {
+	setupRepositoryTestDB(t)
+	skill := model.SkillDefinition{ID: "archive-value-skill", Name: "条件值", OwnerType: model.SkillOwnerSystem, Enabled: true}
+	version := model.SkillVersion{ID: "archive-value-skill-version", SkillID: skill.ID, Version: "1.0.0", Status: model.SkillVersionPublished}
+	if err := CreateSkillAggregate(skill, version); err != nil {
+		t.Fatal(err)
+	}
+	workflowVersion := model.WorkflowVersion{ID: "condition-workflow-version", WorkflowID: "condition-workflow", Version: "1.0.0", Status: model.WorkflowVersionPublished, PackageJSON: `{"nodes":[{"condition":{"value":"archive-value-skill-version"}}]}`}
+	if err := CreateWorkflowDefinitionAggregate(model.WorkflowDefinition{ID: workflowVersion.WorkflowID, Name: "Workflow", OwnerType: model.WorkflowOwnerSystem, Enabled: true}, workflowVersion); err != nil {
+		t.Fatal(err)
+	}
+	agentVersion := model.AgentVersion{ID: "parameter-agent-version", AgentID: "parameter-agent", Version: "1.0.0", Status: model.AgentVersionPublished, DefaultSkillRefsJSON: `[{"parameters":{"value":"archive-value-skill-version"}}]`}
+	if err := CreateAgentAggregate(model.AgentDefinition{ID: agentVersion.AgentID, Name: "Agent", OwnerType: model.AgentOwnerSystem, Enabled: true}, agentVersion); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ArchiveSkillVersionWithAudit(version.ID, skill.ID, "later", model.SkillAuditLog{ID: "archive-value-audit"}); err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	storedVersion, ok, err := GetSkillVersion(version.ID)
+	if err != nil || !ok || storedVersion.Status != model.SkillVersionArchived {
+		t.Fatalf("skill version=%+v ok=%v err=%v", storedVersion, ok, err)
+	}
+	storedWorkflow, workflowOK, workflowErr := GetWorkflowVersion(workflowVersion.ID)
+	storedAgent, agentOK, agentErr := GetAgentVersion(agentVersion.ID)
+	if workflowErr != nil || !workflowOK || storedWorkflow.PackageJSON != workflowVersion.PackageJSON || agentErr != nil || !agentOK || storedAgent.DefaultSkillRefsJSON != agentVersion.DefaultSkillRefsJSON {
+		t.Fatalf("workflow=%+v ok=%v err=%v agent=%+v ok=%v err=%v", storedWorkflow, workflowOK, workflowErr, storedAgent, agentOK, agentErr)
 	}
 }
 
