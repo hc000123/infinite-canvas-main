@@ -8,7 +8,7 @@
 ```text
 提交前全量冒烟 → 修复并复测 → 整理版本和文档 → 提交全部改动
 → 对提交后的 HEAD 复测 → 创建 tag → 推送 main 和 tag
-→ GitHub 镜像构建通过 → 阿里云手工拉取并构建同一提交 → 云端冒烟与持久化复验
+→ GitHub 镜像构建通过 → 阿里云拉取指定 GHCR 版本镜像并切换容器 → 云端冒烟与持久化复验
 ```
 
 ## 历史流程核对结果
@@ -252,28 +252,41 @@ GitHub Actions 当前只构建并推送 linux/amd64 Docker 镜像，不运行测
 
 ## 7. 阿里云手工部署
 
-当前固定方式是在阿里云服务器从 Git 仓库拉取已发布的 `main`，核对 release commit 和 tag 后，使用仓库 Dockerfile 在服务器无缓存重建并重启 Compose 服务。GitHub Actions 的 GHCR 镜像用于发布产物与构建校验，当前阿里云流程不直接拉取 GHCR 镜像。
+当前正式服务不依赖服务器 Git 工作区，也不使用 Docker Compose 构建。固定方式是：GitHub Actions 基于 release commit 构建并推送 `ghcr.io/hc000123/infinite-canvas-main:vX.Y.Z`，阿里云在 `/opt/infinite-canvas` 拉取这个精确版本镜像，保留旧容器作为回滚副本，再用 `docker run` 启动新容器。
 
-在阿里云项目目录执行：
+生产约定：
+
+- 当前容器名：`infinite-canvas`。
+- 数据目录：`/opt/infinite-canvas/data`，挂载到 `/app/data`。
+- 外部端口：`3000:3000`。
+- 重启策略：`unless-stopped`。
+- 版本备份目录：`/opt/infinite-canvas/backups/YYYYMMDD-HHMMSS`。
+- 旧容器重命名为 `infinite-canvas-vOLD-backup`，新版本稳定前不得删除。
+
+先设置并拉取精确版本，不使用 `latest` 作为上线目标：
 
 ```bash
+cd /opt/infinite-canvas
+
 release_tag="vX.Y.Z"
-release_commit="填入本次发布的完整提交 SHA"
+new_image="ghcr.io/hc000123/infinite-canvas-main:${release_tag}"
+backup_dir="/opt/infinite-canvas/backups/$(date +%Y%m%d-%H%M%S)"
 
-git fetch origin --tags
-git switch main
-git pull --ff-only origin main
+mkdir -p "$backup_dir"
+cp -a /opt/infinite-canvas/.env "$backup_dir/infinite-canvas.env"
+cp -a /opt/infinite-canvas/data/*.db* "$backup_dir/"
 
-test "$(git rev-parse HEAD)" = "$release_commit"
-git tag --points-at HEAD
+docker pull "$new_image"
+docker image inspect "$new_image" \
+  --format 'image={{.RepoTags}} id={{.Id}} digests={{.RepoDigests}}'
 ```
 
-最后一条必须包含当前 `release_tag`。如果 SHA 或 tag 不一致，停止部署。
+镜像 digest 必须与 tag 对应的 GitHub Actions 输出一致。如果拉取失败、digest 不一致或备份失败，停止部署；不要停止当前容器。
 
-部署前先确认：
+切换前先确认：
 
 1. 数据库和 `data` 已做备份或云盘快照。服务启动会执行 AutoMigrate，回滚旧镜像不会自动回滚数据库结构。
-2. Compose 必须继续把服务器项目目录的 `./data` 挂载到容器 `/app/data`。
+2. 新容器必须继续把 `/opt/infinite-canvas/data` 挂载到 `/app/data`。
 3. 即使数据库改用 PostgreSQL，公开素材、项目缓存、工作流媒体和 Dreamina 登录态仍需要持久磁盘或对应的外部存储。
 4. 生产环境至少明确配置：
 
@@ -300,23 +313,30 @@ DREAMINA_OUTPUT_DIR=/app/data/jimeng-cli
 
 如使用登录 IP 绑定或客户端 IP 审计，还要按阿里云反向代理的实际网段配置 `TRUSTED_PROXIES`。
 
-先备份服务器数据：
+切换时先用 `docker inspect infinite-canvas` 将当前容器实际环境保存为权限 `0600` 的 `runtime.env`，再停止当前容器并重新复制一次 SQLite 文件，确保停机状态下的数据库备份一致。随后把当前容器重命名为旧版本备份，使用以下固定参数启动新镜像：
 
 ```bash
-mkdir -p ../deploy-backups
-tar -C data -czf "../deploy-backups/data-before-${release_tag}-$(date +%Y%m%d-%H%M%S).tgz" .
+umask 077
+docker inspect infinite-canvas \
+  --format '{{range .Config.Env}}{{println .}}{{end}}' \
+  > "$backup_dir/runtime.env"
+chmod 600 "$backup_dir/runtime.env"
+
+docker stop infinite-canvas
+cp -a /opt/infinite-canvas/data/*.db* "$backup_dir/"
+docker rename infinite-canvas "infinite-canvas-${old_release_tag}-backup"
+
+docker run -d \
+  --name infinite-canvas \
+  --network bridge \
+  --env-file "$backup_dir/runtime.env" \
+  -v /opt/infinite-canvas/data:/app/data \
+  -p 3000:3000 \
+  --restart unless-stopped \
+  "$new_image"
 ```
 
-确认 `.env` 中的 `ADMIN_PASSWORD`、`JWT_SECRET` 不是示例值，然后构建并启动：
-
-```bash
-docker compose config >/dev/null
-docker compose build --no-cache app
-docker compose up -d app
-docker compose ps
-```
-
-服务器构建必须基于已核对的 `release_commit`。外部端口是 Next `3000`，Go 只在容器内部监听 `8080`。
+`old_release_tag` 使用旧版本号，例如 `v0.3.1`。启动后同时等待容器 `health=healthy` 和 `http://127.0.0.1:3000/api/health` 精确返回 `ok`；失败时立即删除新容器，把旧备份容器改回 `infinite-canvas` 并启动。外部端口是 Next `3000`，Go 只在容器内部监听 `8080`。
 
 ## 8. 云端冒烟和持久化复验
 
@@ -342,8 +362,8 @@ curl -fsS -o /dev/null "$release_url/login"
 持久化必须同时验证数据库和文件：
 
 1. 注册一个唯一测试用户并记录测试素材 URL/hash。
-2. 执行一次 `docker compose restart app`，重新登录并读取同一素材。
-3. 对同一 release commit 再执行一次 `docker compose build --no-cache app && docker compose up -d app`，重复登录和素材读取。
+2. 执行一次 `docker restart infinite-canvas`，重新登录并读取同一素材。
+3. 对同一版本镜像再执行一次容器切换流程，重复登录和素材读取；不得改用 `latest` 或服务器本地构建代替精确版本镜像。
 4. 使用 Dreamina 时，重新运行渠道预检，确认登录态仍存在。
 
 项目、画布和“我的素材”主要保存在当前浏览器本地。浏览器刷新后仍能看到项目，不能证明阿里云服务器数据卷有效，也不能证明已支持跨浏览器云同步；服务端持久化必须使用注册用户、数据库记录和 `/api/uploaded-assets/...` 文件单独验证。
@@ -352,7 +372,7 @@ curl -fsS -o /dev/null "$release_url/login"
 
 发现 P0/P1 问题时：
 
-1. 在阿里云服务器检出上一个已知正常的 tag 或 commit，重新执行 `docker compose build --no-cache app && docker compose up -d app`。
+1. 删除或停止失败的新 `infinite-canvas`，把保留的 `infinite-canvas-vOLD-backup` 重命名回 `infinite-canvas` 并启动。
 2. 如果新版本已经执行数据库结构调整，只回滚镜像不够；根据上线前备份恢复数据库或执行经过审核的前向修复。
 3. 已推送的版本 tag 不删除、不改指向、不强推；修复后发布新的补丁版本。
 4. 在 `docs/pending-test.md` 记录失败现象、回滚 commit、数据处理和后续补验结果。
@@ -367,7 +387,7 @@ curl -fsS -o /dev/null "$release_url/login"
 - GHCR 镜像 tag 和 digest。
 - 阿里云实际部署 SHA 与本地 Docker 镜像 ID。
 - 正式域名、健康检查和公开素材检查结果。
-- `docker compose restart app` 与同提交重新构建后的数据库/文件持久化结果。
+- `docker restart infinite-canvas` 与同一精确版本镜像再次切换后的数据库/文件持久化结果。
 - 是否执行真实付费请求；如执行，记录模型、任务 ID、费用和结果。
 - 已知非阻断项、放行结论和回滚 commit。
 

@@ -5,13 +5,13 @@
 ## 部署步骤
 
 1. 本地完成测试、版本提交、tag 和 `main` / tag 推送，并等待两条 GitHub 镜像构建成功。
-2. 在阿里云服务器项目目录拉取 `main` 和 tags，核对 HEAD 与 release commit 一致。
-3. 备份服务器 `data`，并确认 Compose 继续挂载 `./data:/app/data`。
-4. 确认 `.env` 中 `ADMIN_PASSWORD`、`JWT_SECRET` 等生产变量正确。
-5. 执行 `docker compose build --no-cache app` 和 `docker compose up -d app`。
+2. 等待 `main` 和版本 tag 对应的两条 GitHub Actions 镜像构建成功，并记录版本镜像 digest。
+3. 在阿里云 `/opt/infinite-canvas` 备份 `.env` 和 `data/*.db*`，拉取精确的 `ghcr.io/hc000123/infinite-canvas-main:vX.Y.Z`。
+4. 保存当前容器实际环境，把 `infinite-canvas` 重命名为旧版本备份容器。
+5. 使用 `/opt/infinite-canvas/data:/app/data`、`3000:3000` 和 `unless-stopped` 启动新版本容器；健康失败立即恢复旧容器。
 6. 完成服务器本机、公网、登录、素材访问和重启持久化复验。
 
-阿里云不自动部署，也不直接使用当前 GHCR 镜像；固定流程是从仓库同一 release commit 在服务器重建 Docker 镜像。
+阿里云不自动部署，也不依赖服务器 Git 工作区或 Compose 构建；固定流程是手工拉取 GitHub Actions 生成的精确版本 GHCR 镜像并切换容器。
 
 ## Workflow 执行边界
 
@@ -63,7 +63,7 @@ Docker 部署会在同一个容器里启动 Go 后端和 Next 服务，因此默
 Docker 镜像会同时启动 Go API 和 Next.js 页面服务，并内置 `/api/health` 健康检查。部署后可用下面命令确认状态：
 
 ```bash
-docker compose ps
+docker ps --filter name=infinite-canvas
 curl https://你的域名/api/health
 ```
 
@@ -89,8 +89,8 @@ DREAMINA_OUTPUT_DIR=/app/data/jimeng-cli
 部署后先在后台即梦渠道完成“获取验证码 → 打开验证网页 → 完成验证”，再运行渠道预检。可用下面命令确认镜像内 CLI 与数据卷：
 
 ```bash
-docker compose exec app dreamina version
-docker compose exec app sh -c 'test -d "$DREAMINA_HOME/.dreamina_cli"'
+docker exec infinite-canvas dreamina version
+docker exec infinite-canvas sh -c 'test -d "$DREAMINA_HOME/.dreamina_cli"'
 ```
 
 渠道预检和网页登录不会创建视频；真实生成会消耗即梦积分。文生、图生、首尾帧、多帧和全能参考应在正式账号登录后各做一次最短时长冒烟，记录任务 ID、最终状态和额度变化。
@@ -113,7 +113,7 @@ https://你的域名/api/uploaded-assets/...
 
 ## 阿里云持久化说明
 
-- Docker Compose 必须持续挂载服务器 `./data:/app/data`，不要在升级时删除数据目录或执行 `docker compose down -v`。
+- 新旧容器都必须持续挂载服务器 `/opt/infinite-canvas/data:/app/data`，升级时不要删除或替换该目录。
 - 上线前备份 `data` 或创建云盘快照；SQLite、公开素材、项目缓存、Workflow 媒体和 Dreamina 登录态都依赖该目录。
 - 反向代理、域名和 HTTPS 由阿里云现有环境维护；升级后必须从公网复验 `/api/health` 和 `/api/uploaded-assets/...`。
 
