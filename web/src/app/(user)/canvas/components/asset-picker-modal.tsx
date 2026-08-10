@@ -14,6 +14,8 @@ import { buildWorkflowAssetCanonicalView } from "../../assets/workflow-asset-ded
 import { assetCategoryLabel, assetsForEpisode, subjectAssetGroups } from "../../assets/asset-subjects";
 import { buildInsertAssetPayload, type InsertAssetPayload } from "../utils/asset-insert-payload";
 import { filterAssetsForPicker, type AssetPickerCategoryFilter, type AssetPickerScopeFilter, type AssetPickerSort } from "../utils/asset-picker-filter";
+import { buildAssetSubjectPickerItems } from "../utils/asset-subject-picker";
+import { AssetSubjectPickerCard } from "./asset-subject-picker-card";
 
 export type AssetPickerTab = "episode-assets" | "my-assets" | "library";
 type AssetPickerKind = InsertAssetPayload["kind"];
@@ -116,9 +118,9 @@ export function AssetPickerModal({ open, title = "选择素材", defaultTab = "m
                 activeKey={activeTab}
                 onChange={(key) => setActiveTab(key as AssetPickerTab)}
                 items={[
-                    ...(projectId && episodeId ? [{ key: "episode-assets", label: "本集素材", children: <EpisodeAssetsTab projectId={projectId} episodeId={episodeId} selection={selection} /> }] : []),
-                    { key: "my-assets", label: "资产", children: <MyAssetsTab allowedKinds={allowedKinds} defaultKind={defaultKind} projectId={projectId} episodeId={episodeId} selection={selection} /> },
-                    { key: "library", label: "素材库", children: <LibraryTab allowedKinds={allowedKinds} defaultKind={defaultKind} selection={selection} /> },
+                    ...(projectId && episodeId ? [{ key: "episode-assets", label: "本集资产", children: <SubjectAssetsTab projectId={projectId} episodeId={episodeId} allowedKinds={allowedKinds} selection={selection} /> }] : []),
+                    { key: "my-assets", label: "全部资产", children: <SubjectAssetsTab allowedKinds={allowedKinds} selection={selection} /> },
+                    { key: "library", label: "外部素材库", children: <LibraryTab allowedKinds={allowedKinds} defaultKind={defaultKind} selection={selection} /> },
                 ]}
             />
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--studio-border-subtle)] pt-4">
@@ -136,6 +138,38 @@ export function AssetPickerModal({ open, title = "选择素材", defaultTab = "m
                 </div>
             </div>
         </Modal>
+    );
+}
+
+function SubjectAssetsTab({ projectId, episodeId, allowedKinds, selection }: { projectId?: string; episodeId?: string; allowedKinds?: AssetPickerKind[]; selection: SelectionControls }) {
+    const assets = useAssetStore((state) => state.assets);
+    const subjects = useAssetStore((state) => state.subjects);
+    const variants = useAssetStore((state) => state.variants);
+    const [keyword, setKeyword] = useState("");
+    const [category, setCategory] = useState<AssetCategory | "all">("all");
+    const supportsImages = !allowedKinds || allowedKinds.includes("image");
+    const items = useMemo(() => supportsImages ? buildAssetSubjectPickerItems({ subjects, variants, assets, projectId, episodeId }) : [], [assets, episodeId, projectId, subjects, supportsImages, variants]);
+    const visible = useMemo(() => {
+        const terms = keyword.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        return items.filter((item) => (category === "all" || item.subject.category === category) && matchesTerms([item.subject.name, item.subject.code, ...item.subject.tags, ...item.variants.map((variant) => variant.name)], terms));
+    }, [category, items, keyword]);
+    const currentSelections = useMemo(() => visible.flatMap((item) => item.currentAsset ? [localAssetSelection(item.currentAsset)] : []), [visible]);
+    const allCurrentSelected = currentSelections.length > 0 && currentSelections.every((item) => selection.selectedKeys.has(item.key));
+
+    return (
+        <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+                <Input className="min-w-56 flex-1" size="small" allowClear prefix={<Search className="size-3.5 text-[var(--studio-text-muted)]" />} placeholder="搜索资产主体、编号、标签或形态" value={keyword} onChange={(event) => setKeyword(event.target.value)} />
+                <div className="flex flex-wrap gap-1.5">
+                    {(["all", "character", "scene", "prop", "blocking", "other"] as const).map((value) => <Tag.CheckableTag key={value} checked={category === value} className={cn("prompt-filter-tag", category === value && "is-active")} onChange={() => setCategory(value)}>{value === "all" ? "全部分类" : assetCategoryLabel(value)}</Tag.CheckableTag>)}
+                </div>
+            </div>
+            <div className="flex items-center justify-between rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-2">
+                <span className="text-xs text-[var(--studio-text-muted)]">{visible.length} 个主体 · 点击卡片默认选择基础形态当前版本</span>
+                <Button size="small" disabled={!currentSelections.length || selection.disabled} onClick={() => selection.onSetMany(currentSelections, !allCurrentSelected)}>{allCurrentSelected ? "取消全选" : "选择全部当前版本"}</Button>
+            </div>
+            {visible.length ? <div className="grid max-h-[405px] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3 lg:grid-cols-4">{visible.map((item) => <AssetSubjectPickerCard key={item.subject.id} item={item} selectedKeys={selection.selectedKeys} disabled={selection.disabled} onSelect={(asset) => selection.onToggle(localAssetSelection(asset))} />)}</div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={supportsImages ? "没有符合条件的资产主体" : "当前插入类型不支持主体图片"} className="py-16" />}
+        </div>
     );
 }
 
