@@ -175,6 +175,46 @@ func TestSkillEvaluationRejectsBlankPrimaryVersionWithoutPartialWrites(t *testin
 	}
 }
 
+func TestSkillEvaluationCanonicalizesPaddedVersionReferences(t *testing.T) {
+	for _, updateSummary := range []bool{false, true} {
+		t.Run(map[bool]string{false: "create", true: "create with summary"}[updateSummary], func(t *testing.T) {
+			setupRepositoryTestDB(t)
+			candidate := createReferenceTestSkill(t, "padded-candidate", model.SkillOwnerSystem, true, model.SkillVersionDraft)
+			baseline := createReferenceTestSkill(t, "padded-baseline", model.SkillOwnerSystem, true, model.SkillVersionDraft)
+			evaluation := model.SkillEvaluation{
+				ID: "padded-evaluation", SkillVersionID: "  " + candidate.ID + "\t", BaselineVersionID: "\n" + baseline.ID + " ",
+			}
+			var err error
+			if updateSummary {
+				err = CreateSkillEvaluationAndUpdateSummary(evaluation, "canonical-summary", "later")
+			} else {
+				err = CreateSkillEvaluation(evaluation)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			storedEvaluation, ok, err := GetSkillEvaluation(evaluation.ID)
+			if err != nil || !ok || storedEvaluation.SkillVersionID != candidate.ID || storedEvaluation.BaselineVersionID != baseline.ID {
+				t.Fatalf("evaluation=%+v ok=%v err=%v", storedEvaluation, ok, err)
+			}
+			storedCandidate, candidateOK, candidateErr := GetSkillVersion(storedEvaluation.SkillVersionID)
+			storedBaseline, baselineOK, baselineErr := GetSkillVersion(storedEvaluation.BaselineVersionID)
+			wantSummary := ""
+			if updateSummary {
+				wantSummary = "canonical-summary"
+			}
+			if candidateErr != nil || !candidateOK || storedCandidate.EvaluationSummaryJSON != wantSummary || baselineErr != nil || !baselineOK || storedBaseline.EvaluationSummaryJSON != "" {
+				t.Fatalf("candidate=%+v/%v/%v baseline=%+v/%v/%v", storedCandidate, candidateOK, candidateErr, storedBaseline, baselineOK, baselineErr)
+			}
+			db, _ := DB()
+			var audits int64
+			if err := db.Model(&model.SkillAuditLog{}).Count(&audits).Error; err != nil || audits != 0 {
+				t.Fatalf("audits=%d err=%v", audits, err)
+			}
+		})
+	}
+}
+
 func createReferenceTestSkill(t *testing.T, key string, owner model.SkillOwnerType, enabled bool, status model.SkillVersionStatus) model.SkillVersion {
 	t.Helper()
 	skill := model.SkillDefinition{ID: "reference-skill-" + key, Name: key, OwnerType: owner, Enabled: enabled}

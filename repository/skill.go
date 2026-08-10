@@ -208,7 +208,9 @@ func SetRecommendedSkillVersionWithAudit(skillID, versionID, updatedAt string, a
 }
 
 func CreateSkillEvaluation(evaluation model.SkillEvaluation) error {
-	if strings.TrimSpace(evaluation.SkillVersionID) == "" {
+	evaluation.SkillVersionID = strings.TrimSpace(evaluation.SkillVersionID)
+	evaluation.BaselineVersionID = strings.TrimSpace(evaluation.BaselineVersionID)
+	if evaluation.SkillVersionID == "" {
 		return ErrSkillEvaluationTargetUnavailable
 	}
 	db, err := DB()
@@ -217,7 +219,7 @@ func CreateSkillEvaluation(evaluation model.SkillEvaluation) error {
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
 		versionIDs := []string{evaluation.SkillVersionID}
-		if strings.TrimSpace(evaluation.BaselineVersionID) != "" {
+		if evaluation.BaselineVersionID != "" {
 			versionIDs = append(versionIDs, evaluation.BaselineVersionID)
 		}
 		if err := validateEvaluationSkillVersions(tx, versionIDs); err != nil {
@@ -228,7 +230,9 @@ func CreateSkillEvaluation(evaluation model.SkillEvaluation) error {
 }
 
 func CreateSkillEvaluationAndUpdateSummary(evaluation model.SkillEvaluation, summaryJSON, updatedAt string) error {
-	if strings.TrimSpace(evaluation.SkillVersionID) == "" {
+	evaluation.SkillVersionID = strings.TrimSpace(evaluation.SkillVersionID)
+	evaluation.BaselineVersionID = strings.TrimSpace(evaluation.BaselineVersionID)
+	if evaluation.SkillVersionID == "" {
 		return ErrSkillEvaluationTargetUnavailable
 	}
 	db, err := DB()
@@ -237,7 +241,7 @@ func CreateSkillEvaluationAndUpdateSummary(evaluation model.SkillEvaluation, sum
 	}
 	return db.Transaction(func(tx *gorm.DB) error {
 		versionIDs := []string{evaluation.SkillVersionID}
-		if strings.TrimSpace(evaluation.BaselineVersionID) != "" {
+		if evaluation.BaselineVersionID != "" {
 			versionIDs = append(versionIDs, evaluation.BaselineVersionID)
 		}
 		if err := validateEvaluationSkillVersions(tx, versionIDs); err != nil {
