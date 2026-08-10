@@ -41,7 +41,7 @@
 | `availableModels`    | string[] | 系统可用模型，由管理员手动选择；页面下拉选项可来自私有渠道模型                 |
 | `modelCosts`         | object[] | 模型单位算力点配置，后端按调用次数、图片张数或视频秒数预扣，上游失败时返还     |
 | `modelTextEndpoints` | object[] | 文本模型使用的接口类型配置                                                     |
-| `modelProtocols`     | object[] | 后端根据私有渠道推导出的模型协议映射，用于区分 OpenAI 兼容、Ark 与即梦 CLI     |
+| `modelProtocols`     | object[] | 后端根据私有渠道推导出的模型协议映射，用于区分 OpenAI 兼容、Ark、MiniMax 与即梦 CLI |
 | `modelCapabilities`  | object[] | 后端根据私有渠道推导出的模型能力映射，包含文本 / 图片 / 视频 / 思考         |
 | `modelSources`       | object[] | 后端根据私有渠道推导出的模型来源映射，用于前台按渠道来源筛选模型               |
 | `defaultImageModel`  | string   | 默认图片模型，从 `availableModels` 中选择                                      |
@@ -69,7 +69,7 @@
 - 画布节点只保存模型 ID。调用时依次解析节点模型、项目默认和系统默认，并跳过未开放或能力不匹配的候选项。
 - 协议严格使用模型映射，不读取旧节点的 `provider`，也不根据模型名称猜测。
 
-模型 ID 在不同协议之间必须全局唯一。同一个 ID 可以出现在多个同协议渠道中用于权重和故障切换；如果同名模型同时配置为 `openai`、`volcengine-ark`、`jimeng-cli` 或 `xinglian-cloud` 等不同协议，保存设置会失败，并要求改成不同的公开模型 ID。
+模型 ID 在不同协议之间必须全局唯一。同一个 ID 可以出现在多个同协议渠道中用于权重和故障切换；如果同名模型同时配置为 `openai`、`volcengine-ark`、`minimax`、`jimeng-cli` 或 `xinglian-cloud` 等不同协议，保存设置会失败，并要求改成不同的公开模型 ID。
 
 用户侧请求模式：
 
@@ -119,9 +119,9 @@
 | 字段           | 类型     | 说明                                                                    |
 | -------------- | -------- | ----------------------------------------------------------------------- |
 | `id`           | string   | 渠道稳定 ID，Agent / 工作流阶段用它绑定具体渠道；为空时后端按名称生成   |
-| `protocol`     | string   | 协议，当前支持 `openai`、`volcengine-ark`、`jimeng-cli`、`xinglian-cloud` |
+| `protocol`     | string   | 协议，当前支持 `openai`、`volcengine-ark`、`minimax`、`jimeng-cli`、`xinglian-cloud` |
 | `name`         | string   | 渠道名称                                                                |
-| `baseUrl`      | string   | OpenAI 兼容、火山 Ark 或星链云接口地址；星链云填写 `https://www.vjimeng.vip/v1` |
+| `baseUrl`      | string   | OpenAI 兼容、火山 Ark、MiniMax 或星链云接口地址；MiniMax 官方地址为 `https://api.minimaxi.com` |
 | `apiKey`       | string   | 渠道密钥，只允许后端使用；管理员接口只回显脱敏状态                       |
 | `endpointId`   | string   | 火山 Ark 旧字段；新配置优先用 `endpointMappings`                         |
 | `endpointMappings` | object[] | 火山 Ark 本地模型名到 Endpoint / EP 的映射                           |
@@ -141,12 +141,21 @@
 后台“模型渠道”提供“一键配置厂商”，用于一次写入标准协议、地址、模型、能力和正式环境：
 
 - 火山 Ark：填写 API Key 和 Endpoint / EP，自动建立 `doubao-seedance-2-0` 到 EP 的映射。
+- MiniMax H3：填写 API Key，自动建立稳定 ID 为 `minimax-video` 的 `minimax` 视频渠道，固定使用 `MiniMax-H3`、官方地址及 `video` / `video_query` 能力。
 - 星链云：填写一次 API Key，自动开放全部九个 SD2 模型。
 - 即梦 CLI：无需 Base URL 或 API Key，自动配置六个模型（含 `seedance2.5`）；普通用户随后在个人配置中完成网页授权。
 - Comfly：填写一次 API Key，自动拆分为文本、图片和视频三个渠道，避免模型能力混用。
 - 通用中转：填写名称、Base URL、API Key、能力和模型，预设不会根据模型名称猜测能力。
 
-预设按稳定渠道 ID 更新，重复应用不会创建重复渠道。密钥输入留空时继续使用后台已保存值；协议、标准地址、模型和能力会更新到当前预设，默认模型与已有 `modelCosts` 不会被覆盖。旧 Comfly 混合渠道会停用但不会删除，公开模型目录只保留仍属于启用渠道的模型。
+预设按稳定渠道 ID 更新，重复应用不会创建重复渠道。密钥输入留空时继续使用后台已保存值；协议、标准地址、模型和能力会更新到当前预设，默认模型与已有 `modelCosts` 不会被覆盖。MiniMax H3 预设也不会自动公开模型，管理员需按实际产品配置手动加入可用模型。旧 Comfly 混合渠道会停用但不会删除，公开模型目录只保留仍属于启用渠道的模型。
+
+### MiniMax H3 视频渠道
+
+`minimax` 是 MiniMax H3 的独立后端协议。创建任务使用 `POST /v2/video_generation`，查询使用 `GET /v2/query/video_generation/{task_id}`；浏览器只调用项目统一视频接口，完整 API Key 由后端以 Bearer 方式发送。任务成功后，后端先查询结果地址，再通过现有成片代理下载链路返回内容。
+
+画布支持文生视频、图生视频、首尾帧和全能参考四种 H3 模式，不开放即梦专用的多帧故事、编辑、延长或重新生成。时长限制为 4–15 秒，清晰度为 768P 或 2K。全能参考最多 9 张图片、3 个视频、3 个音频，总计不超过 12 个，允许纯音频输入；单次请求（含 data URI 素材）不能超过 64 MB。
+
+纯文本且画幅为 Auto 时按 `16:9` 提交；首帧、首尾帧以及全能参考的 Auto 均按 `adaptive` 提交。H3 不接收 seed、生成音频和 callback 参数，画布会隐藏对应控件；水印参数仍可使用。
 
 ### 星链云 SD2 视频渠道
 

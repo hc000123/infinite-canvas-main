@@ -1,6 +1,6 @@
 # API 渠道与 Agent 绑定规则
 
-本文档约束后台 API 渠道、Agent 配置、工作流阶段和生成任务之间的绑定关系。目标是让火山企业 API、即梦 CLI、星链云和中转 API 都进入同一个可审计、可预检、可扣费、可隔离的执行体系，避免前端散落 Key、避免一个全局模型覆盖所有 Agent。
+本文档约束后台 API 渠道、Agent 配置、工作流阶段和生成任务之间的绑定关系。目标是让火山企业 API、MiniMax、即梦 CLI、星链云和中转 API 都进入同一个可审计、可预检、可扣费、可隔离的执行体系，避免前端散落 Key、避免一个全局模型覆盖所有 Agent。
 
 ## 总原则
 
@@ -40,6 +40,29 @@
 前端不可见信息：
 
 - 完整 API Key、AK/SK、内部请求头、后台完整错误栈。
+
+### MiniMax H3 API
+
+用途：
+
+- MiniMax H3 文生视频、首帧、首尾帧和多模态参考视频生成。
+- 视频任务查询、结果地址归一化与成片代理下载。
+
+渠道要求：
+
+- 协议标识使用 `minimax`，稳定渠道 ID 使用 `minimax-video`。
+- 必须配置 `https://api.minimaxi.com`、API Key、固定模型 `MiniMax-H3` 以及 `video` / `video_query` 能力。
+- 创建和查询分别只允许官方 `/v2/video_generation`、`/v2/query/video_generation/{task_id}` 路径；完整 Key 只由后端写入 Bearer 请求头。
+- 请求体执行字段白名单、4–15 秒、768P / 2K、各类参考数量、12 个总素材与 64 MB 上限校验；不转发 seed、生成音频、callback 或其他 H3 不支持字段。
+- 厂商预设只写入私有渠道，不自动公开模型、不替换默认视频模型，也不会发起真实生成作为预检。
+
+前端可见信息：
+
+- 渠道名、`MiniMax-H3`、协议、Base URL 安全展示、Key 是否配置和 Key 尾号。
+
+前端不可见信息：
+
+- 完整 API Key、服务端 Bearer 请求头、后台完整错误栈。
 
 ### 即梦 CLI
 
@@ -130,7 +153,7 @@
 字段规则：
 
 - `id` 是绑定 Agent 和任务时的稳定引用，不使用显示名称做主键。
-- `protocol` 决定后端适配器：`openai`、`volcengine-ark`、`jimeng-cli`。
+- `protocol` 决定后端适配器：`openai`、`volcengine-ark`、`minimax`、`jimeng-cli`、`xinglian-cloud`。
 - `capabilities` 决定可用于哪些任务：`text`、`image`、`video`、`video_query`、`asset_review`、`preflight`、`cli_workflow`。
 - `environment` 用于区分 `dev`、`test`、`prod`。测试环境不能默认命中正式高价视频 API。
 - `costs` 必须能覆盖模型和任务类型。未配置费用的高费用任务默认阻断。
