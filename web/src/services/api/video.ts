@@ -8,6 +8,7 @@ import { isRemoteOrInlineMediaUrl, normalizeSeedanceRatio, normalizeSeedanceReso
 import { buildSeedanceVideoTaskPayload, defaultSeedanceImageRole, seedanceAssetURIFromImageReference, seedanceAssetURIFromVideoReference, type SeedanceImageReferenceInput, type SeedanceOrderedReferenceInput } from "@/services/api/video-reference";
 import { buildDreaminaVideoPayload } from "@/services/api/dreamina-video-payload";
 import { buildXinglianVideoPayload } from "@/services/api/xinglian-video-payload";
+import { buildMiniMaxVideoPayload, type MiniMaxVideoReference } from "@/services/api/minimax-video-payload";
 import { aiTaskTraceHeaders, readAiTaskLedgerFromHeaders, type AiTaskLedger, type AiTaskTrace } from "@/services/api/ai-task-trace";
 import { type AiConfig } from "@/stores/use-config-store";
 import type { ReferenceImage } from "@/types/image";
@@ -243,7 +244,7 @@ function shouldPreflightVideoProtocol(protocol: AiConfig["videoProtocol"]) {
 }
 
 function isLongRunningVideoProtocol(protocol: AiConfig["videoProtocol"]) {
-    return protocol === "volcengine-ark" || protocol === "jimeng-cli" || protocol === "xinglian-cloud";
+    return protocol === "volcengine-ark" || protocol === "jimeng-cli" || protocol === "xinglian-cloud" || protocol === "minimax";
 }
 
 function resolveVideoRequestModel(config: AiConfig) {
@@ -307,6 +308,9 @@ function isTransientVideoRequestError(error: unknown) {
 }
 
 export async function buildVideoPayload(config: AiConfig, prompt: string, references: NormalizedVideoReferences, model: string) {
+    if (config.videoProtocol === "minimax") {
+        return buildMiniMaxVideoRequest(config, prompt, references, model);
+    }
     if (config.videoProtocol === "volcengine-ark") {
         return buildSeedanceVideoPayload(config, prompt, references);
     }
@@ -352,6 +356,60 @@ export async function buildVideoPayload(config: AiConfig, prompt: string, refere
         body.append("input_reference_role[]", references.images[index]?.seedanceRole || "reference_image");
     });
     return body;
+}
+
+async function buildMiniMaxVideoRequest(config: AiConfig, prompt: string, references: NormalizedVideoReferences, model: string) {
+    const resolved: MiniMaxVideoReference[] = [];
+    let imageIndex = 0;
+    for (const input of references.inputs) {
+        if (input.type === "image") {
+            resolved.push({
+                type: "image",
+                url: await miniMaxReferenceURL(input.image, "图片"),
+                role: input.image.seedanceRole || defaultSeedanceImageRole(imageIndex, config.videoReferenceImageMode),
+            });
+            imageIndex += 1;
+        } else if (input.type === "video") {
+            resolved.push({ type: "video", url: await miniMaxReferenceURL(input.video, "视频"), role: "reference_video" });
+        } else {
+            resolved.push({ type: "audio", url: await miniMaxReferenceURL(input.audio, "音频"), role: "reference_audio" });
+        }
+    }
+    return buildMiniMaxVideoPayload({
+        model,
+        prompt,
+        duration: config.videoSeconds,
+        ratio: config.size,
+        resolution: config.vquality,
+        watermark: config.videoWatermark === "true",
+        references: resolved,
+    });
+}
+
+async function miniMaxReferenceURL(reference: ReferenceImage | ReferenceVideo | ReferenceAudio, label: "图片" | "视频" | "音频") {
+    const direct = miniMaxSupportedURL("dataUrl" in reference ? reference.dataUrl : "") || miniMaxSupportedURL(reference.url) || ("volcenginePublicUrl" in reference ? miniMaxSupportedURL(reference.volcenginePublicUrl) : "");
+    if (direct) return direct;
+    try {
+        if (label === "图片") {
+            const image = reference as ReferenceImage;
+            const dataUrl = await imageToDataUrl({ dataUrl: miniMaxSupportedURL(image.dataUrl), storageKey: image.storageKey, url: image.url?.startsWith("blob:") ? image.url : "" });
+            if (dataUrl?.startsWith("data:")) return dataUrl;
+        } else {
+            const media = reference as ReferenceVideo | ReferenceAudio;
+            const url = await resolveMediaUrl(media.storageKey, media.url?.startsWith("blob:") ? media.url : "");
+            const supported = miniMaxSupportedURL(url);
+            if (supported) return supported;
+            if (url) return blobToDataUrl(await (await fetch(url)).blob());
+        }
+    } catch {
+        // Use the provider-specific error below.
+    }
+    throw new Error(`MiniMax H3 无法读取${label}“${reference.name || `未命名${label}`}”，请先导入我的素材后重试`);
+}
+
+function miniMaxSupportedURL(url?: string) {
+    const value = (url || "").trim();
+    return /^(?:https?:\/\/|data:|mm_file:\/\/)/i.test(value) ? value : "";
 }
 
 async function buildDreaminaVideoRequest(config: AiConfig, prompt: string, references: NormalizedVideoReferences, model: string) {
