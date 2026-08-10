@@ -1,6 +1,6 @@
 export type AiModelKind = "image" | "video" | "text";
 
-const videoKeywords = ["seedance", "video", "veo", "sora", "kling", "hailuo", "runway", "i2v", "t2v", "wan"];
+const videoKeywords = ["seedance", "video", "veo", "sora", "kling", "hailuo", "runway", "i2v", "t2v", "wan", "sd2-", "minimax-h3", "manxue", "omni-fast"];
 const imageKeywords = ["gpt-image", "image", "imagen", "seedream", "banana", "dall-e", "dalle", "flux", "sdxl", "stable-diffusion", "midjourney"];
 const unsupportedTextKeywords = ["embedding", "moderation", "whisper", "tts", "audio", "rerank"];
 

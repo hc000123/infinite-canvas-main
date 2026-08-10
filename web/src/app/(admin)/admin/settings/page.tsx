@@ -118,7 +118,6 @@ export default function AdminSettingsPage() {
     const [isDeletingChannel, setIsDeletingChannel] = useState(false);
     const [isEnterpriseVideoFocus, setIsEnterpriseVideoFocus] = useState(false);
     const [modelCosts, setModelCosts] = useState<AdminModelCost[]>([]);
-    const [configuredModels, setConfiguredModels] = useState<string[]>([]);
     const watchedPublicModels = Form.useWatch(["public", "modelChannel", "availableModels"], { form, preserve: true });
     const watchedModelTextEndpoints = Form.useWatch(["public", "modelChannel", "modelTextEndpoints"], { form, preserve: true });
     const publicModels = useMemo(() => watchedPublicModels || [], [watchedPublicModels]);
@@ -145,8 +144,7 @@ export default function AdminSettingsPage() {
             await syncConfiguredModelsFromAuthoritativeSettings(
                 authoritativeSettingsCoordinatorRef.current,
                 async () => normalizeSettings(await fetchAdminSettings(token)),
-                (models, data) => {
-                    setConfiguredModels(models);
+                (_, data) => {
                     form.setFieldsValue(data);
                     setChannels(data.private.channels);
                     setModelCosts(data.public.modelChannel.modelCosts);
@@ -192,8 +190,7 @@ export default function AdminSettingsPage() {
             await syncConfiguredModelsFromAuthoritativeSettings(authoritativeSettingsCoordinatorRef.current, async () => {
                 const saved = normalizeSettings(await saveAdminSettings(token, values));
                 return mergePrivateSecrets(values, saved);
-            }, (models, merged) => {
-                setConfiguredModels(models);
+            }, (_, merged) => {
                 form.setFieldsValue(merged);
                 setChannels(merged.private.channels);
                 setModelCosts(merged.public.modelChannel.modelCosts);
@@ -215,8 +212,7 @@ export default function AdminSettingsPage() {
             await syncConfiguredModelsFromAuthoritativeSettings(authoritativeSettingsCoordinatorRef.current, async () => {
                 const saved = normalizeSettings(await saveAdminSettings(token, result.settings));
                 return mergePrivateSecrets(result.settings, saved);
-            }, (models, merged) => {
-                setConfiguredModels(models);
+            }, (_, merged) => {
                 form.setFieldsValue(merged);
                 setChannels(merged.private.channels);
                 setModelCosts(merged.public.modelChannel.modelCosts);
@@ -405,8 +401,7 @@ export default function AdminSettingsPage() {
                         private: { ...latest.private, channels: nextChannels },
                     });
                 },
-            ), (models, merged) => {
-                setConfiguredModels(models);
+            ), (_, merged) => {
                 setChannels(merged.private.channels);
                 setModelCosts(merged.public.modelChannel.modelCosts);
                 setPublicSettings(merged.public);
@@ -432,8 +427,7 @@ export default function AdminSettingsPage() {
         return syncConfiguredModelsFromAuthoritativeSettings(authoritativeSettingsCoordinatorRef.current, async () => {
             const saved = normalizeSettings(await saveAdminSettings(token, nextSettings));
             return mergePrivateSecrets(nextSettings, saved);
-        }, (models, merged) => {
-            setConfiguredModels(models);
+        }, (_, merged) => {
             setChannels(merged.private.channels);
             setModelCosts(merged.public.modelChannel.modelCosts);
             setPublicSettings(merged.public);
@@ -836,7 +830,6 @@ export default function AdminSettingsPage() {
                     existingChannel={editingChannelIndex === null ? undefined : channels[editingChannelIndex]}
                     siblingChannels={channels.filter((_, index) => index !== editingChannelIndex)}
                     publicModelChannel={publicModelChannel}
-                    configuredModels={configuredModels}
                     saving={isSavingChannelWizard}
                     onCancel={closeChannelWizard}
                     onDiscoverModels={discoverChannelModels}
