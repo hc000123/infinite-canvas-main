@@ -42,6 +42,32 @@ func TestEvaluateSkillRequiresExplicitAPICostConfirmation(t *testing.T) {
 	}
 }
 
+func TestEvaluateSkillRejectsBlankPrimaryVersionWithoutWrites(t *testing.T) {
+	setupInvocationServiceTest(t)
+	db, err := repository.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, versionID := range []string{"", "  "} {
+		var beforeEvaluations, beforeAudits int64
+		if err := db.Model(&model.SkillEvaluation{}).Count(&beforeEvaluations).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Model(&model.SkillAuditLog{}).Count(&beforeAudits).Error; err != nil {
+			t.Fatal(err)
+		}
+		if _, err := EvaluateSkill("admin-1", versionID, SkillEvaluationInput{}); err == nil || !strings.Contains(err.Error(), "Skill 版本不存在") {
+			t.Fatalf("versionID=%q err=%v", versionID, err)
+		}
+		var afterEvaluations, afterAudits int64
+		_ = db.Model(&model.SkillEvaluation{}).Count(&afterEvaluations).Error
+		_ = db.Model(&model.SkillAuditLog{}).Count(&afterAudits).Error
+		if afterEvaluations != beforeEvaluations || afterAudits != beforeAudits {
+			t.Fatalf("versionID=%q evaluations=%d/%d audits=%d/%d", versionID, beforeEvaluations, afterEvaluations, beforeAudits, afterAudits)
+		}
+	}
+}
+
 func TestDeterministicSkillEvaluationRoundTripsStoredDiff(t *testing.T) {
 	setupVideoWorkflowTest(t)
 	detail := ensureVideoWorkflowTestRun(t)

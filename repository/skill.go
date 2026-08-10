@@ -208,6 +208,9 @@ func SetRecommendedSkillVersionWithAudit(skillID, versionID, updatedAt string, a
 }
 
 func CreateSkillEvaluation(evaluation model.SkillEvaluation) error {
+	if strings.TrimSpace(evaluation.SkillVersionID) == "" {
+		return ErrSkillEvaluationTargetUnavailable
+	}
 	db, err := DB()
 	if err != nil {
 		return err
@@ -225,6 +228,9 @@ func CreateSkillEvaluation(evaluation model.SkillEvaluation) error {
 }
 
 func CreateSkillEvaluationAndUpdateSummary(evaluation model.SkillEvaluation, summaryJSON, updatedAt string) error {
+	if strings.TrimSpace(evaluation.SkillVersionID) == "" {
+		return ErrSkillEvaluationTargetUnavailable
+	}
 	db, err := DB()
 	if err != nil {
 		return err

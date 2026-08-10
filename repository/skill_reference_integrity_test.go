@@ -138,6 +138,43 @@ func TestSkillEvaluationRevalidatesTargetsWithoutPartialWrites(t *testing.T) {
 	}
 }
 
+func TestSkillEvaluationRejectsBlankPrimaryVersionWithoutPartialWrites(t *testing.T) {
+	for _, item := range []struct {
+		name      string
+		versionID string
+		create    func(model.SkillEvaluation) error
+	}{
+		{name: "empty create", versionID: "", create: CreateSkillEvaluation},
+		{name: "whitespace create", versionID: "  ", create: CreateSkillEvaluation},
+		{name: "empty summary", versionID: "", create: func(evaluation model.SkillEvaluation) error { return CreateSkillEvaluationAndUpdateSummary(evaluation, "after", "later") }},
+		{name: "whitespace summary", versionID: "\t", create: func(evaluation model.SkillEvaluation) error { return CreateSkillEvaluationAndUpdateSummary(evaluation, "after", "later") }},
+	} {
+		t.Run(item.name, func(t *testing.T) {
+			setupRepositoryTestDB(t)
+			baseline := createReferenceTestSkill(t, "blank-primary", model.SkillOwnerSystem, true, model.SkillVersionDraft)
+			db, _ := DB()
+			if err := db.Model(&model.SkillVersion{}).Where("id = ?", baseline.ID).Update("evaluation_summary_json", "before").Error; err != nil {
+				t.Fatal(err)
+			}
+			evaluation := model.SkillEvaluation{ID: "blank-primary-evaluation", SkillVersionID: item.versionID, BaselineVersionID: baseline.ID}
+			if err := item.create(evaluation); !errors.Is(err, ErrSkillEvaluationTargetUnavailable) {
+				t.Fatalf("err=%v", err)
+			}
+			if _, ok, err := GetSkillEvaluation(evaluation.ID); err != nil || ok {
+				t.Fatalf("evaluation ok=%v err=%v", ok, err)
+			}
+			stored, ok, err := GetSkillVersion(baseline.ID)
+			if err != nil || !ok || stored.EvaluationSummaryJSON != "before" {
+				t.Fatalf("baseline=%+v ok=%v err=%v", stored, ok, err)
+			}
+			var audits int64
+			if err := db.Model(&model.SkillAuditLog{}).Count(&audits).Error; err != nil || audits != 0 {
+				t.Fatalf("audits=%d err=%v", audits, err)
+			}
+		})
+	}
+}
+
 func createReferenceTestSkill(t *testing.T, key string, owner model.SkillOwnerType, enabled bool, status model.SkillVersionStatus) model.SkillVersion {
 	t.Helper()
 	skill := model.SkillDefinition{ID: "reference-skill-" + key, Name: key, OwnerType: owner, Enabled: enabled}
