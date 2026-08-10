@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { summarizeWorkflowStages } from "./workflow-stage-summary.ts";
+import { projectProductionStages as summarizeWorkflowStages } from "../../../../production-stage-projection.ts";
+
+test("uses the shared production-stage projection in the episode workbench", () => {
+    const source = readFileSync(new URL("./use-workflow-workbench.ts", import.meta.url), "utf8");
+    assert.match(source, /projectProductionStages/);
+    assert.doesNotMatch(source, /summarizeWorkflowStages/);
+});
 
 test("exposes six blocked production stages when their replaceable skill runner is unavailable", () => {
     const result = summarizeWorkflowStages({ packageCount: 3, scriptReady: true, workerReady: false });

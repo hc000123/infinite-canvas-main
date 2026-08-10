@@ -50,10 +50,11 @@ test("project Agent center has an explicit return-to-project action", () => {
     assert.match(page, /`\/projects\/\$\{project\.id\}`/);
 });
 
-test("project production navigation exposes Agent, Skill management and project cache", () => {
+test("project production navigation exposes production control, Skill management and project cache", () => {
     const board = readProjectFile("./[id]/components/project-episode-board.tsx");
     const page = readProjectFile("./[id]/page.tsx");
-    assert.match(board, /项目 Agent/);
+    assert.match(board, /生产总控/);
+    assert.doesNotMatch(board, />项目 Agent</);
     assert.match(board, /Skill 管理/);
     assert.match(board, /查看项目缓存/);
     assert.doesNotMatch(board, /Workflow 中心/);

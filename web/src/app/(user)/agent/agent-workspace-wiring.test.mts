@@ -10,6 +10,13 @@ test("places Agent between projects and canvas in the shared navigation", () => 
     const agent = source.indexOf('slug: "agent"');
     const canvas = source.indexOf('slug: "canvas"');
     assert.ok(projects >= 0 && projects < agent && agent < canvas);
+    assert.match(source, /slug: "agent",\s*label: "生产总控",\s*shortLabel: "总控"/s);
+});
+
+test("presents the Agent route as production control instead of an Agent definition center", () => {
+    const source = read("./agent-workspace.tsx");
+    assert.match(source, />生产总控</);
+    assert.doesNotMatch(source, />项目 Agent</);
 });
 
 test("keeps local projects visible while remote progress reports an error", () => {

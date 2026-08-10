@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useScriptStore } from "@/app/(user)/canvas/stores/use-script-store";
 import { buildEpisodeScriptSnapshot } from "@/app/(user)/canvas/utils/canvas-episode-context";
 import { orderedScriptScenes } from "@/app/(user)/canvas/utils/script-management";
+import { productionStageComplete, projectProductionStages } from "@/app/(user)/projects/production-stage-projection";
 import { useCreativeProjectStore } from "@/app/(user)/projects/use-creative-project-store";
 import { agentWorkspaceHref } from "@/app/(user)/projects/agent-workspace-route";
 import { useVideoPackageStore } from "@/app/(user)/video/use-video-package-store";
@@ -15,8 +16,6 @@ import { useUserStore } from "@/stores/use-user-store";
 
 import { normalizeWorkflowRouteState, type WorkflowStageKey } from "./workflow-route-state";
 import { appendWorkflowEvents, workflowPollNeedsDetail } from "./workflow-poll-state";
-import { summarizeWorkflowStages } from "./workflow-stage-summary";
-import type { WorkflowStageView } from "./workflow-view-types";
 
 export function useWorkflowWorkbench(projectId: string, episodeId: string) {
     const searchParams = useSearchParams();
@@ -150,17 +149,17 @@ export function useWorkflowWorkbench(projectId: string, episodeId: string) {
 
     const stageViews = useMemo(
         () =>
-            summarizeWorkflowStages({
+            projectProductionStages({
                 generatedCount: packages.filter((item) => item.generation?.status === "succeeded" || item.canvasStatus === "已生成").length,
                 missingAssetCount: packages.filter((item) => item.assetStatus !== "完整").length,
                 packageCount: packages.length,
                 remoteStages: detail?.stages,
                 scriptReady: Boolean(scriptSnapshot.trim()),
-                workerReady: Boolean(health?.ready),
+                workerReady: health?.ready,
             }),
         [detail?.stages, health?.ready, packages, scriptSnapshot],
     );
-    const completedCount = stageViews.filter(workflowViewStageComplete).length;
+    const completedCount = stageViews.filter((stage) => productionStageComplete(stage.status)).length;
     const blockerCount = stageViews.filter((stage) => ["blocked", "failed", "rejected"].includes(stage.status)).length;
 
     const selectRoute = useCallback(
@@ -173,7 +172,7 @@ export function useWorkflowWorkbench(projectId: string, episodeId: string) {
     );
     const continueNext = useCallback(() => {
         const currentIndex = stageViews.findIndex((stage) => stage.key === routeState.stage);
-        const next = stageViews.find((stage, index) => index > currentIndex && !workflowViewStageComplete(stage)) || stageViews.find((stage) => !workflowViewStageComplete(stage));
+        const next = stageViews.find((stage, index) => index > currentIndex && !productionStageComplete(stage.status)) || stageViews.find((stage) => !productionStageComplete(stage.status));
         if (next) selectRoute(next.key);
     }, [routeState.stage, selectRoute, stageViews]);
 
@@ -199,10 +198,6 @@ export function useWorkflowWorkbench(projectId: string, episodeId: string) {
         selectedPackage,
         stageViews,
     };
-}
-
-function workflowViewStageComplete(stage: WorkflowStageView) {
-    return ["approved", "applied", "complete"].includes(stage.status);
 }
 
 function packageRouteStatus(item: ReturnType<typeof useVideoPackageStore.getState>["importedPackages"][number]) {

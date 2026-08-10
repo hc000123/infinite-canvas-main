@@ -1,10 +1,17 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { buildAgentEpisodeView, buildAgentProjectViews, filterAgentProjectViews } from "./agent-workspace-model.ts";
 
 const project = { id: "project-1", title: "清道夫", description: "", status: "active" as const, canvasIds: [], createdAt: "2026-08-08T08:00:00Z", updatedAt: "2026-08-08T08:00:00Z" };
 const episode = { id: "episode-1", projectId: project.id, code: "EP01", order: 1, title: "雨夜", summary: "阿宁进入房间。", hook: "", turningPoint: "", cliffhanger: "", sceneIds: [], createdAt: "2026-08-08T08:00:00Z", updatedAt: "2026-08-08T08:00:00Z" };
+
+test("uses the shared production-stage projection as its only stage state model", () => {
+    const source = readFileSync(new URL("./agent-workspace-model.ts", import.meta.url), "utf8");
+    assert.match(source, /projectProductionStages/);
+    assert.doesNotMatch(source, /function latestRemoteStages|function remoteOr/);
+});
 
 test("derives the six explicit Agent production stages", () => {
     const view = buildAgentEpisodeView({
