@@ -89,7 +89,7 @@ export type CanvasNodeMetadata = {
     videoPromptReviewEnabled?: string;
     returnLastFrame?: string;
     channelMode?: "remote" | "local";
-    provider?: "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud";
+    provider?: "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud" | "minimax";
     actionType?: CanvasVideoActionType;
     videoActionType?: CanvasVideoActionType;
     relationType?: CanvasVideoRelationType;

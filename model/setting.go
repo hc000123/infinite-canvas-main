@@ -16,6 +16,7 @@ const (
 	ModelProtocolVolcengineArk ModelProtocol = "volcengine-ark"
 	ModelProtocolJimengCLI     ModelProtocol = "jimeng-cli"
 	ModelProtocolXinglianCloud ModelProtocol = "xinglian-cloud"
+	ModelProtocolMiniMax       ModelProtocol = "minimax"
 )
 
 // ModelChannel 模型渠道配置。

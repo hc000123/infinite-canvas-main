@@ -176,6 +176,7 @@ export function enterpriseVideoChannelReadiness(input: { isPublicSettingsLoading
     if (input.isPublicSettingsLoading) return { message: "正在读取企业视频配置，请稍后再试。", status: "checking" as const };
     if (input.videoProtocol === "volcengine-ark") return { message: "企业 Ark / Seedance 视频通道已启用。", status: "ready" as const };
     if (input.videoProtocol === "xinglian-cloud") return { message: "星链云视频通道已启用。", status: "ready" as const };
+    if (input.videoProtocol === "minimax") return { message: "MiniMax H3 视频通道已启用。", status: "ready" as const };
     return { message: "当前视频通道不是企业 Ark / Seedance，请先确认后台系统设置已把视频模型映射到 volcengine-ark。", status: "blocked" as const };
 }
 

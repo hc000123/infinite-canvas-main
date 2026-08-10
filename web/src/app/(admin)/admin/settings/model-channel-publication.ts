@@ -31,7 +31,7 @@ export function modelChannelHasCapability(channel: AdminModelChannel, capability
     const capabilities = normalizeModels(channel.capabilities).map((item) => item.toLowerCase());
     if (capabilities.length) return capabilities.includes(capability);
     if (channel.protocol === "volcengine-ark") return capability === "text" || capability === "video";
-    if (channel.protocol === "jimeng-cli" || channel.protocol === "xinglian-cloud") return capability === "video";
+    if (channel.protocol === "jimeng-cli" || channel.protocol === "xinglian-cloud" || channel.protocol === "minimax") return capability === "video";
     return capability === "text" || capability === "image";
 }
 

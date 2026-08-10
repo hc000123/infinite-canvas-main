@@ -661,7 +661,7 @@ export function planStoryboardGroupCanvasInsert({
     shots: StoryboardShot[];
     assets: StoryboardAssetLike[];
     position: Position;
-    config: { provider?: "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud"; model?: string; size?: string; seconds?: string; vquality?: string };
+    config: { provider?: "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud" | "minimax"; model?: string; size?: string; seconds?: string; vquality?: string };
     episodeTitle?: string;
     idFactory: (prefix: string) => string;
     connectionIdFactory: (index: number) => string;
@@ -748,7 +748,7 @@ export function planShotGroupCanvasInsert({
     assets: StoryboardAssetLike[];
     autoAssetRefs?: StoryboardAssetRef[];
     position: Position;
-    config: { provider?: "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud"; model?: string; size?: string; seconds?: string; vquality?: string };
+    config: { provider?: "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud" | "minimax"; model?: string; size?: string; seconds?: string; vquality?: string };
     episodeTitle?: string;
     idFactory: (prefix: string) => string;
     connectionIdFactory: (index: number) => string;

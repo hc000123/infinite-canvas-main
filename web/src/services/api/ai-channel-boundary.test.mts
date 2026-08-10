@@ -50,3 +50,8 @@ test("remote video protocol supports Xinglian cloud backend mapping", () => {
     assert.equal(inferRemoteVideoProtocol("sd2-720p-fast", "openai", [{ model: "sd2-720p-fast", protocol: "xinglian-cloud" }]), "xinglian-cloud");
     assert.equal(resolveAllowedVideoProtocol("remote", "xinglian-cloud"), "xinglian-cloud");
 });
+
+test("remote video protocol supports MiniMax backend mapping", () => {
+    assert.equal(inferRemoteVideoProtocol("MiniMax-H3", "openai", [{ model: "MiniMax-H3", protocol: "minimax" }]), "minimax");
+    assert.equal(resolveAllowedVideoProtocol("remote", "minimax"), "minimax");
+});

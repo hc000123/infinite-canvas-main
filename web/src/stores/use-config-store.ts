@@ -18,7 +18,7 @@ export type TextModelEndpointType = "chat_completions" | "responses";
 
 export type AiConfig = {
     channelMode: "remote" | "local";
-    videoProtocol: "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud";
+    videoProtocol: "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud" | "minimax";
     baseUrl: string;
     apiKey: string;
     volcengineBaseUrl: string;
@@ -62,7 +62,7 @@ export const CONFIG_STORE_KEY = "infinite-canvas:ai_config_store";
 
 const useDevDefaults = process.env.NODE_ENV === "development";
 const devVideoProtocolValue = process.env.NEXT_PUBLIC_DEV_AI_VIDEO_PROTOCOL;
-const devVideoProtocol: AiConfig["videoProtocol"] | "" = useDevDefaults && (devVideoProtocolValue === "volcengine-ark" || devVideoProtocolValue === "jimeng-cli" || devVideoProtocolValue === "xinglian-cloud") ? devVideoProtocolValue : "";
+const devVideoProtocol: AiConfig["videoProtocol"] | "" = useDevDefaults && (devVideoProtocolValue === "volcengine-ark" || devVideoProtocolValue === "jimeng-cli" || devVideoProtocolValue === "xinglian-cloud" || devVideoProtocolValue === "minimax") ? devVideoProtocolValue : "";
 
 export const defaultConfig: AiConfig = {
     channelMode: "remote",

@@ -488,7 +488,7 @@ export async function deleteAdminAsset(token: string, id: string) {
 
 export type AdminModelChannel = {
     id: string;
-    protocol: "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud";
+    protocol: "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud" | "minimax";
     name: string;
     baseUrl: string;
     apiKey: string;
@@ -540,7 +540,7 @@ export type AdminModelTextEndpoint = {
 
 export type AdminModelProtocol = {
     model: string;
-    protocol: "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud";
+    protocol: "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud" | "minimax";
 };
 
 export type AdminModelCapability = {
@@ -552,7 +552,7 @@ export type AdminModelSource = {
     model: string;
     channelId: string;
     channelName: string;
-    protocol: "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud";
+    protocol: "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud" | "minimax";
 };
 
 export type AdminPublicVolcengineAssetSettings = { enabled: boolean };

@@ -147,5 +147,5 @@ function normalizeCanvasVideoSeconds(value: string, provider: CanvasVideoProvide
 }
 
 function isSeedanceDurationProtocol(provider: CanvasVideoProvider) {
-    return provider === "volcengine-ark" || provider === "jimeng-cli" || provider === "xinglian-cloud";
+    return provider === "volcengine-ark" || provider === "jimeng-cli" || provider === "xinglian-cloud" || provider === "minimax";
 }

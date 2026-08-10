@@ -7,7 +7,7 @@ import { fitNodeSize, nodeSizeFromRatio } from "./canvas-node-size.ts";
 type ContinuousVideoChainConfig = {
     model: string;
     size: string;
-    videoProtocol: "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud";
+    videoProtocol: "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud" | "minimax";
     videoSeconds: string;
     vquality: string;
     videoGenerateAudio: string;

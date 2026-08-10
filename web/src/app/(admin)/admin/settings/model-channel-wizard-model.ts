@@ -47,7 +47,7 @@ export function normalizeWizardModels(values: readonly string[] = []) {
 }
 
 export function dedicatedVideoProtocol(protocol: AdminModelChannel["protocol"]) {
-    return protocol === "jimeng-cli" || protocol === "xinglian-cloud";
+    return protocol === "jimeng-cli" || protocol === "xinglian-cloud" || protocol === "minimax";
 }
 
 export function protocolScopedWizardCapabilities(protocol: AdminModelChannel["protocol"], capabilities: readonly string[] = []) {

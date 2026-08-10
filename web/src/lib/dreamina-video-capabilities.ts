@@ -2,7 +2,7 @@ import type { VideoReferenceMode } from "../services/api/video-reference.ts";
 import { isSeedance25Model } from "../services/api/video-normalizers.ts";
 
 export type DreaminaVideoMode = Exclude<VideoReferenceMode, "auto">;
-export type DreaminaVideoProtocol = "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud";
+export type DreaminaVideoProtocol = "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud" | "minimax";
 
 export type DreaminaVideoCapability = {
     label: string;
