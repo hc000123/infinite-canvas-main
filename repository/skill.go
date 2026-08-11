@@ -10,13 +10,13 @@ import (
 )
 
 var (
-	ErrSkillVersionMustBePublished      = errors.New("skill version must be published")
-	ErrSkillVersionActiveReference     = errors.New("skill version has active references")
-	ErrSkillVersionMustBeDraft          = errors.New("skill version must be a draft")
-	ErrSkillVersionReferenced           = errors.New("skill version is referenced")
-	ErrSkillDefinitionSeedProtected     = errors.New("seed skill definition is protected")
-	ErrSkillDefinitionHasHistory        = errors.New("skill definition has published or archived versions")
-	ErrSkillDefinitionReferenced        = errors.New("skill definition is referenced")
+	ErrSkillVersionMustBePublished  = errors.New("skill version must be published")
+	ErrSkillVersionActiveReference  = errors.New("skill version has active references")
+	ErrSkillVersionMustBeDraft      = errors.New("skill version must be a draft")
+	ErrSkillVersionReferenced       = errors.New("skill version is referenced")
+	ErrSkillDefinitionSeedProtected = errors.New("seed skill definition is protected")
+	ErrSkillDefinitionHasHistory    = errors.New("skill definition has published or archived versions")
+	ErrSkillDefinitionReferenced    = errors.New("skill definition is referenced")
 )
 
 func CreateSkillDefinition(skill model.SkillDefinition) error {

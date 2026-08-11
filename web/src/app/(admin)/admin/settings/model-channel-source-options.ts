@@ -12,6 +12,12 @@ export type ChannelModelSourceGroup = {
     options: ChannelModelSourceOption[];
 };
 
+export function isChannelModelSourceOption(value: unknown): value is ChannelModelSourceOption {
+    if (!value || typeof value !== "object") return false;
+    const option = value as Partial<ChannelModelSourceOption>;
+    return typeof option.label === "string" && typeof option.value === "string" && Array.isArray(option.sources) && option.sources.every((source) => typeof source === "string") && typeof option.searchText === "string";
+}
+
 export function buildChannelModelSourceGroups(channels: AdminModelChannel[]): ChannelModelSourceGroup[] {
     const channelOrder: string[] = [];
     const sourcesByModel = new Map<string, string[]>();

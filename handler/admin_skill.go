@@ -67,7 +67,7 @@ func AdminImportSkillFolder(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := service.ImportManagedSkillFolder(admin.ID, true, service.SkillFolderImportInput{
 		StageKey: values.Get("stageKey"),
-		Name: values.Get("name"), Summary: values.Get("summary"), SummaryProvided: values.Has("summary"),
+		Name:     values.Get("name"), Summary: values.Get("summary"), SummaryProvided: values.Has("summary"),
 		Version: values.Get("version"), VersionProvided: values.Has("version"), Snapshot: snapshot,
 	})
 	if err != nil {

@@ -535,7 +535,7 @@ func TestDeleteSkillDefinitionProtectsSeedsAndPublishedHistory(t *testing.T) {
 
 func TestListSkillRegistryRelationsInBatches(t *testing.T) {
 	setupRepositoryTestDB(t)
-	for _, skill := range []model.SkillDefinition{{ID: "skill-1", Name: "一", OwnerType: model.SkillOwnerSystem}, {ID: "skill-2", Name: "二", OwnerType: model.SkillOwnerSystem}} {
+	for _, skill := range []model.SkillDefinition{{ID: "skill-1", Name: "一", OwnerType: model.SkillOwnerSystem, Enabled: true}, {ID: "skill-2", Name: "二", OwnerType: model.SkillOwnerSystem, Enabled: true}} {
 		if err := CreateSkillDefinition(skill); err != nil {
 			t.Fatal(err)
 		}

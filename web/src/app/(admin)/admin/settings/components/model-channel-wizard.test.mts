@@ -202,7 +202,7 @@ test("editing can jump between steps and save without reaching the last step", (
 
 test("public model selector groups models by configured channel source", () => {
     assert.match(pageSource, /buildChannelModelSourceGroups\(channels\)/);
-    assert.match(pageSource, /option\.data as ChannelModelSourceOption/);
+    assert.match(pageSource, /if \(!isChannelModelSourceOption\(option\.data\)\) return option\.label/);
     assert.match(pageSource, /filterOption/);
     assert.match(pageSource, /searchText/);
     assert.match(sourceOptionsSource, /多渠道共享/);

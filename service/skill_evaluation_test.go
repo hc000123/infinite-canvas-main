@@ -75,7 +75,7 @@ func TestEvaluateSkillRejectsUnavailableBaselineBeforeExecutorCall(t *testing.T)
 	}{
 		{name: "missing", prepare: func(*testing.T, model.SkillVersion) string { return "missing-baseline-version" }},
 		{name: "legacy project", prepare: func(t *testing.T, candidate model.SkillVersion) string {
-			skill := model.SkillDefinition{ID: "project-baseline-skill", Name: "Project", OwnerType: model.SkillOwnerProject, Enabled: true}
+			skill := model.SkillDefinition{ID: "project-baseline-skill", Name: "Project", OwnerType: model.SkillOwnerType("project"), Enabled: true}
 			version := candidate
 			version.ID, version.SkillID, version.Version = "project-baseline-version", skill.ID, "1.0.0-project"
 			if err := repository.CreateSkillAggregate(skill, version); err != nil {

@@ -40,7 +40,6 @@ func TestWorkflowStageUsesExplicitPublishedSkillVersion(t *testing.T) {
 	setupVideoWorkflowTest(t)
 	detail := ensureVideoWorkflowTestRun(t)
 	draft := publishCompatibleSkillTestVersion(t, "workflow.stage.art", "7.0.0")
-	setSkillTestScope(t, draft, "user-1", detail.Run.ProjectID)
 	stage, err := StartWorkflowStageWithInput("user-1", detail.Run.ID, WorkflowStageAssetExtraction, WorkflowStageStartInput{
 		IdempotencyKey: "explicit-skill-version",
 		SkillVersionID: draft.ID,
@@ -54,18 +53,17 @@ func TestWorkflowStageUsesExplicitPublishedSkillVersion(t *testing.T) {
 	}
 }
 
-func TestListWorkflowStageSkillOptionsRequiresProjectOwnerUser(t *testing.T) {
+func TestListWorkflowStageSkillOptionsSharesSystemVersionsAcrossUsersAndProjects(t *testing.T) {
 	setupAITaskTestDB(t)
 	if err := EnsureSkillSeeds(); err != nil {
 		t.Fatal(err)
 	}
 	version := publishCompatibleSkillTestVersion(t, "workflow.stage.art", "8.0.0")
-	setSkillTestScope(t, version, "user-1", "project-1")
 	ownerItems, err := ListWorkflowStageSkillOptions("user-1", WorkflowStageAssetExtraction, "project-1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	foreignItems, err := ListWorkflowStageSkillOptions("user-2", WorkflowStageAssetExtraction, "project-1")
+	foreignItems, err := ListWorkflowStageSkillOptions("user-2", WorkflowStageAssetExtraction, "project-2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +75,7 @@ func TestListWorkflowStageSkillOptionsRequiresProjectOwnerUser(t *testing.T) {
 		}
 		return false
 	}
-	if !contains(ownerItems) || contains(foreignItems) {
+	if !contains(ownerItems) || !contains(foreignItems) {
 		t.Fatalf("owner=%+v foreign=%+v", ownerItems, foreignItems)
 	}
 }

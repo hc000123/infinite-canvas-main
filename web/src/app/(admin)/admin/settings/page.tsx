@@ -11,7 +11,7 @@ import { modelMatchesAiCapability, type AiModelKind } from "@/lib/ai-model-kind"
 import { ModelChannelWizard } from "./components/model-channel-wizard";
 import { ProviderPresetModal } from "./components/provider-preset-modal";
 import { sanitizeModelChannelPublication } from "./model-channel-publication";
-import { buildChannelModelSourceGroups, type ChannelModelSourceOption } from "./model-channel-source-options";
+import { buildChannelModelSourceGroups, isChannelModelSourceOption } from "./model-channel-source-options";
 import { channelVerificationCopy, createAuthoritativeSettingsCoordinator, createChannelVerificationCoordinator, filterWizardPublicationSnapshot, finishAuthoritativeSettingsOperation, persistAuthoritativeSettingsMutation, runChannelVerification, syncConfiguredModelsFromAuthoritativeSettings } from "./model-channel-wizard-model";
 import type { ModelChannelPresetResult } from "./model-channel-presets";
 import {
@@ -526,9 +526,10 @@ export default function AdminSettingsPage() {
                                                 showSearch
                                                 placeholder="请选择系统可用模型"
                                                 options={channelModelSourceGroups}
-                                                filterOption={(input, option) => String((option as ChannelModelSourceOption | undefined)?.searchText || "").includes(input.trim().toLowerCase())}
+                                                filterOption={(input, option) => isChannelModelSourceOption(option) && option.searchText.includes(input.trim().toLowerCase())}
                                                 optionRender={(option) => {
-                                                    const item = option.data as ChannelModelSourceOption;
+                                                    if (!isChannelModelSourceOption(option.data)) return option.label;
+                                                    const item = option.data;
                                                     return (
                                                         <Flex justify="space-between" align="center" gap={12}>
                                                             <Typography.Text>{item.label}</Typography.Text>
