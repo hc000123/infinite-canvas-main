@@ -136,11 +136,11 @@ func ensureSkillSeed(seed skillSeed) error {
 			return err
 		}
 	}
-	binding, bound, err := repository.ResolveWorkflowStageSkillBinding(seed.StageKey, "")
+	_, bound, err := repository.ResolveWorkflowStageSkillBinding(seed.StageKey, "")
 	if err != nil {
 		return err
 	}
-	if bound && !strings.HasPrefix(binding.SkillVersionID, "skill-version-system-workflow-"+seed.StageKey+"-") {
+	if bound {
 		return nil
 	}
 	return repository.UpsertWorkflowStageSkillBinding(model.WorkflowStageSkillBinding{

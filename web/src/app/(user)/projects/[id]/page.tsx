@@ -396,7 +396,6 @@ export default function CreativeProjectDetailPage() {
                 onEditCanvasPreset={setEditingCanvasPresetId}
                 onEditEpisodeTitle={openEpisodeTitleEdit}
                 onOpenAgentWorkspace={() => router.push(agentWorkspaceHref({ projectId: project.id }))}
-                onOpenSkillManagement={() => router.push(`/projects/${project.id}/skills`)}
                 onOpenProjectCache={() => router.push(`/cache?projectId=${encodeURIComponent(project.id)}`)}
                 onEditProject={() => setProjectEditOpen(true)}
                 onFilterChange={setEpisodeFilter}

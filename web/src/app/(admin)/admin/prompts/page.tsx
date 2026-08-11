@@ -2,7 +2,7 @@
 
 import { CopyOutlined, DeleteOutlined, EditOutlined, ExportOutlined, EyeOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, SyncOutlined } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
-import { Button, Card, Checkbox, Col, Flex, Form, Image, Input, Modal, Row, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
+import { Button, Card, Checkbox, Col, Flex, Form, Image, Input, Modal, Row, Select, Space, Table, Tag, Tooltip, Typography, theme } from "antd";
 import { useEffect, useState } from "react";
 
 import {
@@ -108,7 +108,7 @@ export default function AdminPromptsPage() {
             title: "封面",
             dataIndex: "coverUrl",
             width: 88,
-            render: (_, item) => <Image src={item.coverUrl || "/logo.svg"} alt={item.title} width={56} height={42} style={{ objectFit: "cover", borderRadius: 6 }} preview={{ mask: "放大" }} fallback="/logo.svg" />,
+            render: (_, item) => <PromptCover src={item.coverUrl} alt={item.title} width={56} height={42} />,
         },
         {
             title: "标题",
@@ -360,7 +360,7 @@ export default function AdminPromptsPage() {
                 {detailPrompt ? (
                     <Flex vertical gap={14}>
                         <Flex gap={14} align="start">
-                            <Image src={detailPrompt.coverUrl || "/logo.svg"} alt={detailPrompt.title} width={116} height={84} style={{ objectFit: "cover", borderRadius: 8 }} preview={{ mask: "放大" }} fallback="/logo.svg" />
+                            <PromptCover src={detailPrompt.coverUrl} alt={detailPrompt.title} width={116} height={84} />
                             <Flex vertical gap={8} style={{ minWidth: 0 }}>
                                 <Typography.Title level={5} style={{ margin: 0 }}>
                                     {detailPrompt.title}
@@ -496,5 +496,24 @@ export default function AdminPromptsPage() {
                 确定删除已选中的 {selectedPromptIds.length} 条提示词吗？删除后会从当前分类中删除。
             </Modal>
         </main>
+    );
+}
+
+function PromptCover({ src, alt, width, height }: { src?: string; alt: string; width: number; height: number }) {
+    const { token } = theme.useToken();
+    return (
+        <span
+            style={{
+                display: "inline-flex",
+                padding: 4,
+                borderRadius: 8,
+                border: `1px solid ${token.colorBorderSecondary}`,
+                backgroundColor: token.colorBgBase,
+                backgroundImage: `repeating-conic-gradient(${token.colorText} 0 25%, ${token.colorBgBase} 0 50%)`,
+                backgroundSize: "12px 12px",
+            }}
+        >
+            <Image src={src || "/logo.svg"} alt={alt} width={width} height={height} style={{ objectFit: "cover", borderRadius: 4 }} preview={{ mask: "放大" }} fallback="/logo.svg" />
+        </span>
     );
 }

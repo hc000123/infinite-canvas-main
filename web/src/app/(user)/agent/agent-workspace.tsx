@@ -72,7 +72,7 @@ export function AgentWorkspace() {
     if (!projectsHydrated || !scriptsHydrated) return <main className="studio-shell grid min-h-[calc(100dvh-3.5rem)] place-items-center"><Spin description="正在读取生产总控" /></main>;
 
     return (
-        <main className="studio-shell min-h-[calc(100dvh-3.5rem)] text-[var(--studio-text-primary)]">
+        <main className="studio-shell h-full min-h-0 overflow-y-auto text-[var(--studio-text-primary)]">
             <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-5 lg:py-8">
                 <header className="flex flex-wrap items-end justify-between gap-5 border-b border-[var(--studio-border-subtle)] pb-5">
                     <div>

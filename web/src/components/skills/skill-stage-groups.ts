@@ -16,8 +16,6 @@ const skillStageDefinitions: Array<{ key: SkillStageGroupKey; label: string }> =
 export type SkillStageGroup = (typeof skillStageDefinitions)[number] & {
     items: SkillAdminItem[];
     totalCount: number;
-    systemCount: number;
-    projectCount: number;
 };
 
 function skillStageGroupKey(item: SkillAdminItem): SkillStageGroupKey {
@@ -53,8 +51,6 @@ export function groupSkillItemsByStage(items: SkillAdminItem[]): SkillStageGroup
             ...definition,
             items: groupItems,
             totalCount: groupItems.length,
-            systemCount: groupItems.filter((item) => item.skill.ownerType === "system").length,
-            projectCount: groupItems.filter((item) => item.skill.ownerType === "project").length,
         }];
     });
 }

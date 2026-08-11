@@ -5,6 +5,7 @@ import test from "node:test";
 const source = readFileSync(new URL("./model-channel-wizard.tsx", import.meta.url), "utf8");
 const presetModalSource = readFileSync(new URL("./provider-preset-modal.tsx", import.meta.url), "utf8");
 const pageSource = readFileSync(new URL("../page.tsx", import.meta.url), "utf8");
+const sourceOptionsSource = readFileSync(new URL("../model-channel-source-options.ts", import.meta.url), "utf8");
 
 test("channel wizard exposes four named steps", () => {
     ["选择渠道类型", "连接信息", "配置模型", "确认使用范围"].forEach((label) => assert.match(source, new RegExp(label)));
@@ -190,4 +191,19 @@ test("settings page keeps provider presets and channel table operations", () => 
 test("successful admin saves immediately publish public settings to the app config store", () => {
     assert.match(pageSource, /const setPublicSettings = useConfigStore\(\(state\) => state\.setPublicSettings\)/);
     assert.ok((pageSource.match(/setPublicSettings\(merged\.public\)/g) || []).length >= 4);
+});
+
+test("editing can jump between steps and save without reaching the last step", () => {
+    assert.match(source, /wizardInitialStep\(Boolean\(initializationInput\.existingChannel\)\)/);
+    assert.match(source, /onChange=\{existingChannel && !busy/);
+    assert.match(source, /existingChannel \|\| step === 3/);
+    assert.match(source, /wizardStepForField\(errorFields\?\.\[0\]\?\.name\)/);
+});
+
+test("public model selector groups models by configured channel source", () => {
+    assert.match(pageSource, /buildChannelModelSourceGroups\(channels\)/);
+    assert.match(pageSource, /if \(!isChannelModelSourceOption\(option\.data\)\) return option\.label/);
+    assert.match(pageSource, /filterOption/);
+    assert.match(pageSource, /searchText/);
+    assert.match(sourceOptionsSource, /多渠道共享/);
 });

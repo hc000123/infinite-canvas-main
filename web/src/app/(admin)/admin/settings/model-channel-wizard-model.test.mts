@@ -20,6 +20,8 @@ import {
     switchWizardProtocolCapabilities,
     syncConfiguredModelsFromAuthoritativeSettings,
     runChannelVerification,
+    wizardInitialStep,
+    wizardStepForField,
 } from "./model-channel-wizard-model.ts";
 import type { AdminModelChannel, AdminPublicModelChannelSettings, AdminSettings } from "../../../../services/api/admin.ts";
 import { sanitizeModelChannelPublication } from "./model-channel-publication.ts";
@@ -58,6 +60,15 @@ const publication = (value: Partial<AdminPublicModelChannelSettings> = {}): Admi
     systemPrompt: "keep me",
     allowCustomChannel: true,
     ...value,
+});
+
+test("编辑渠道从连接信息开始且保存错误定位到对应步骤", () => {
+    assert.equal(wizardInitialStep(false), 0);
+    assert.equal(wizardInitialStep(true), 1);
+    assert.equal(wizardStepForField(["protocol"]), 0);
+    assert.equal(wizardStepForField(["apiKey"]), 1);
+    assert.equal(wizardStepForField(["endpointMappings", 0, "endpointId"]), 2);
+    assert.equal(wizardStepForField(["publishedModels"]), 3);
 });
 
 test("发现模型和手动模型会修剪、忽略空项并稳定去重", () => {
@@ -323,7 +334,7 @@ test("渠道检测文案覆盖三种模式并正确标记星链与 OpenAI 视频
         modalLabel: "视频预检",
         actionLabel: "预检",
         batchLabel: "批量预检",
-        description: "星链云只查询 API Key 对应账户余额，不创建视频任务或扣除额度。",
+        description: "星链云查询 API Key 对应的可用模型和账户余额，不创建视频任务或扣除额度。",
     });
     assert.deepEqual(channelVerificationCopy(channel({ capabilities: ["video"] })), {
         tableLabel: "连接检测",

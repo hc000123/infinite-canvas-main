@@ -6,6 +6,7 @@ import (
 
 	"github.com/basketikun/infinite-canvas/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var ErrAgentVersionTransitionConflict = errors.New("Agent 版本状态已变化")
@@ -16,6 +17,9 @@ func CreateAgentAggregate(agent model.AgentDefinition, version model.AgentVersio
 		return err
 	}
 	return database.Transaction(func(tx *gorm.DB) error {
+		if err := validateAgentDraftSkillReferences(tx, version.DefaultSkillRefsJSON, version.SkillAccessPolicyJSON); err != nil {
+			return err
+		}
 		if err := tx.Create(&agent).Error; err != nil {
 			return err
 		}
@@ -90,7 +94,12 @@ func CreateAgentVersion(version model.AgentVersion) error {
 	if err != nil {
 		return err
 	}
-	return database.Create(&version).Error
+	return database.Transaction(func(tx *gorm.DB) error {
+		if err := validateAgentDraftSkillReferences(tx, version.DefaultSkillRefsJSON, version.SkillAccessPolicyJSON); err != nil {
+			return err
+		}
+		return tx.Create(&version).Error
+	})
 }
 
 func SaveAgentDraft(version model.AgentVersion) error {
@@ -98,27 +107,39 @@ func SaveAgentDraft(version model.AgentVersion) error {
 	if err != nil {
 		return err
 	}
-	result := database.Model(&model.AgentVersion{}).
-		Where("id = ? AND status = ?", strings.TrimSpace(version.ID), model.AgentVersionDraft).
-		Updates(map[string]any{
-			"version":                  version.Version,
-			"role_prompt":              version.RolePrompt,
-			"planner_mode":             version.PlannerMode,
-			"default_skill_refs_json":  version.DefaultSkillRefsJSON,
-			"skill_access_policy_json": version.SkillAccessPolicyJSON,
-			"model_policy_json":        version.ModelPolicyJSON,
-			"tool_policy_json":         version.ToolPolicyJSON,
-			"execution_policy_json":    version.ExecutionPolicyJSON,
-			"content_hash":             version.ContentHash,
-			"updated_at":               version.UpdatedAt,
-		})
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected != 1 {
-		return ErrAgentVersionTransitionConflict
-	}
-	return nil
+	return database.Transaction(func(tx *gorm.DB) error {
+		var current model.AgentVersion
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&current, "id = ? AND status = ?", strings.TrimSpace(version.ID), model.AgentVersionDraft).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrAgentVersionTransitionConflict
+			}
+			return err
+		}
+		if err := validateAgentDraftSkillReferences(tx, version.DefaultSkillRefsJSON, version.SkillAccessPolicyJSON); err != nil {
+			return err
+		}
+		result := tx.Model(&model.AgentVersion{}).
+			Where("id = ? AND status = ?", current.ID, model.AgentVersionDraft).
+			Updates(map[string]any{
+				"version":                  version.Version,
+				"role_prompt":              version.RolePrompt,
+				"planner_mode":             version.PlannerMode,
+				"default_skill_refs_json":  version.DefaultSkillRefsJSON,
+				"skill_access_policy_json": version.SkillAccessPolicyJSON,
+				"model_policy_json":        version.ModelPolicyJSON,
+				"tool_policy_json":         version.ToolPolicyJSON,
+				"execution_policy_json":    version.ExecutionPolicyJSON,
+				"content_hash":             version.ContentHash,
+				"updated_at":               version.UpdatedAt,
+			})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrAgentVersionTransitionConflict
+		}
+		return nil
+	})
 }
 
 func PublishAgentVersion(version model.AgentVersion) error {
@@ -126,20 +147,32 @@ func PublishAgentVersion(version model.AgentVersion) error {
 	if err != nil {
 		return err
 	}
-	result := database.Model(&model.AgentVersion{}).
-		Where("id = ? AND status = ?", strings.TrimSpace(version.ID), model.AgentVersionDraft).
-		Updates(map[string]any{
-			"status":       model.AgentVersionPublished,
-			"published_at": version.PublishedAt,
-			"updated_at":   version.UpdatedAt,
-		})
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected != 1 {
-		return ErrAgentVersionTransitionConflict
-	}
-	return nil
+	return database.Transaction(func(tx *gorm.DB) error {
+		var current model.AgentVersion
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&current, "id = ? AND status = ?", strings.TrimSpace(version.ID), model.AgentVersionDraft).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrAgentVersionTransitionConflict
+			}
+			return err
+		}
+		if err := validateAgentSkillReferences(tx, current.DefaultSkillRefsJSON, current.SkillAccessPolicyJSON); err != nil {
+			return err
+		}
+		result := tx.Model(&model.AgentVersion{}).
+			Where("id = ? AND status = ?", current.ID, model.AgentVersionDraft).
+			Updates(map[string]any{
+				"status":       model.AgentVersionPublished,
+				"published_at": version.PublishedAt,
+				"updated_at":   version.UpdatedAt,
+			})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrAgentVersionTransitionConflict
+		}
+		return nil
+	})
 }
 
 func SetRecommendedAgentVersion(agentID, versionID, updatedAt string) error {

@@ -113,7 +113,7 @@ func TestAgentPlanProcessSmokeRejectsBadConfirmationWithoutCost(t *testing.T) {
 	var artifact service.ArtifactEnvelope
 	decodeAgentPlanProcessData(t, artifactResponse, &artifact)
 	planResponse := agentPlanProcessCall(t, baseURL, http.MethodPost, "/api/v1/agent-plans", userToken, map[string]any{
-		"projectId": "process-project", "episodeId": "process-episode", "agentId": "agent-system-canvas-orchestrator", "agentVersionId": "agent-version-system-canvas-orchestrator-1.0.0",
+		"projectId": "process-project", "episodeId": "process-episode", "agentId": "agent-system-canvas-orchestrator", "agentVersionId": "agent-version-system-canvas-orchestrator-1.1.0",
 		"goal": "优化剧本", "idempotencyKey": "process-smoke-plan", "sourceArtifactRefs": []map[string]any{{"bindingName": "source_text", "artifactId": artifact.Artifact.ID, "contentHash": artifact.Artifact.ContentHash}},
 		"skillOverrides": []map[string]any{{
 			"stepKey": "script", "label": "剧本整理", "capability": "workflow.stage.script",

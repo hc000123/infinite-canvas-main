@@ -167,19 +167,19 @@ export function CanvasCreateProjectModal({
                     <Form.Item name="defaultDuration" label="默认时长">
                         <Space.Compact className="w-full">
                             <InputNumber min={1} max={20} className="w-full" />
-                            <Input className="w-12 text-center" value="秒" readOnly />
+                            <Input className="!w-14 shrink-0 text-center" value="秒" readOnly tabIndex={-1} />
                         </Space.Compact>
                     </Form.Item>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                     <Form.Item name="defaultImageModel" label="默认图片模型">
-                        <Select showSearch optionFilterProp="label" placeholder="选择图片模型" options={imageModelOptions} />
+                        <Select showSearch optionFilterProp="label" popupMatchSelectWidth={360} placeholder="选择图片模型" options={imageModelOptions} />
                     </Form.Item>
                     <Form.Item name="defaultVideoModel" label="默认视频模型">
-                        <Select showSearch optionFilterProp="label" placeholder="选择视频模型" options={videoModelOptions} />
+                        <Select showSearch optionFilterProp="label" popupMatchSelectWidth={360} placeholder="选择视频模型" options={videoModelOptions} />
                     </Form.Item>
-                    <Form.Item name="defaultTextModel" label="默认文本模型">
-                        <Select showSearch optionFilterProp="label" placeholder="选择文本模型" options={textModelOptions} />
+                    <Form.Item name="defaultTextModel" label="默认文本模型" className="sm:col-span-2">
+                        <Select showSearch optionFilterProp="label" popupMatchSelectWidth={360} placeholder="选择文本模型" options={textModelOptions} />
                     </Form.Item>
                 </div>
                 <Typography.Text type="secondary" className="text-xs">

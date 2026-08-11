@@ -4,8 +4,7 @@ type SkillOwnerType string
 type SkillVersionStatus string
 
 const (
-	SkillOwnerSystem  SkillOwnerType = "system"
-	SkillOwnerProject SkillOwnerType = "project"
+	SkillOwnerSystem SkillOwnerType = "system"
 
 	SkillVersionDraft     SkillVersionStatus = "draft"
 	SkillVersionPublished SkillVersionStatus = "published"

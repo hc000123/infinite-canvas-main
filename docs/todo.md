@@ -28,11 +28,11 @@
 
 ### Workflow + Skill + 画布总控 Runtime
 
-- Phase 1 通用 Skill Registry：已实现，自动验收与管理端冒烟通过，待用户确认。固定六阶段身份已切换为通用 Definition / Version、Manifest、评测、推荐版和工作流消费端绑定；项目页可复制 System Skill，并管理隔离的 Project Skill 草稿、发布、推荐、归档、停用与安全删除。
+- Phase 1 通用 Skill Registry 边界：Skill Definition / Version、Manifest、评测、推荐版和消费绑定只由管理员在后台全局维护；启用、已发布且契约匹配的版本供所有已登录账号和项目共享。项目侧只在运行前选择并冻结精确版本，不再创建、复制或管理项目专属 Skill；本轮已实现变更和人工验收步骤统一记录在 `docs/pending-test.md`。
 - Phase 2 Artifact + Invocation Runtime：已实现，待用户确认。Skill 可独立预检、冻结版本与契约、运行、审核和幂等 Apply，所有产物统一进入不可变 Artifact 血缘。
 - Phase 3 正式视频 Workflow 迁移：已实现，待用户确认。视频工作流阶段已改为统一 Invocation / Artifact 执行真相，旧阶段表只保留工作台投影。
 - Phase 4 Agent Plan Runtime：作为画布总控临时计划与历史兼容底座保留，继续提供版本冻结、确认、逐步审核和幂等 Apply；固定岗位 Agent 不再进入正式生产链。
-- Phase 5 固定阶段运行时：制作人员可见的 Workflow Composer 已退场，旧入口重定向到生产总控；项目 Skill 管理保留为独立入口。生产总控与分集工作台共用唯一六阶段 descriptor 和状态投影，后端继续保留阶段顺序、条件、重试、审批、契约校验、版本冻结、执行记录和产物传递；制作人员在每个固定阶段执行前手动选择并确认 Skill 精确版本，系统不得自动替换。固定转换只补阶段契约必需结构，不摘要、润色或改写上游 Skill 内容。
+- Phase 5 固定阶段运行时：制作人员可见的 Workflow Composer 已退场，旧入口重定向到生产总控；Skill Definition 与版本生命周期统一由后台管理员维护。生产总控与分集工作台共用唯一六阶段 descriptor 和状态投影，后端继续保留阶段顺序、条件、重试、审批、契约校验、版本冻结、执行记录和产物传递；制作人员在每个固定阶段执行前手动选择并确认 Skill 精确版本，系统不得自动替换。固定转换只补阶段契约必需结构，不摘要、润色或改写上游 Skill 内容。
 - Phase 6 画布和图片入口：生图工作台与画布节点继续直接调用 Skill；画布对话固定使用唯一“画布总控”，基于受限 Skill Catalog 决定直接回答或生成可编辑 Temporary Plan。普通回答不建 Plan，计划必须先通过版本、步数和 Artifact 契约校验。
 - Phase 7 项目剧本入口迁移：已改为 `source_text → Skill Invocation → production_script → 人工审核`，制作人员按分集选择兼容的剧本 Skill 精确版本，不再经过系统剧本 Agent 或 Agent Plan；动态剧本能力已作为可选 `skill-system-workflow-script@3.2.0` 发布，不会自动替换其他版本。
 - Phase 8 内容分类、资产 Brief 变体与分镜选项：已实现，自动验收和隔离浏览器验收通过，待用户确认。新增内容标签分类、角色 / 场景 / 道具独立 Brief、竖屏短剧 / 横屏中长剧分镜 6 个可独立发布 Skill；执行时由制作人员根据项目要求手动选择并冻结精确版本。

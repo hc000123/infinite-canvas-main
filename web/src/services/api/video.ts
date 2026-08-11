@@ -1,11 +1,12 @@
 import axios from "axios";
 
 import { dataUrlToFile } from "@/lib/image-utils";
+import { normalizeDreaminaVideoSettings } from "@/lib/dreamina-video-capabilities";
 import { imageToDataUrl } from "@/services/image-storage";
 import { resolveMediaUrl } from "@/services/file-storage";
 import { AI_REQUEST_TIMEOUT_MS, AI_VIDEO_CONTENT_TIMEOUT_MS, AI_VIDEO_MAX_POLL_ATTEMPTS, AI_VIDEO_POLL_INTERVAL_MS, AI_VIDEO_TASK_TIMEOUT_MS, aiApiUrl, aiHeaders, delay, normalizeAiError, refreshRemoteUser } from "@/services/api/ai-provider";
 import { isRemoteOrInlineMediaUrl, normalizeSeedanceRatio, normalizeSeedanceResolution, normalizeSeedanceSeed, normalizeVideoResolution, normalizeVideoSeconds, normalizeVideoSize } from "@/services/api/video-normalizers";
-import { buildSeedanceVideoTaskPayload, defaultSeedanceImageRole, seedanceAssetURIFromImageReference, seedanceAssetURIFromVideoReference, type SeedanceImageReferenceInput, type SeedanceOrderedReferenceInput } from "@/services/api/video-reference";
+import { buildSeedanceVideoTaskPayload, defaultSeedanceImageRole, normalizeVideoReferenceMode, seedanceAssetURIFromImageReference, seedanceAssetURIFromVideoReference, type SeedanceImageReferenceInput, type SeedanceOrderedReferenceInput } from "@/services/api/video-reference";
 import { buildDreaminaVideoPayload } from "@/services/api/dreamina-video-payload";
 import { buildXinglianVideoPayload } from "@/services/api/xinglian-video-payload";
 import { aiTaskRequestHeaders, aiTaskTraceHeaders, preserveVideoTaskLedger, readAiTaskLedgerFromHeaders, type AiTaskLedger, type AiTaskTrace } from "@/services/api/ai-task-trace";
@@ -411,10 +412,18 @@ async function dreaminaMediaFile(reference: ReferenceVideo | ReferenceAudio, kin
 
 async function buildXinglianVideoRequest(config: AiConfig, prompt: string, references: NormalizedVideoReferences, model: string) {
     const [images, videos, audios] = await Promise.all([xinglianReferenceURLs(references.images), xinglianReferenceURLs(references.videos), xinglianReferenceURLs(references.audios)]);
+    const referenceMode = normalizeVideoReferenceMode(config.videoReferenceMode);
+    const settings = normalizeDreaminaVideoSettings({
+        protocol: "xinglian-cloud",
+        model,
+        mode: referenceMode === "auto" ? "text2video" : referenceMode,
+        seconds: config.videoSeconds,
+        resolution: config.vquality,
+    });
     return buildXinglianVideoPayload({
         model,
         prompt,
-        duration: normalizeVideoSeconds(config.videoSeconds),
+        duration: settings.seconds,
         ratio: normalizeSeedanceRatio(config.size),
         generateAudio: config.videoGenerateAudio === "true",
         images,

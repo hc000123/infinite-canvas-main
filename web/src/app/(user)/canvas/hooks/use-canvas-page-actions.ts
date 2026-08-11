@@ -65,10 +65,13 @@ export function useCanvasPageActions({
     updateProject: (id: string, patch: Partial<Pick<CanvasProject, "nodes" | "connections" | "chatSessions" | "activeChatId" | "backgroundMode" | "showImageInfo" | "viewport">>) => void;
     viewport: ViewportTransform;
 }) {
+    const visibleNodes = useMemo(() => nodes.filter((node) => !isHiddenBatchChild(node, nodes)), [nodes]);
+    const viewportInsets = useMemo(() => ({ top: 24, right: 160, bottom: 32, left: 24 }), []);
+
     const resetViewport = useCallback(() => {
-        setViewport(fitCanvasViewport(nodes, size));
+        setViewport(fitCanvasViewport(visibleNodes, size, viewportInsets));
         setContextMenu(null);
-    }, [nodes, setContextMenu, setViewport, size]);
+    }, [setContextMenu, setViewport, size, viewportInsets, visibleNodes]);
 
     const organizeCanvas = useCallback(() => {
         const organized = organizeCanvasNodes(nodes, connections);
@@ -77,11 +80,12 @@ export function useCanvasPageActions({
             fitCanvasViewport(
                 organized.filter((node) => !isHiddenBatchChild(node, organized)),
                 size,
+                viewportInsets,
             ),
         );
         setContextMenu(null);
         message.success("画布节点已按生产流程整理");
-    }, [connections, message, nodes, setContextMenu, setNodes, setViewport, size]);
+    }, [connections, message, nodes, setContextMenu, setNodes, setViewport, size, viewportInsets]);
 
     const setZoomScale = useCallback(
         (scale: number) => {

@@ -8,6 +8,7 @@ export type DreaminaVideoCapability = {
     label: string;
     notice: string;
     duration: { min: number; max: number };
+    durationOptions?: number[];
     segmentDuration?: { min: number; max: number };
     resolutions: string[];
     fallbackResolution: string;
@@ -28,6 +29,7 @@ type DreaminaReferenceInput = DreaminaCapabilityInput & {
 };
 
 export function resolveDreaminaVideoCapability(input: DreaminaCapabilityInput): DreaminaVideoCapability | null {
+    if (input.protocol === "xinglian-cloud") return resolveXinglianVideoCapability(input.model);
     if (input.protocol !== "jimeng-cli" && input.protocol !== "volcengine-ark") return null;
     if (input.protocol === "jimeng-cli" && input.mode === "multiframe2video") {
         return {
@@ -72,11 +74,36 @@ export function resolveDreaminaVideoCapability(input: DreaminaCapabilityInput): 
 export function normalizeDreaminaVideoSettings(input: DreaminaCapabilityInput & { seconds: string; resolution: string }) {
     const capability = resolveDreaminaVideoCapability(input);
     if (!capability) return { seconds: input.seconds, resolution: input.resolution };
-    const seconds = Math.floor(Number(input.seconds) || 6);
+    const requestedSeconds = Math.floor(Number(input.seconds) || 6);
+    const seconds = capability.durationOptions?.length
+        ? capability.durationOptions.reduce((nearest, value) => (Math.abs(value - requestedSeconds) < Math.abs(nearest - requestedSeconds) ? value : nearest))
+        : requestedSeconds;
     const resolution = normalizeResolutionValue(input.resolution);
     return {
         seconds: String(Math.max(capability.duration.min, Math.min(capability.duration.max, seconds))),
         resolution: capability.resolutions.includes(resolution) ? resolution : capability.fallbackResolution,
+    };
+}
+
+function resolveXinglianVideoCapability(model: string): DreaminaVideoCapability {
+    const normalized = model.trim().toLowerCase();
+    const sd25 = normalized.startsWith("sd2.5-");
+    const fixed20 = sd25 && normalized.endsWith("-20s");
+    const ds = /^sd2-720p-ds(?:-|$)/.test(normalized);
+    const resolution = normalized.includes("1080p") ? "1080" : normalized.includes("480p") ? "480" : "720";
+    return {
+        label: fixed20 ? "SD2.5 · 固定 20s" : sd25 ? "SD2.5 · 4–30s · 多模态" : ds ? "SD2 · 仅 10/15s" : "",
+        notice: ds ? "DS 模型只支持 10 秒或 15 秒" : fixed20 ? "当前模型固定生成 20 秒" : "",
+        duration: fixed20 ? { min: 20, max: 20 } : ds ? { min: 10, max: 15 } : { min: 4, max: sd25 ? 30 : 15 },
+        durationOptions: fixed20 ? [20] : ds ? [10, 15] : undefined,
+        resolutions: [resolution],
+        fallbackResolution: resolution,
+        references: sd25
+            ? { images: 30, videos: 9, audios: 9, total: 48, allowAudioOnly: false }
+            : ds
+              ? { images: 9, videos: 3, audios: 3, total: 12, allowAudioOnly: false }
+              : { images: 9, videos: 3, audios: 3, total: 15, allowAudioOnly: false },
+        fixedModel: false,
     };
 }
 

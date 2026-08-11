@@ -6,15 +6,14 @@ import { Alert, App, Button, Empty, Flex, Input, Modal, Select, Spin, Tag, Typog
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchAdminSkillSourceFiles, fetchAdminSkillStageTemplates, importAdminSkillFolder, importAdminSkillFolderVersion, type SkillStageTemplate } from "@/services/api/admin-skills";
-import { fetchProjectSkillSourceFiles, fetchProjectSkillStageTemplates, importProjectSkillFolder, importProjectSkillFolderVersion } from "@/services/api/project-skills";
 import { skillFolderLayout } from "@/services/api/skill-folder-form";
 import { canSubmitSkillFolderImport, createLatestRequestGuard, diffSkillFolderFiles, readDroppedSkillFolder, readSkillFolderMetadata, type SkillFolderDiff, type SkillFolderMetadata } from "./skill-folder-import-utils";
 
 type SkillFolderImportResult = { skill?: { id: string }; version?: { id: string } | string; id?: string };
-type SkillFolderImportProps = { open: boolean; token: string; scope?: "admin" | "project"; projectId?: string; skillId?: string; previousVersionId?: string; onCancel: () => void; onImported: (skillId?: string, versionId?: string) => void };
+type SkillFolderImportProps = { open: boolean; token: string; skillId?: string; previousVersionId?: string; onCancel: () => void; onImported: (skillId?: string, versionId?: string) => void };
 const emptyFields: SkillFolderMetadata = { name: "", summary: "", version: "" };
 
-export function SkillFolderImport({ open, token, scope = "admin", projectId, skillId, previousVersionId, onCancel, onImported }: SkillFolderImportProps) {
+export function SkillFolderImport({ open, token, skillId, previousVersionId, onCancel, onImported }: SkillFolderImportProps) {
     const { message } = App.useApp();
     const skillInputRef = useRef<HTMLInputElement>(null);
     const folderInputRef = useRef<HTMLInputElement>(null);
@@ -29,8 +28,8 @@ export function SkillFolderImport({ open, token, scope = "admin", projectId, ski
     const [diffing, setDiffing] = useState(false);
     const [diffError, setDiffError] = useState("");
     const updating = Boolean(skillId);
-    const templates = useQuery({ queryKey: [scope, "skill-stage-templates", token], queryFn: () => scope === "admin" ? fetchAdminSkillStageTemplates(token) : fetchProjectSkillStageTemplates(token), enabled: open && !updating && Boolean(token), retry: false });
-    const previousFiles = useQuery({ queryKey: [scope, "skill-source-files", previousVersionId, token], queryFn: () => scope === "admin" ? fetchAdminSkillSourceFiles(token, previousVersionId!) : fetchProjectSkillSourceFiles(token, previousVersionId!), enabled: open && updating && Boolean(token && previousVersionId), retry: false });
+    const templates = useQuery({ queryKey: ["admin", "skill-stage-templates", token], queryFn: () => fetchAdminSkillStageTemplates(token), enabled: open && !updating && Boolean(token), retry: false });
+    const previousFiles = useQuery({ queryKey: ["admin", "skill-source-files", previousVersionId, token], queryFn: () => fetchAdminSkillSourceFiles(token, previousVersionId!), enabled: open && updating && Boolean(token && previousVersionId), retry: false });
     const selected = templates.data?.find((item) => item.key === stageKey);
     const layout = useMemo(() => skillFolderLayout(files), [files]);
     const hasSkill = layout.relativePaths.includes("SKILL.md");
@@ -66,8 +65,8 @@ export function SkillFolderImport({ open, token, scope = "admin", projectId, ski
 
     const mutation = useMutation<SkillFolderImportResult>({
         mutationFn: (): Promise<SkillFolderImportResult> => updating
-            ? scope === "admin" ? importAdminSkillFolderVersion(token, skillId!, files, fields.version.trim()) : importProjectSkillFolderVersion(token, skillId!, files, fields.version.trim())
-            : scope === "admin" ? importAdminSkillFolder(token, files, { ownerType: "system", stageKey, name: fields.name.trim(), summary: fields.summary.trim(), version: fields.version.trim() }) : importProjectSkillFolder(token, files, { ownerType: "project", projectId, stageKey, name: fields.name.trim(), summary: fields.summary.trim(), version: fields.version.trim() }),
+            ? importAdminSkillFolderVersion(token, skillId!, files, fields.version.trim())
+            : importAdminSkillFolder(token, files, { stageKey, name: fields.name.trim(), summary: fields.summary.trim(), version: fields.version.trim() }),
         onSuccess: (result) => {
             requestGuard.current.invalidate();
             message.success(updating ? "新版本已载入，请先试跑" : "Skill 已载入，请先试跑");

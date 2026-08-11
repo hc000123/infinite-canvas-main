@@ -12,12 +12,10 @@ import (
 const skillFolderRequestMaxBytes = 34 << 20
 
 type skillCreateInput struct {
-	Name           string               `json:"name"`
-	Summary        string               `json:"summary"`
-	OwnerType      model.SkillOwnerType `json:"ownerType"`
-	OwnerProjectID string               `json:"ownerProjectId"`
-	Version        string               `json:"version"`
-	Package        service.SkillPackage `json:"package"`
+	Name    string               `json:"name"`
+	Summary string               `json:"summary"`
+	Version string               `json:"version"`
+	Package service.SkillPackage `json:"package"`
 }
 
 type skillUpdateInput struct {
@@ -45,7 +43,7 @@ func AdminCreateSkill(w http.ResponseWriter, r *http.Request) {
 	if !decodeWorkflowBody(w, r, &input, 1<<20) {
 		return
 	}
-	result, err := service.CreateManagedSkill(admin.ID, true, input.OwnerType, input.OwnerProjectID, input.Name, input.Summary, service.SkillDraftInput{Version: input.Version, Package: input.Package})
+	result, err := service.CreateManagedSystemSkill(admin.ID, true, input.Name, input.Summary, service.SkillDraftInput{Version: input.Version, Package: input.Package})
 	if err != nil {
 		FailError(w, err)
 		return
@@ -68,8 +66,8 @@ func AdminImportSkillFolder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := service.ImportManagedSkillFolder(admin.ID, true, service.SkillFolderImportInput{
-		OwnerType: model.SkillOwnerType(values.Get("ownerType")), ProjectID: values.Get("projectId"), StageKey: values.Get("stageKey"),
-		Name: values.Get("name"), Summary: values.Get("summary"), SummaryProvided: values.Has("summary"),
+		StageKey: values.Get("stageKey"),
+		Name:     values.Get("name"), Summary: values.Get("summary"), SummaryProvided: values.Has("summary"),
 		Version: values.Get("version"), VersionProvided: values.Has("version"), Snapshot: snapshot,
 	})
 	if err != nil {
@@ -214,8 +212,13 @@ func AdminCreateSkillVersion(w http.ResponseWriter, r *http.Request, skillID str
 	OK(w, result)
 }
 
-func AdminSkillVersion(w http.ResponseWriter, _ *http.Request, id string) {
-	version, packageValue, err := service.GetSkillVersionPackage(id)
+func AdminSkillVersion(w http.ResponseWriter, r *http.Request, id string) {
+	admin, ok := skillAdmin(r)
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	version, packageValue, err := service.GetManagedSkillVersionPackage(admin.ID, id, true)
 	if err != nil {
 		FailError(w, err)
 		return
@@ -239,6 +242,32 @@ func AdminUpdateSkillVersion(w http.ResponseWriter, r *http.Request, id string) 
 		return
 	}
 	OK(w, result)
+}
+
+func AdminDeleteSkillVersion(w http.ResponseWriter, r *http.Request, id string) {
+	admin, ok := skillAdmin(r)
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	if err := service.DeleteOwnedSkillVersion(admin.ID, true, id); err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, map[string]bool{"deleted": true})
+}
+
+func AdminDeleteSkill(w http.ResponseWriter, r *http.Request, id string) {
+	admin, ok := skillAdmin(r)
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	if err := service.DeleteOwnedSkillDefinition(admin.ID, true, id); err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, map[string]bool{"deleted": true})
 }
 
 func AdminValidateSkillVersion(w http.ResponseWriter, r *http.Request, id string) {
@@ -291,8 +320,13 @@ func AdminTrialSkillVersion(w http.ResponseWriter, r *http.Request, id string) {
 	OK(w, result)
 }
 
-func AdminSkillTrial(w http.ResponseWriter, _ *http.Request, id string) {
-	result, err := service.GetSkillTrialResult(id)
+func AdminSkillTrial(w http.ResponseWriter, r *http.Request, id string) {
+	admin, ok := skillAdmin(r)
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	result, err := service.GetManagedSkillTrialResult(admin.ID, id, true)
 	if err != nil {
 		FailError(w, err)
 		return
@@ -300,8 +334,13 @@ func AdminSkillTrial(w http.ResponseWriter, _ *http.Request, id string) {
 	OK(w, result)
 }
 
-func AdminSkillEvaluation(w http.ResponseWriter, _ *http.Request, id string) {
-	result, err := service.GetSkillEvaluationResult(id)
+func AdminSkillEvaluation(w http.ResponseWriter, r *http.Request, id string) {
+	admin, ok := skillAdmin(r)
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	result, err := service.GetManagedSkillEvaluationResult(admin.ID, id, true)
 	if err != nil {
 		FailError(w, err)
 		return
@@ -316,6 +355,20 @@ func AdminPublishSkillVersion(w http.ResponseWriter, r *http.Request, id string)
 		return
 	}
 	result, err := service.PublishOwnedSkillVersion(admin.ID, true, id)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
+func AdminArchiveSkillVersion(w http.ResponseWriter, r *http.Request, id string) {
+	admin, ok := skillAdmin(r)
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	result, err := service.ArchiveOwnedSkillVersion(admin.ID, true, id)
 	if err != nil {
 		FailError(w, err)
 		return

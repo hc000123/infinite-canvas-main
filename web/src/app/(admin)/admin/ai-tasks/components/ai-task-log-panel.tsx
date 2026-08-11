@@ -44,6 +44,7 @@ export function AITaskLogPanel() {
             title: "时间",
             dataIndex: "createdAt",
             width: 170,
+            fixed: "left",
             render: (_, item) => <Typography.Text type="secondary">{formatTime(item.createdAt)}</Typography.Text>,
         },
         {
@@ -130,6 +131,7 @@ export function AITaskLogPanel() {
             key: "actions",
             width: 128,
             align: "right",
+            fixed: "right",
             render: (_, item) => (
                 <Space size={4}>
                     <Tooltip title="查看详情">
@@ -258,6 +260,7 @@ export function AITaskLogPanel() {
                     search={false}
                     defaultSize="middle"
                     tableLayout="fixed"
+                    scroll={{ x: 1600 }}
                     cardProps={{ variant: "borderless" }}
                     headerTitle={
                         <Space>

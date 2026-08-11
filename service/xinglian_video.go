@@ -54,10 +54,14 @@ func BuildXinglianVideoCreateRequest(body []byte, contentType string) ([]byte, s
 	if prompt == "" {
 		return nil, "", errors.New("缺少视频提示词")
 	}
+	duration, err := xinglianDuration(source, modelName)
+	if err != nil {
+		return nil, "", err
+	}
 	payload := map[string]any{
 		"model":    modelName,
 		"prompt":   prompt,
-		"duration": xinglianDuration(source),
+		"duration": duration,
 		"metadata": map[string]any{
 			"ratio":       xinglianRatio(xinglianString(source, "ratio", "size")),
 			"enableSound": xinglianEnableSound(source),
@@ -237,23 +241,42 @@ func xinglianString(values map[string]any, keys ...string) string {
 	return ""
 }
 
-func xinglianDuration(values map[string]any) int {
+func xinglianDuration(values map[string]any, modelName string) (int, error) {
+	duration := 4
 	for _, key := range []string{"duration", "seconds"} {
 		if value, ok := values[key]; ok {
 			switch number := value.(type) {
 			case float64:
-				if number >= 1 && number <= 15 {
-					return int(number)
+				if number >= 1 && number <= 30 {
+					duration = int(number)
 				}
 			case string:
-				var duration int
-				if _, err := fmt.Sscan(number, &duration); err == nil && duration >= 1 && duration <= 15 {
-					return duration
+				var parsed int
+				if _, err := fmt.Sscan(number, &parsed); err == nil && parsed >= 1 && parsed <= 30 {
+					duration = parsed
 				}
 			}
+			break
 		}
 	}
-	return 4
+	modelName = strings.ToLower(strings.TrimSpace(modelName))
+	if strings.HasSuffix(modelName, "-20s") {
+		if duration != 20 {
+			return 0, errors.New("当前星链云模型固定 20 秒，请将视频时长设置为 20 秒")
+		}
+		return duration, nil
+	}
+	if strings.HasPrefix(modelName, "sd2-720p-ds") && duration != 10 && duration != 15 {
+		return 0, errors.New("当前星链云 DS 模型仅支持 10 秒或 15 秒")
+	}
+	maxDuration := 15
+	if strings.HasPrefix(modelName, "sd2.5-") {
+		maxDuration = 30
+	}
+	if duration > maxDuration {
+		return 0, fmt.Errorf("当前星链云模型最长支持 %d 秒", maxDuration)
+	}
+	return duration, nil
 }
 
 func xinglianRatio(value string) string {

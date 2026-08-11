@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -15,8 +16,6 @@ func TestResolveWorkflowStageSkillPrefersExactThenProjectThenGlobal(t *testing.T
 	}
 	project := publishCompatibleSkillTestVersion(t, "workflow.stage.art", "2.0.0")
 	exact := publishCompatibleSkillTestVersion(t, "workflow.stage.art", "3.0.0")
-	setSkillTestScope(t, project, "admin-1", "p1")
-	setSkillTestScope(t, exact, "admin-1", "p1")
 	if err := repository.UpsertWorkflowStageSkillBinding(model.WorkflowStageSkillBinding{ID: "project", StageKey: "art", Scope: model.WorkflowStageSkillScopeProject, ScopeID: "p1", SkillVersionID: project.ID}); err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +36,6 @@ func TestResolveWorkflowStageSkillPrefersExactThenProjectThenGlobal(t *testing.T
 func TestResolveWorkflowStageSkillRejectsIncompatibleCapability(t *testing.T) {
 	setupAITaskTestDB(t)
 	version := publishCompatibleSkillTestVersion(t, "asset.character.rendition", "1.0.0")
-	setSkillTestScope(t, version, "admin-1", "p1")
 	_, err := ResolveWorkflowStageSkill("admin-1", "storyboard", "p1", version.ID)
 	if err == nil || !strings.Contains(err.Error(), "不支持") {
 		t.Fatalf("err=%v", err)
@@ -76,11 +74,6 @@ func TestUpdateWorkflowStageSkillBindingRestrictsProjectSkillScopeAndOwner(t *te
 	version := publishCompatibleSkillTestVersion(t, "workflow.stage.art", "4.1.0")
 	setSkillTestScope(t, version, "admin-1", "project-1")
 
-	if _, err := UpdateWorkflowStageSkillBinding("admin-1", "art", WorkflowStageSkillBindingInput{
-		Scope: model.WorkflowStageSkillScopeProject, ScopeID: "project-1", SkillVersionID: version.ID,
-	}); err != nil {
-		t.Fatalf("same-project owner binding rejected: %v", err)
-	}
 	for _, item := range []struct {
 		name    string
 		adminID string
@@ -88,39 +81,35 @@ func TestUpdateWorkflowStageSkillBindingRestrictsProjectSkillScopeAndOwner(t *te
 		scopeID string
 	}{
 		{name: "global", adminID: "admin-1", scope: model.WorkflowStageSkillScopeGlobal},
+		{name: "same project", adminID: "admin-1", scope: model.WorkflowStageSkillScopeProject, scopeID: "project-1"},
 		{name: "cross project", adminID: "admin-1", scope: model.WorkflowStageSkillScopeProject, scopeID: "project-2"},
 		{name: "foreign admin", adminID: "admin-2", scope: model.WorkflowStageSkillScopeProject, scopeID: "project-1"},
 	} {
 		t.Run(item.name, func(t *testing.T) {
 			if _, err := UpdateWorkflowStageSkillBinding(item.adminID, "art", WorkflowStageSkillBindingInput{
 				Scope: item.scope, ScopeID: item.scopeID, SkillVersionID: version.ID,
-			}); err == nil || !strings.Contains(err.Error(), "项目 Skill") {
+			}); err == nil || !strings.Contains(err.Error(), "Skill 版本不存在") {
 				t.Fatalf("expected project Skill binding rejection, err=%v", err)
 			}
 		})
 	}
 }
 
-func TestResolveWorkflowStageSkillRejectsForeignUserExactAndBinding(t *testing.T) {
+func TestResolveWorkflowStageSkillRejectsProjectSkillExactAndBinding(t *testing.T) {
 	setupAITaskTestDB(t)
 	if err := EnsureSkillSeeds(); err != nil {
 		t.Fatal(err)
 	}
 	version := publishCompatibleSkillTestVersion(t, "workflow.stage.art", "5.0.0")
 	setSkillTestScope(t, version, "user-1", "project-1")
+	if _, err := ResolveWorkflowStageSkillForRun("user-1", WorkflowStageAssetExtraction, "project-1", version.ID); err == nil {
+		t.Fatal("project Skill resolved through exact version")
+	}
 	if err := repository.UpsertWorkflowStageSkillBinding(model.WorkflowStageSkillBinding{
 		ID: "foreign-user-binding", StageKey: "art", Scope: model.WorkflowStageSkillScopeProject,
 		ScopeID: "project-1", SkillVersionID: version.ID,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	for _, exactVersionID := range []string{version.ID, ""} {
-		if _, err := ResolveWorkflowStageSkillForRun("user-1", WorkflowStageAssetExtraction, "project-1", exactVersionID); err != nil {
-			t.Fatalf("owner rejected exact=%q: %v", exactVersionID, err)
-		}
-		if _, err := ResolveWorkflowStageSkillForRun("user-2", WorkflowStageAssetExtraction, "project-1", exactVersionID); err == nil {
-			t.Fatalf("foreign user accepted exact=%q", exactVersionID)
-		}
+	}); !errors.Is(err, repository.ErrSkillReferenceTargetUnavailable) {
+		t.Fatalf("binding err=%v", err)
 	}
 }
 
@@ -150,7 +139,7 @@ func setSkillTestScope(t *testing.T, version model.SkillVersion, userID, project
 	if err != nil || !ok {
 		t.Fatalf("skill=%+v ok=%v err=%v", skill, ok, err)
 	}
-	skill.OwnerType = model.SkillOwnerProject
+	skill.OwnerType = model.SkillOwnerType("project")
 	skill.OwnerUserID = userID
 	skill.OwnerProjectID = projectID
 	skill.Name += " " + version.ID

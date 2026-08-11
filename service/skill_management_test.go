@@ -21,9 +21,16 @@ func TestImportOwnedSkillFolderCreatesStagePackageAndSourceSnapshot(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: WorkflowSkillStageScript, Snapshot: snapshot})
+	created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{StageKey: WorkflowSkillStageScript, Snapshot: snapshot})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if created.Skill.OwnerType != model.SkillOwnerSystem || created.Skill.OwnerUserID != "" || created.Skill.OwnerProjectID != "" {
+		t.Fatalf("owner=%+v", created.Skill)
+	}
+	stored, ok, err := repository.GetSkillDefinition(created.Skill.ID)
+	if err != nil || !ok || stored.OwnerType != model.SkillOwnerSystem || stored.OwnerUserID != "" || stored.OwnerProjectID != "" {
+		t.Fatalf("stored=%+v ok=%v err=%v", stored, ok, err)
 	}
 	if created.Skill.Name != "Seedance 剧本整理" || created.Skill.Summary != "保留剧情" || created.Skill.StageKey != WorkflowSkillStageScript || created.Version.Version != "1.4.0" {
 		t.Fatalf("created=%+v", created)
@@ -52,13 +59,22 @@ func TestImportOwnedSkillFolderCreatesStagePackageAndSourceSnapshot(t *testing.T
 	}
 }
 
+func TestImportManagedSkillFolderRequiresAdmin(t *testing.T) {
+	setupInvocationServiceTest(t)
+	snapshot, _ := ParseSkillFolder("script", []SkillFolderFile{{Path: "SKILL.md", Data: []byte("# Rules")}})
+	_, err := ImportManagedSkillFolder("user-1", false, SkillFolderImportInput{StageKey: WorkflowSkillStageScript, Snapshot: snapshot})
+	if err == nil || !strings.Contains(err.Error(), "只有管理员可以导入 System Skill") {
+		t.Fatalf("err=%v", err)
+	}
+}
+
 func TestImportOwnedSkillFolderVersionInheritsStageAndRejectsDuplicateContent(t *testing.T) {
 	setupInvocationServiceTest(t)
 	if err := EnsureCoreArtifactSchemas(); err != nil {
 		t.Fatal(err)
 	}
 	first, _ := ParseSkillFolder("script", []SkillFolderFile{{Path: "SKILL.md", Data: []byte("# V1")}})
-	created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: WorkflowSkillStageScript, Version: "2.0.0", Snapshot: first})
+	created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{StageKey: WorkflowSkillStageScript, Version: "2.0.0", Snapshot: first})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +103,7 @@ func TestImportOwnedSkillFolderAllowsIndependentDefinitionsWithTheSameName(t *te
 			t.Fatal(err)
 		}
 		created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{
-			OwnerType: model.SkillOwnerSystem, StageKey: WorkflowSkillStageScript, Name: "同名剧本 Skill", Snapshot: snapshot,
+			StageKey: WorkflowSkillStageScript, Name: "同名剧本 Skill", Snapshot: snapshot,
 		})
 		if err != nil {
 			t.Fatalf("import %d err=%v", index, err)
@@ -117,11 +133,11 @@ func TestSkillFolderImportDistinguishesMissingAndExplicitEmptyMetadata(t *testin
 		t.Fatal(err)
 	}
 	snapshot, _ := ParseSkillFolder("script", []SkillFolderFile{{Path: "SKILL.md", Data: []byte("---\nname: Frontmatter\ndescription: Frontmatter summary\nversion: 3.0.0\n---\n# V1")}})
-	fallback, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: WorkflowSkillStageScript, Snapshot: snapshot})
+	fallback, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{StageKey: WorkflowSkillStageScript, Snapshot: snapshot})
 	if err != nil || fallback.Skill.Summary != "Frontmatter summary" || fallback.Version.Version != "3.0.0" {
 		t.Fatalf("fallback=%+v err=%v", fallback, err)
 	}
-	explicit, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: WorkflowSkillStageScript, Name: "Confirmed", Summary: "", SummaryProvided: true, Version: "", VersionProvided: true, Snapshot: snapshot})
+	explicit, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{StageKey: WorkflowSkillStageScript, Name: "Confirmed", Summary: "", SummaryProvided: true, Version: "", VersionProvided: true, Snapshot: snapshot})
 	if err != nil || explicit.Skill.Summary != "" || explicit.Version.Version != "1.0.0" {
 		t.Fatalf("explicit=%+v err=%v", explicit, err)
 	}
@@ -140,7 +156,7 @@ func TestSkillFolderImportDistinguishesMissingAndExplicitEmptyMetadata(t *testin
 func TestUpdateSkillDraftRejectsFolderImportWithoutChangingSourceSnapshot(t *testing.T) {
 	setupInvocationServiceTest(t)
 	snapshot, _ := ParseSkillFolder("script", []SkillFolderFile{{Path: "SKILL.md", Data: []byte("# Frozen")}})
-	created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: WorkflowSkillStageScript, Snapshot: snapshot})
+	created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{StageKey: WorkflowSkillStageScript, Snapshot: snapshot})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,87 +173,55 @@ func TestUpdateSkillDraftRejectsFolderImportWithoutChangingSourceSnapshot(t *tes
 	}
 }
 
-func TestProjectSkillManagementEnforcesOwnerAndLifecycle(t *testing.T) {
+func TestSkillManagementRequiresAdminAndCreatesSystemOwner(t *testing.T) {
 	setupInvocationServiceTest(t)
 	pkg := validSkillTestPackage()
 	pkg.Manifest.EstimatedCostClass = "none"
-	created, err := CreateProjectSkill("user-owner", "project-1", "项目剧本", "项目专用", SkillDraftInput{Version: "1.0.0", Package: pkg})
+	if _, err := CreateManagedSystemSkill("user-1", false, "全局 Skill", "", SkillDraftInput{Version: "1.0.0", Package: pkg}); err == nil || !strings.Contains(err.Error(), "只有管理员可以创建 Skill") {
+		t.Fatalf("non-admin create err=%v", err)
+	}
+	created, err := CreateManagedSystemSkill("admin-1", true, "全局 Skill", "系统共享", SkillDraftInput{Version: "1.0.0", Package: pkg})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := UpdateOwnedSkillDefinition("user-other", false, created.Skill.ID, "越权改名", "", nil); err == nil {
-		t.Fatal("foreign project user mutated skill")
+	if created.Skill.OwnerType != model.SkillOwnerSystem || created.Skill.OwnerUserID != "" || created.Skill.OwnerProjectID != "" {
+		t.Fatalf("created owner=%+v", created.Skill)
 	}
-	renamed, err := UpdateOwnedSkillDefinition("user-owner", false, created.Skill.ID, "项目剧本新版", "", nil)
-	if err != nil || renamed.Name != "项目剧本新版" {
-		t.Fatalf("renamed=%+v err=%v", renamed, err)
+	stored, ok, err := repository.GetSkillDefinition(created.Skill.ID)
+	if err != nil || !ok || stored.OwnerType != model.SkillOwnerSystem || stored.OwnerUserID != "" || stored.OwnerProjectID != "" {
+		t.Fatalf("stored=%+v ok=%v err=%v", stored, ok, err)
 	}
-	published, err := PublishOwnedSkillVersion("user-owner", false, created.Version.ID)
-	if err != nil || published.Version.Status != model.SkillVersionPublished {
-		t.Fatalf("published=%+v err=%v", published, err)
-	}
-	recommended, err := RecommendOwnedSkillVersion("user-owner", false, created.Skill.ID, created.Version.ID)
-	if err != nil || recommended.Skill.RecommendedVersionID != created.Version.ID {
-		t.Fatalf("recommended=%+v err=%v", recommended, err)
-	}
-	archived, err := ArchiveOwnedSkillVersion("user-owner", false, created.Version.ID)
-	if err != nil || archived.Status != model.SkillVersionArchived {
-		t.Fatalf("archived=%+v err=%v", archived, err)
-	}
-	definition, _, _ := repository.GetSkillDefinition(created.Skill.ID)
-	if definition.RecommendedVersionID != "" {
-		t.Fatalf("archived version remains recommended: %+v", definition)
-	}
-	if err := DeleteOwnedSkillDefinition("user-owner", false, created.Skill.ID); err == nil {
-		t.Fatal("published definition was physically deleted")
+	if _, err := UpdateOwnedSkillDefinition("user-1", false, created.Skill.ID, "越权改名", "", nil); err == nil {
+		t.Fatal("non-admin mutated a system Skill")
 	}
 }
 
-func TestProjectSkillCopyAndSafeDraftDeletion(t *testing.T) {
+func TestSkillManagementRejectsLegacyProjectOwnerAndNonAdminPackageRead(t *testing.T) {
 	setupInvocationServiceTest(t)
-	if err := EnsureSkillSeeds(); err != nil {
-		t.Fatal(err)
-	}
-	source, _, _ := repository.GetSkillDefinition("skill-system-workflow-script")
-	copied, err := CopySystemSkillToProject("user-owner", false, source.ID, "project-1", "项目剧本副本", "1.0.0")
-	if err != nil || copied.Skill.OwnerType != model.SkillOwnerProject || copied.Skill.OwnerUserID != "user-owner" || copied.Skill.OwnerProjectID != "project-1" || copied.Version.Status != model.SkillVersionDraft {
-		t.Fatalf("copied=%+v err=%v", copied, err)
-	}
-	reloadedSource, _, _ := repository.GetSkillDefinition(source.ID)
-	if reloadedSource.RecommendedVersionID != source.RecommendedVersionID {
-		t.Fatal("copy changed system source")
-	}
-	if err := DeleteOwnedSkillVersion("user-owner", false, copied.Version.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok, _ := repository.GetSkillVersion(copied.Version.ID); ok {
-		t.Fatal("unreferenced draft still exists")
-	}
-	if err := DeleteOwnedSkillDefinition("user-owner", false, copied.Skill.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok, _ := repository.GetSkillDefinition(copied.Skill.ID); ok {
-		t.Fatal("never-published definition still exists")
-	}
-}
-
-func TestProjectSkillDraftCannotBeDeletedWhenWorkflowReferencesIt(t *testing.T) {
-	setupInvocationServiceTest(t)
-	pkg := validSkillTestPackage()
-	pkg.Manifest.EstimatedCostClass = "none"
-	created, err := CreateOwnedProjectSkill("user-owner", "project-1", "被引用 Skill", "", SkillDraftInput{Version: "1.0.0", Package: pkg})
+	pkg, err := ValidateInvocableSkillPackage(validSkillTestPackage())
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = CreateProjectWorkflow("user-owner", WorkflowCreateInput{ProjectID: "project-1", Name: "引用草稿", Version: "1.0.0", Package: WorkflowPackage{Nodes: []WorkflowNodeSpec{{
-		NodeKey: "script", Name: "剧本", ExecutorType: WorkflowExecutorSkill,
-		SkillBinding: &WorkflowSkillBinding{Mode: WorkflowSkillBindingFixed, SkillID: created.Skill.ID, SkillVersionID: created.Version.ID}, OutputArtifactType: "production_script",
-	}}}})
+	stamp := now()
+	skill := model.SkillDefinition{ID: "legacy-project-skill", Name: "Legacy", OwnerType: model.SkillOwnerType("project"), OwnerUserID: "user-1", OwnerProjectID: "project-1", Enabled: true, CreatedAt: stamp, UpdatedAt: stamp}
+	version := skillVersionFromPackage("legacy-project-version", skill.ID, "1.0.0", "user-1", stamp, pkg)
+	if err := repository.CreateSkillAggregate(skill, version); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpdateOwnedSkillDefinition("admin-1", true, skill.ID, "不应更新", "", nil); err == nil {
+		t.Fatal("admin mutated a non-system Skill")
+	}
+	if _, _, err := GetManagedSkillVersionPackage("user-1", version.ID, false); err == nil {
+		t.Fatal("non-admin read a management package")
+	}
+	items, err := ListSkillAdminItems()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := DeleteOwnedSkillVersion("user-owner", false, created.Version.ID); err == nil {
-		t.Fatal("referenced draft was deleted")
+	for _, item := range items {
+		if item.Skill.ID == skill.ID {
+			t.Fatal("legacy project Skill leaked into admin registry")
+		}
 	}
 }
 
@@ -269,42 +253,18 @@ func TestRegularUserCannotMutateSystemSkill(t *testing.T) {
 	}
 }
 
-func TestVisibleSkillListDoesNotExposeManagementRelations(t *testing.T) {
-	setupInvocationServiceTest(t)
-	if err := EnsureSkillSeeds(); err != nil {
-		t.Fatal(err)
-	}
-	versionID := "skill-version-system-workflow-script-3.2.0"
-	stamp := now()
-	if err := repository.CreateSkillEvaluationAndUpdateSummary(model.SkillEvaluation{ID: "evaluation-secret", SkillVersionID: versionID, ProjectID: "project-secret", ResultJSON: `{"secret":true}`, CreatedAt: stamp}, `{"evaluationId":"evaluation-secret","status":"passed","contentHash":"safe-hash","durationMs":12,"standalone":true}`, stamp); err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.CreateSkillAuditLog(model.SkillAuditLog{ID: "audit-secret", SkillVersionID: versionID, Action: "secret", CreatedAt: stamp}); err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.SaveWorkflowStageSkillBinding(model.WorkflowStageSkillBinding{ID: "binding-secret", StageKey: "secret", Scope: model.WorkflowStageSkillScopeProject, ScopeID: "project-secret", SkillVersionID: versionID}); err != nil {
-		t.Fatal(err)
-	}
-
-	items, err := ListVisibleSkillItems("user-1", "project-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	found := false
-	for _, item := range items {
-		if item.Skill.ID == "skill-system-workflow-script" {
-			found = true
-			if len(item.Evaluations) != 0 || len(item.Audits) != 0 || len(item.Bindings) != 0 {
-				t.Fatalf("management relations leaked to regular user: %+v", item)
-			}
-			for _, version := range item.Versions {
-				if version.ID == versionID && !strings.Contains(version.EvaluationSummaryJSON, "evaluation-secret") {
-					t.Fatalf("safe latest trial summary missing: %+v", version)
-				}
-			}
+func TestSkillDefinitionLifecycleErrorsRemainSafeAndSpecific(t *testing.T) {
+	for _, item := range []struct {
+		err  error
+		want string
+	}{
+		{repository.ErrSkillDefinitionSeedProtected, "系统种子 Skill 不能删除"},
+		{repository.ErrSkillDefinitionHasHistory, "已发布或已归档 Skill 不能删除"},
+		{repository.ErrSkillDefinitionReferenced, "已被 Workflow 或 Agent 引用"},
+		{repository.ErrSkillVersionReferenced, "已有评测、绑定或引用"},
+	} {
+		if err := safeSkillLifecycleError(item.err); err == nil || !strings.Contains(err.Error(), item.want) {
+			t.Fatalf("source=%v err=%v", item.err, err)
 		}
-	}
-	if !found {
-		t.Fatal("visible system skill was not returned")
 	}
 }

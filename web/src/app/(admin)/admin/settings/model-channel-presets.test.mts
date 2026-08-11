@@ -67,8 +67,30 @@ test("applies all Xinglian models idempotently without changing billing or defau
     assert.equal(channels.length, 1);
     assert.deepEqual(channels[0].models, XINGLIAN_MODELS);
     assert.equal(channels[0].apiKey, "new-key");
+    assert.match(channels[0].remark, /SD2 \/ SD2\.5/);
     assert.equal(second.settings.public.modelChannel.defaultVideoModel, "existing-video");
     assert.deepEqual(second.settings.public.modelChannel.modelCosts, [{ model: "sd2-720p-mini", credits: 18 }]);
+});
+
+test("uses the current Xinglian SD2 and SD2.5 model catalog", () => {
+    assert.deepEqual(XINGLIAN_MODELS, [
+        "sd2-720p-ap-fast",
+        "sd2-720p-ap",
+        "sd2-1080p-ap-fast",
+        "sd2-1080p-ap",
+        "sd2-720p-ax-fast",
+        "sd2-720p-ax",
+        "sd2-720p-ds",
+        "sd2-720p-ds-fast",
+        "sd2-720p-ax2",
+        "sd2-720p-ax2-fast",
+        "sd2-720p-ds-v933",
+        "sd2.5-480p-ax2",
+        "sd2.5-720p-ax2",
+        "sd2.5-480p-ax2-20s",
+        "sd2.5-720p-ax2-20s",
+    ]);
+    assert.match(MODEL_CHANNEL_PRESETS.find((item) => item.id === "xinglian")?.description || "", /15 个/);
 });
 
 test("creates three isolated GeekNow channels without publishing models", () => {

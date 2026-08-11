@@ -15,9 +15,7 @@ func TestResolveInvocationSkillHonorsManualLockAndExplainsRejectedCandidates(t *
 	_, other := seedInvocationSkillVersion(t, skill, invocationSkillSeed{VersionID: "manual-v2", Version: "2.0.0"})
 	other.FilesJSON = `{broken`
 	other.ContentHash = "corrupt-rejected-candidate"
-	if err := repository.SaveSkillVersion(other); err != nil {
-		t.Fatal(err)
-	}
+	saveSkillVersionFixture(t, other)
 
 	result, err := ResolveInvocationSkill("user-1", InvocationResolutionInput{
 		ProjectID: "project-1", SkillVersionID: manual.ID, ExpectedOutputArtifactType: "production_script",
@@ -40,32 +38,38 @@ func TestResolveInvocationSkillHonorsManualLockAndExplainsRejectedCandidates(t *
 func TestResolveInvocationSkillUsesSemverRankingTagsAndStableTieBreak(t *testing.T) {
 	setupInvocationServiceTest(t)
 	input := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "source_text", `{"text":"test"}`)
-	projectSkill, projectV1 := seedInvocationSkill(t, invocationSkillSeed{ID: "z-project", VersionID: "z-v1", Version: "1.4.0", OwnerType: model.SkillOwnerProject, ProjectTags: []string{"short_drama"}})
-	_, projectV2 := seedInvocationSkillVersion(t, projectSkill, invocationSkillSeed{VersionID: "z-v2", Version: "1.9.0"})
-	seedInvocationSkill(t, invocationSkillSeed{ID: "a-system", VersionID: "a-v1", Version: "1.9.0", ProjectTags: []string{"other"}})
+	taggedSkill, taggedV1 := seedInvocationSkill(t, invocationSkillSeed{ID: "z-tagged", VersionID: "z-v1", Version: "1.4.0", ProjectTags: []string{"short_drama", "vertical"}})
+	_, taggedV2 := seedInvocationSkillVersion(t, taggedSkill, invocationSkillSeed{VersionID: "z-v2", Version: "1.9.0"})
+	_, fallback := seedInvocationSkill(t, invocationSkillSeed{ID: "a-system", VersionID: "a-v1", Version: "1.9.0", ProjectTags: []string{"other"}})
 
 	byCapability, err := ResolveInvocationSkill("user-1", InvocationResolutionInput{
-		ProjectID: "project-1", Capability: "script.create", ProjectTags: []string{"short_drama"},
+		ProjectID: "project-1", Capability: "script.create", ProjectTags: []string{"short_drama", "vertical"},
 		ExpectedOutputArtifactType: "production_script", Inputs: []ResolvedArtifactBinding{{BindingName: "source", Artifact: input}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if byCapability.Resolved.Skill.ID != projectSkill.ID || byCapability.Resolved.Skill.OwnerType != model.SkillOwnerProject {
+	if byCapability.Resolved.Skill.ID != taggedSkill.ID || byCapability.Resolved.Skill.OwnerType != model.SkillOwnerSystem {
 		t.Fatalf("ranking winner=%+v trace=%+v", byCapability.Resolved, byCapability.Trace)
 	}
 	if len(byCapability.Trace.Candidates) < 2 || byCapability.Trace.Candidates[0].Score <= byCapability.Trace.Candidates[1].Score {
 		t.Fatalf("scores do not explain ordering: %+v", byCapability.Trace.Candidates)
 	}
+	if tagged := invocationTraceCandidate(byCapability.Trace, taggedV1.ID); tagged == nil || tagged.Score != 220 {
+		t.Fatalf("tagged score=%+v", tagged)
+	}
+	if untagged := invocationTraceCandidate(byCapability.Trace, fallback.ID); untagged == nil || untagged.Score != 20 {
+		t.Fatalf("recommended fallback score=%+v", untagged)
+	}
 
 	byConstraint, err := ResolveInvocationSkill("user-1", InvocationResolutionInput{
-		ProjectID: "project-1", SkillID: projectSkill.ID, SkillVersionConstraint: ">=1.0 <2.0",
+		ProjectID: "project-1", SkillID: taggedSkill.ID, SkillVersionConstraint: ">=1.0 <2.0",
 		ExpectedOutputArtifactType: "production_script", Inputs: []ResolvedArtifactBinding{{BindingName: "source", Artifact: input}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if byConstraint.Resolved.Version.ID != projectV2.ID || byConstraint.Resolved.Version.ID == projectV1.ID {
+	if byConstraint.Resolved.Version.ID != taggedV2.ID || byConstraint.Resolved.Version.ID == taggedV1.ID {
 		t.Fatalf("highest compatible semver not selected: %+v", byConstraint)
 	}
 }
@@ -73,7 +77,7 @@ func TestResolveInvocationSkillUsesSemverRankingTagsAndStableTieBreak(t *testing
 func TestResolveInvocationSkillEnforcesOwnerLegacyAndPersistedBindings(t *testing.T) {
 	setupInvocationServiceTest(t)
 	input := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "source_text", `{"text":"test"}`)
-	_, projectVersion := seedInvocationSkill(t, invocationSkillSeed{ID: "private", VersionID: "private-v1", Version: "1.0.0", OwnerType: model.SkillOwnerProject})
+	_, projectVersion := seedInvocationSkill(t, invocationSkillSeed{ID: "private", VersionID: "private-v1", Version: "1.0.0", OwnerType: model.SkillOwnerType("project")})
 
 	for _, selector := range []InvocationResolutionInput{
 		{ProjectID: "project-1", SkillVersionID: projectVersion.ID},
@@ -109,9 +113,7 @@ func TestResolveInvocationSkillEnforcesOwnerLegacyAndPersistedBindings(t *testin
 		t.Fatal(normalizeErr)
 	}
 	legacyVersion.ContentHash = normalized.ContentHash
-	if err := repository.SaveSkillVersion(legacyVersion); err != nil {
-		t.Fatal(err)
-	}
+	saveSkillVersionFixture(t, legacyVersion)
 	result, err := ResolveInvocationSkill("user-1", InvocationResolutionInput{ProjectID: "project-1", SkillVersionID: legacyVersion.ID, Inputs: []ResolvedArtifactBinding{{BindingName: "source", Artifact: input}}})
 	if err != nil {
 		t.Fatal(err)
@@ -165,7 +167,7 @@ func TestResolveInvocationSkillValidatesOptionalRepeatedCardinalitySchemaAndOutp
 
 func TestResolveInvocationSkillKeepsRejectReasonOrderStable(t *testing.T) {
 	setupInvocationServiceTest(t)
-	skill, version := seedInvocationSkill(t, invocationSkillSeed{ID: "reason-order", VersionID: "reason-order-v1", Version: "1.0.0", OwnerType: model.SkillOwnerProject})
+	skill, version := seedInvocationSkill(t, invocationSkillSeed{ID: "reason-order", VersionID: "reason-order-v1", Version: "1.0.0", OwnerType: model.SkillOwnerType("project")})
 	skill.Enabled = false
 	if err := repository.SaveSkillDefinition(skill); err != nil {
 		t.Fatal(err)
@@ -174,9 +176,7 @@ func TestResolveInvocationSkillKeepsRejectReasonOrderStable(t *testing.T) {
 	version.ManifestJSON = `{`
 	version.InputContractJSON = `{"requiredInputs":["source"],"imagePolicy":{"required":false,"min":0,"max":0,"allowTextFallback":true,"allowedTypes":[]}}`
 	version.OutputContractJSON = `{"schemaVersion":"1.0.0","schema":{"type":"object"}}`
-	if err := repository.SaveSkillVersion(version); err != nil {
-		t.Fatal(err)
-	}
+	saveSkillVersionFixture(t, version)
 	result, err := ResolveInvocationSkill("foreign", InvocationResolutionInput{ProjectID: "project-1", Capability: "different.capability"})
 	if err != nil {
 		t.Fatal(err)
@@ -231,9 +231,7 @@ func TestResolveInvocationSkillFallsBackAfterFullPackageFailure(t *testing.T) {
 	input := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "source_text", `{"text":"test"}`)
 	_, corrupt := seedInvocationSkill(t, invocationSkillSeed{ID: "a-corrupt-package", VersionID: "a-corrupt-package-v1", Version: "1.0.0"})
 	corrupt.FilesJSON = `{broken`
-	if err := repository.SaveSkillVersion(corrupt); err != nil {
-		t.Fatal(err)
-	}
+	saveSkillVersionFixture(t, corrupt)
 	_, valid := seedInvocationSkill(t, invocationSkillSeed{ID: "z-valid-package", VersionID: "z-valid-package-v1", Version: "1.0.0"})
 	result, err := ResolveInvocationSkill("user-1", InvocationResolutionInput{ProjectID: "project-1", Capability: "script.create", ExpectedOutputArtifactType: "production_script", Inputs: []ResolvedArtifactBinding{{BindingName: "source", Artifact: input}}})
 	if err != nil {
@@ -253,9 +251,7 @@ func TestResolveInvocationSkillConstraintFallsBackAfterHighestPackageFailure(t *
 	skill, lower := seedInvocationSkill(t, invocationSkillSeed{ID: "constraint-fallback", VersionID: "constraint-v1", Version: "1.0.0"})
 	_, highest := seedInvocationSkillVersion(t, skill, invocationSkillSeed{VersionID: "constraint-v2", Version: "1.9.0"})
 	highest.FilesJSON = `{broken`
-	if err := repository.SaveSkillVersion(highest); err != nil {
-		t.Fatal(err)
-	}
+	saveSkillVersionFixture(t, highest)
 	result, err := ResolveInvocationSkill("user-1", InvocationResolutionInput{ProjectID: "project-1", SkillID: skill.ID, SkillVersionConstraint: ">=1.0 <2.0", ExpectedOutputArtifactType: "production_script", Inputs: []ResolvedArtifactBinding{{BindingName: "source", Artifact: input}}})
 	if err != nil {
 		t.Fatal(err)

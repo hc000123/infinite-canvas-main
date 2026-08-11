@@ -13,7 +13,8 @@ test("external Skill import offers both a single SKILL.md and a complete folder"
 });
 
 test("new version import fetches and renders the selected version diff", () => {
-    for (const text of ["previousVersionId", "fetchAdminSkillSourceFiles", "fetchProjectSkillSourceFiles", "diffSkillFolderFiles", "新增", "修改", "删除", "文件内容无变化"]) assert.ok(source.includes(text), `missing ${text}`);
+    for (const text of ["previousVersionId", "fetchAdminSkillSourceFiles", "importAdminSkillFolder", "diffSkillFolderFiles", "新增", "修改", "删除", "文件内容无变化"]) assert.ok(source.includes(text), `missing ${text}`);
+    for (const text of ["fetchProjectSkill", "importProjectSkill", 'scope === "admin"']) assert.equal(source.includes(text), false, `unexpected ${text}`);
 });
 
 test("closing folder import invalidates requests and clears transient loading state", () => {

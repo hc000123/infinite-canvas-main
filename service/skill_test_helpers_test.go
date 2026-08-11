@@ -35,10 +35,21 @@ func createSkillTestDraft(t *testing.T, capability, versionName string) model.Sk
 	outputJSON, _ := json.Marshal(normalized.OutputContract)
 	gatesJSON, _ := json.Marshal(normalized.QualityGateProfile)
 	stamp := now()
-	skill := model.SkillDefinition{ID: newID("skill"), Name: capability + " test", OwnerType: model.SkillOwnerProject, OwnerUserID: "admin-1", OwnerProjectID: newID("project"), Enabled: true, CreatedAt: stamp, UpdatedAt: stamp}
+	skill := model.SkillDefinition{ID: newID("skill"), Name: capability + " test", OwnerType: model.SkillOwnerSystem, Enabled: true, CreatedAt: stamp, UpdatedAt: stamp}
 	version := model.SkillVersion{ID: newID("skillversion"), SkillID: skill.ID, Version: versionName, Status: model.SkillVersionDraft, ManifestJSON: string(manifestJSON), FilesJSON: string(filesJSON), InputContractJSON: string(inputJSON), OutputContractJSON: string(outputJSON), QualityGateProfileJSON: string(gatesJSON), ContentHash: normalized.ContentHash, CreatedBy: "admin-1", CreatedAt: stamp, UpdatedAt: stamp}
 	if err := repository.CreateSkillAggregate(skill, version); err != nil {
 		t.Fatal(err)
 	}
 	return version
+}
+
+func saveSkillVersionFixture(t *testing.T, version model.SkillVersion) {
+	t.Helper()
+	database, err := repository.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Save(&version).Error; err != nil {
+		t.Fatal(err)
+	}
 }

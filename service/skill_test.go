@@ -10,36 +10,22 @@ import (
 	"github.com/basketikun/infinite-canvas/repository"
 )
 
-func TestSkillRegistryKeepsOptionsAndExactResolutionIdenticalAndIsolated(t *testing.T) {
-	setupInvocationServiceTest(t)
-	skill, version := seedInvocationSkill(t, invocationSkillSeed{
-		ID: "cross-entry-project-skill", VersionID: "cross-entry-project-skill-v1", Version: "1.0.0", OwnerType: model.SkillOwnerProject, Recommended: true,
-		Mutate: func(pkg *SkillPackage) { pkg.Manifest.Capabilities = []string{"workflow.stage.cross_entry"} },
-	})
-	filter := SkillOptionFilter{Capability: "workflow.stage.cross_entry", InputArtifactType: "source_text", OutputArtifactType: "production_script"}
-	options, err := ListSkillOptions("user-1", "project-1", filter)
-	if err != nil || len(options) != 1 {
-		t.Fatalf("options=%+v err=%v", options, err)
+func TestListSkillOptionsAreGlobalAcrossAccountsAndProjects(t *testing.T) {
+	setupAITaskTestDB(t)
+	if err := EnsureSkillSeeds(); err != nil {
+		t.Fatal(err)
 	}
-	option := options[0]
-	resolved, err := ResolveExactSkillVersion("user-1", "project-1", version.ID)
+	filter := SkillOptionFilter{Capability: "workflow.stage.script", InputArtifactType: "source_text", OutputArtifactType: "production_script"}
+	first, err := ListSkillOptions("user-1", "project-1", filter)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if option.SkillID != skill.ID || option.SkillVersionID != version.ID || option.ContentHash != resolved.Version.ContentHash ||
-		!reflect.DeepEqual(option.Manifest, resolved.Package.Manifest) ||
-		!reflect.DeepEqual(option.InputBindings, resolved.Package.InputContract.ArtifactInputs) ||
-		!reflect.DeepEqual(option.OutputBindings, resolved.Package.OutputContract.ArtifactOutputs) {
-		t.Fatalf("registry drift option=%+v resolved=%+v", option, resolved)
+	second, err := ListSkillOptions("user-2", "project-2", filter)
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, foreign := range []struct{ userID, projectID string }{{"user-2", "project-1"}, {"user-1", "project-2"}} {
-		items, listErr := ListSkillOptions(foreign.userID, foreign.projectID, filter)
-		if listErr != nil || len(items) != 0 {
-			t.Fatalf("foreign catalog leaked for %+v: items=%+v err=%v", foreign, items, listErr)
-		}
-		if _, resolveErr := ResolveExactSkillVersion(foreign.userID, foreign.projectID, version.ID); resolveErr == nil {
-			t.Fatalf("foreign exact resolution leaked for %+v", foreign)
-		}
+	if len(first) == 0 || !reflect.DeepEqual(first, second) {
+		t.Fatalf("first=%+v second=%+v", first, second)
 	}
 }
 
@@ -69,8 +55,8 @@ func TestPublishSkillVersionRequiresMatchingPassingEvaluation(t *testing.T) {
 func TestCreateAndPublishSkillRequireInvocableArtifactBindings(t *testing.T) {
 	setupAITaskTestDB(t)
 	legacy := legacySkillTestPackage()
-	if _, err := CreateSkill(
-		"admin-1", model.SkillOwnerSystem, "", "Legacy", "",
+	if _, err := CreateSystemSkill(
+		"admin-1", "Legacy", "",
 		SkillDraftInput{Version: "1.0.0", Package: legacy},
 	); err == nil {
 		t.Fatal("new drafts must reject legacy packages without artifact bindings")
@@ -90,6 +76,17 @@ func TestCreateAndPublishSkillRequireInvocableArtifactBindings(t *testing.T) {
 	}
 	if _, err := PublishSkillVersion("admin-1", version.ID); err == nil {
 		t.Fatal("publish must reject legacy packages without artifact bindings")
+	}
+}
+
+func TestCreateSystemSkillPersistsEmptyOwnerIDs(t *testing.T) {
+	setupAITaskTestDB(t)
+	created, err := CreateSystemSkill("admin-1", "系统 Skill", "", SkillDraftInput{Version: "1.0.0", Package: validSkillTestPackage()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Skill.OwnerType != model.SkillOwnerSystem || created.Skill.OwnerUserID != "" || created.Skill.OwnerProjectID != "" {
+		t.Fatalf("skill=%+v", created.Skill)
 	}
 }
 
@@ -150,33 +147,7 @@ func TestListSkillOptionsSerializesEmptyContractsAsArrays(t *testing.T) {
 	}
 }
 
-func TestListSkillOptionsRequiresProjectOwnerUser(t *testing.T) {
-	setupAITaskTestDB(t)
-	pkg := invocableSkillTestPackage()
-	pkg.Manifest.Capabilities = []string{"test.project.owner"}
-	created, err := CreateProjectSkill(
-		"user-1", "project-1", "项目私有 Skill", "",
-		SkillDraftInput{Version: "1.0.0", Package: pkg},
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	created.Version.Status = model.SkillVersionPublished
-	if err := repository.SaveSkillVersion(created.Version); err != nil {
-		t.Fatal(err)
-	}
-	filter := SkillOptionFilter{Capability: "test.project.owner"}
-	items, err := ListSkillOptions("user-1", "project-1", filter)
-	if err != nil || len(items) != 1 || items[0].SkillID != created.Skill.ID {
-		t.Fatalf("same owner items=%+v err=%v", items, err)
-	}
-	items, err = ListSkillOptions("user-2", "project-1", filter)
-	if err != nil || len(items) != 0 {
-		t.Fatalf("foreign user items=%+v err=%v", items, err)
-	}
-}
-
-func TestVisibleSkillResolutionRequiresProjectOwnerUser(t *testing.T) {
+func TestExactResolutionRejectsLegacyProjectOwner(t *testing.T) {
 	setupAITaskTestDB(t)
 	pkg, err := ValidateInvocableSkillPackage(invocableSkillTestPackage())
 	if err != nil {
@@ -184,60 +155,16 @@ func TestVisibleSkillResolutionRequiresProjectOwnerUser(t *testing.T) {
 	}
 	stamp := now()
 	skill := model.SkillDefinition{
-		ID: "project-skill", Name: "项目 Skill", OwnerType: model.SkillOwnerProject,
+		ID: "legacy-project-skill", Name: "遗留项目 Skill", OwnerType: model.SkillOwnerType("project"),
 		OwnerUserID: "user-1", OwnerProjectID: "project-1", Enabled: true,
-		RecommendedVersionID: "project-version", CreatedAt: stamp, UpdatedAt: stamp,
+		RecommendedVersionID: "legacy-project-version", CreatedAt: stamp, UpdatedAt: stamp,
 	}
-	version := skillVersionFromPackage("project-version", skill.ID, "1.0.0", "user-1", stamp, pkg)
+	version := skillVersionFromPackage("legacy-project-version", skill.ID, "1.0.0", "user-1", stamp, pkg)
 	version.Status = model.SkillVersionPublished
 	if err := repository.CreateSkillAggregate(skill, version); err != nil {
 		t.Fatal(err)
 	}
-	for _, resolve := range []struct {
-		name string
-		call func(userID, projectID string) (ResolvedSkill, error)
-	}{
-		{name: "exact", call: func(userID, projectID string) (ResolvedSkill, error) {
-			return ResolveExactSkillVersion(userID, projectID, version.ID)
-		}},
-		{name: "recommended", call: func(userID, projectID string) (ResolvedSkill, error) {
-			return ResolveRecommendedSkill(userID, projectID, skill.ID)
-		}},
-	} {
-		t.Run(resolve.name, func(t *testing.T) {
-			if _, err := resolve.call("user-1", "project-1"); err != nil {
-				t.Fatalf("same owner rejected: %v", err)
-			}
-			if _, err := resolve.call("user-2", "project-1"); err == nil {
-				t.Fatal("foreign user must be rejected")
-			}
-			if _, err := resolve.call("user-1", "project-2"); err == nil {
-				t.Fatal("foreign project must be rejected")
-			}
-		})
-	}
-}
-
-func TestCreateSkillSupportsSystemAndProjectOwners(t *testing.T) {
-	setupAITaskTestDB(t)
-	for _, owner := range []struct {
-		typeValue model.SkillOwnerType
-		projectID string
-	}{
-		{typeValue: model.SkillOwnerSystem},
-		{typeValue: model.SkillOwnerProject, projectID: "project-1"},
-	} {
-		created, err := CreateSkill("admin-1", owner.typeValue, owner.projectID, "可组合 Skill", "说明", SkillDraftInput{Version: "1.0.0", Package: validSkillTestPackage()})
-		if err != nil {
-			t.Fatal(err)
-		}
-		expectedOwnerUserID := ""
-		if owner.typeValue == model.SkillOwnerProject {
-			expectedOwnerUserID = "admin-1"
-		}
-		if created.Skill.OwnerType != owner.typeValue || created.Skill.OwnerUserID != expectedOwnerUserID ||
-			created.Skill.OwnerProjectID != owner.projectID || created.Version.Status != model.SkillVersionDraft {
-			t.Fatalf("created=%+v", created)
-		}
+	if _, err := ResolveExactSkillVersion("user-1", "project-1", version.ID); err == nil {
+		t.Fatal("legacy project owner must not resolve")
 	}
 }

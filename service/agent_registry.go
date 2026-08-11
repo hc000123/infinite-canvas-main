@@ -399,7 +399,7 @@ func normalizeAgentAccessPolicy(value AgentSkillAccessPolicy) (AgentSkillAccessP
 	seen := map[model.SkillOwnerType]bool{}
 	owners := make([]model.SkillOwnerType, 0, len(value.AllowedOwnerTypes))
 	for _, owner := range value.AllowedOwnerTypes {
-		if owner != model.SkillOwnerSystem && owner != model.SkillOwnerProject {
+		if owner != model.SkillOwnerSystem {
 			return value, safeMessageError{message: "Agent Skill 所有者范围无效"}
 		}
 		if !seen[owner] {
