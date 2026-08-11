@@ -14,15 +14,21 @@ export type ImageAngleTransform = {
     wideAngle: boolean;
 };
 
+const MIN_REFERENCE_EDGE = 300;
+const MIN_REFERENCE_RATIO = 0.4;
+const MAX_REFERENCE_RATIO = 2.5;
+const PORTRAIT_CROP_SIZE = { width: 576, height: 1024 };
+const LANDSCAPE_CROP_SIZE = { width: 1024, height: 576 };
+
 export async function cropDataUrl(dataUrl: string, crop?: ImageCropRect) {
     const image = await loadImage(dataUrl);
-    if (crop) {
-        return drawCrop(image, Math.floor(crop.x * image.width), Math.floor(crop.y * image.height), Math.ceil(crop.width * image.width), Math.ceil(crop.height * image.height));
-    }
     const size = Math.min(image.width, image.height);
-    const sx = Math.max(0, Math.floor((image.width - size) / 2));
-    const sy = Math.max(0, Math.floor((image.height - size) / 2));
-    return drawCrop(image, sx, sy, size, size);
+    const sx = crop ? Math.floor(crop.x * image.width) : Math.max(0, Math.floor((image.width - size) / 2));
+    const sy = crop ? Math.floor(crop.y * image.height) : Math.max(0, Math.floor((image.height - size) / 2));
+    const sw = crop ? Math.ceil(crop.width * image.width) : size;
+    const sh = crop ? Math.ceil(crop.height * image.height) : size;
+    const target = blurredCropTarget(sw, sh);
+    return target ? drawCropWithBlurredBackground(image, sx, sy, sw, sh, target.width, target.height) : drawCrop(image, sx, sy, sw, sh);
 }
 
 export async function cropImageToResolution(dataUrl: string, width: number, height: number) {
@@ -85,6 +91,33 @@ function drawCrop(image: HTMLImageElement, sx: number, sy: number, sw: number, s
     const context = canvas.getContext("2d");
     if (!context) return image.src;
     context.drawImage(image, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/png");
+}
+
+function blurredCropTarget(width: number, height: number) {
+    const ratio = width / height;
+    if (width >= MIN_REFERENCE_EDGE && height >= MIN_REFERENCE_EDGE && ratio > MIN_REFERENCE_RATIO && ratio < MAX_REFERENCE_RATIO) return null;
+    return width > height ? LANDSCAPE_CROP_SIZE : PORTRAIT_CROP_SIZE;
+}
+
+function drawCropWithBlurredBackground(image: HTMLImageElement, sx: number, sy: number, sw: number, sh: number, width: number, height: number) {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) return drawCrop(image, sx, sy, sw, sh);
+
+    const coverScale = Math.max(width / sw, height / sh) * 1.08;
+    const backgroundWidth = sw * coverScale;
+    const backgroundHeight = sh * coverScale;
+    context.filter = "blur(32px) brightness(0.72)";
+    context.drawImage(image, sx, sy, sw, sh, (width - backgroundWidth) / 2, (height - backgroundHeight) / 2, backgroundWidth, backgroundHeight);
+
+    const containScale = Math.min(width / sw, height / sh);
+    const foregroundWidth = sw * containScale;
+    const foregroundHeight = sh * containScale;
+    context.filter = "none";
+    context.drawImage(image, sx, sy, sw, sh, (width - foregroundWidth) / 2, (height - foregroundHeight) / 2, foregroundWidth, foregroundHeight);
     return canvas.toDataURL("image/png");
 }
 
