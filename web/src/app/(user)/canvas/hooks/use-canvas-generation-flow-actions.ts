@@ -10,7 +10,7 @@ import type { CanvasNodeGenerationMode } from "../components/canvas-node-prompt-
 import { buildGenerationConfig } from "../utils/canvas-generation-config";
 import { resolveCanvasEffectivePrompt } from "../utils/canvas-generation-inputs";
 import { directVideoReferenceInputs } from "../utils/canvas-generation-metadata";
-import { canvasPromptEditorDocument } from "../utils/canvas-media-versions";
+import { canvasPromptEditorDocument, completePendingCanvasMediaVersion } from "../utils/canvas-media-versions";
 import { serializePromptDocument } from "../utils/canvas-prompt-document";
 import { buildReferenceMentionOptions } from "../utils/canvas-reference-mentions";
 import { syncCanvasVolcengineAssetsFromLibrary } from "../utils/canvas-volcengine-asset-sync";
@@ -216,18 +216,12 @@ export function useCanvasGenerationFlowActions({
                         setNodes((prev) =>
                             prev.map((node) =>
                                 node.id === videoRecord.id
-                                    ? {
+                                    ? completePendingCanvasMediaVersion(node, {
                                           ...node,
                                           width: videoRecord.width,
                                           height: videoRecord.height,
-                                          metadata: {
-                                              ...node.metadata,
-                                              status: NODE_STATUS_SUCCESS,
-                                              errorDetails: undefined,
-                                              content: videoRecord.metadata?.videoUrl,
-                                              mimeType: "video/mp4",
-                                          },
-                                      }
+                                          metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS, errorDetails: undefined, content: videoRecord.metadata?.videoUrl, mimeType: "video/mp4" },
+                                      })
                                     : node.id === nodeId && markSourceStatus
                                       ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS } }
                                       : node,
