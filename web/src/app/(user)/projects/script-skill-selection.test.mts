@@ -23,12 +23,12 @@ function option(overrides: Partial<SkillOption> & { skillVersionId: string }): S
 
 test("exposes every published Skill with the script capability and Artifact contract", () => {
     const valid = option({ skillVersionId: "skill-script-v1" });
-    const projectSkill = option({ skillId: "project-script", skillVersionId: "project-script-v2", ownerType: "project", ownerProjectId: "project-1" });
+    const secondSystemSkill = option({ skillId: "alternate-script", skillVersionId: "alternate-script-v2" });
     const wrongCapability = option({ skillVersionId: "wrong-capability", manifest: { ...valid.manifest, capabilities: ["workflow.stage.art"] } });
     const wrongInput = option({ skillVersionId: "wrong-input", manifest: { ...valid.manifest, inputArtifactTypes: ["production_script"] } });
     const wrongOutput = option({ skillVersionId: "wrong-output", manifest: { ...valid.manifest, outputArtifactTypes: ["content_profile"] } });
 
-    assert.deepEqual(compatibleScriptSkillOptions([valid, projectSkill, wrongCapability, wrongInput, wrongOutput]).map((item) => item.skillVersionId), ["skill-script-v1", "project-script-v2"]);
+    assert.deepEqual(compatibleScriptSkillOptions([valid, secondSystemSkill, wrongCapability, wrongInput, wrongOutput]).map((item) => item.skillVersionId), ["skill-script-v1", "alternate-script-v2"]);
 });
 
 test("uses stored, recommended, then first compatible Skill version", () => {

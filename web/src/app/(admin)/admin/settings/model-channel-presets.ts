@@ -22,7 +22,23 @@ export type ModelChannelPresetDefinition = {
     tag: string;
 };
 
-export const XINGLIAN_MODELS = ["sd2-720p-fast", "sd2-720p", "sd2-720p-sh", "sd2-720p-mini", "sd2-1080p-mini", "sd2-1080p-fast", "sd2-1080p", "sd2-720p-ax-fast", "sd2-720p-ax"] as const;
+export const XINGLIAN_MODELS = [
+    "sd2-720p-ap-fast",
+    "sd2-720p-ap",
+    "sd2-1080p-ap-fast",
+    "sd2-1080p-ap",
+    "sd2-720p-ax-fast",
+    "sd2-720p-ax",
+    "sd2-720p-ds",
+    "sd2-720p-ds-fast",
+    "sd2-720p-ax2",
+    "sd2-720p-ax2-fast",
+    "sd2-720p-ds-v933",
+    "sd2.5-480p-ax2",
+    "sd2.5-720p-ax2",
+    "sd2.5-480p-ax2-20s",
+    "sd2.5-720p-ax2-20s",
+] as const;
 export const VOLCENGINE_ARK_MODELS = {
     seedance20: "doubao-seedance-2-0",
     seedance25: "doubao-seedance-2-5",
@@ -37,7 +53,7 @@ export const GEEKNOW_VIDEO_MODELS = ["grok-imagine-video", "grok-imagine-video-1
 
 export const MODEL_CHANNEL_PRESETS: readonly ModelChannelPresetDefinition[] = [
     { id: "volcengine", name: "火山 Ark", description: "Seedance 企业 API；只需 Key 和 EP。", tag: "视频" },
-    { id: "xinglian", name: "星链云", description: "一次配置 9 个 SD2 视频模型到私有渠道。", tag: "视频" },
+    { id: "xinglian", name: "星链云", description: "一次配置 15 个 SD2 / SD2.5 视频模型到私有渠道。", tag: "视频" },
     { id: "jimeng", name: "即梦 CLI", description: "自动配置六个模型；普通用户需在个人配置完成即梦网页登录。", tag: "本地 CLI" },
     { id: "comfly", name: "Comfly", description: "一次 Key 自动拆分文本、图片和视频渠道。", tag: "整包" },
     { id: "geeknow", name: "GeekNow", description: "一次 Key 配置文本、图片和视频三个私有渠道。", tag: "整包" },
@@ -105,7 +121,7 @@ function applyXinglian(settings: AdminSettings, input: ModelChannelPresetInput, 
             apiKey,
             models: [...XINGLIAN_MODELS],
             capabilities: ["video", "video_query", "preflight"],
-            remark: "厂商预设：星链云 SD2",
+            remark: "厂商预设：星链云 SD2 / SD2.5",
         }),
         summary,
     );

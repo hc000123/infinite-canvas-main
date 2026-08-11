@@ -122,7 +122,7 @@ func seedInvocationSkill(t *testing.T, seed invocationSkillSeed) (model.SkillDef
 		owner = model.SkillOwnerSystem
 	}
 	skill := model.SkillDefinition{ID: seed.ID, Name: seed.ID, OwnerType: owner, Enabled: true, CreatedAt: now(), UpdatedAt: now()}
-	if owner == model.SkillOwnerProject {
+	if owner == model.SkillOwnerType("project") {
 		skill.OwnerUserID, skill.OwnerProjectID = "user-1", "project-1"
 	}
 	skill, version := seedInvocationSkillVersion(t, skill, seed)
@@ -165,8 +165,15 @@ func seedInvocationSkillVersion(t *testing.T, skill model.SkillDefinition, seed 
 	version := skillVersionFromPackage(seed.VersionID, skill.ID, seed.Version, "user-1", now(), normalized)
 	version.Status = model.SkillVersionPublished
 	if _, ok, _ := repository.GetSkillDefinition(skill.ID); ok {
-		if err := repository.CreateSkillVersion(version); err != nil {
-			t.Fatal(err)
+		var createErr error
+		if skill.OwnerType == model.SkillOwnerType("project") {
+			db, _ := repository.DB()
+			createErr = db.Create(&version).Error
+		} else {
+			createErr = repository.CreateSkillVersion(version)
+		}
+		if createErr != nil {
+			t.Fatal(createErr)
 		}
 	}
 	return skill, version

@@ -42,7 +42,7 @@ export function CanvasToolbar({ actions, state }: { actions: CanvasToolbarAction
     });
 
     return (
-        <div className="pointer-events-none absolute bottom-5 z-50 flex justify-center" style={{ left: 300, right: 16 }}>
+        <div className="pointer-events-none absolute inset-x-4 bottom-5 z-50 flex justify-center">
             <div className="thin-scrollbar pointer-events-auto flex h-14 max-w-full items-center gap-1 overflow-x-auto rounded-lg border px-2 shadow-[var(--studio-shadow)] backdrop-blur [&>*]:shrink-0" style={dockStyle}>
                 {tools.map((tool) =>
                     tool.type === "divider" ? <CanvasToolDivider key={tool.id} /> : <CanvasToolButton key={tool.id} label={tool.label} icon={tool.icon} onClick={tool.onClick} active={tool.active} disabled={tool.disabled} danger={tool.danger} />,

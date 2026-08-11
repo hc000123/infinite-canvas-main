@@ -47,7 +47,7 @@ func TestWorkflowExecutionKeepsManualSkillVersionAfterRecommendationChanges(t *t
 func TestWorkflowPreviewUsesTheExactRegistryOptionSnapshot(t *testing.T) {
 	setupInvocationServiceTest(t)
 	skill, version := seedInvocationSkill(t, invocationSkillSeed{
-		ID: "workflow-cross-entry-skill", VersionID: "workflow-cross-entry-skill-v1", Version: "1.0.0", OwnerType: model.SkillOwnerProject, Recommended: true,
+		ID: "workflow-cross-entry-skill", VersionID: "workflow-cross-entry-skill-v1", Version: "1.0.0", Recommended: true,
 		Mutate: func(pkg *SkillPackage) { pkg.Manifest.Capabilities = []string{"workflow.stage.cross_entry"} },
 	})
 	options, err := ListSkillOptions("user-1", "project-1", SkillOptionFilter{Capability: "workflow.stage.cross_entry"})

@@ -46,6 +46,18 @@ export function normalizeWizardModels(values: readonly string[] = []) {
     });
 }
 
+export function wizardInitialStep(editing: boolean) {
+    return editing ? 1 : 0;
+}
+
+export function wizardStepForField(name: readonly (string | number)[] = []) {
+    const field = String(name[0] || "");
+    if (field === "protocol") return 0;
+    if (["models", "capabilities", "endpointMappings"].includes(field)) return 2;
+    if (["publishedModels", "defaultTextModel", "defaultImageModel", "defaultVideoModel", "modelTextEndpoints"].includes(field)) return 3;
+    return 1;
+}
+
 export function dedicatedVideoProtocol(protocol: AdminModelChannel["protocol"]) {
     return protocol === "jimeng-cli" || protocol === "xinglian-cloud";
 }
@@ -193,7 +205,7 @@ export function channelVerificationCopy(channel: AdminModelChannel) {
         ? "企业 Ark / Seedance 只验证 API Key、Base URL 和模型到火山 Endpoint / EP 的映射，不创建视频任务或扣除额度。"
         : channel.protocol === "jimeng-cli"
           ? "即梦 CLI 只检查 CLI 安装、登录态、输出目录和模型版本，不创建视频任务或扣除额度。"
-          : "星链云只查询 API Key 对应账户余额，不创建视频任务或扣除额度。";
+          : "星链云查询 API Key 对应的可用模型和账户余额，不创建视频任务或扣除额度。";
     return {
         tableLabel: "视频预检",
         modalLabel: "视频预检",

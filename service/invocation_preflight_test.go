@@ -119,10 +119,10 @@ func TestPreflightInvocationCanonicalIdempotencyAndRecommendationFreeze(t *testi
 	}
 }
 
-func TestPreflightInvocationDerivesCoordinatesBeforeProjectSkillResolution(t *testing.T) {
+func TestPreflightInvocationDerivesCoordinatesBeforeSkillResolution(t *testing.T) {
 	setupInvocationServiceTest(t)
 	input := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "source_text", `{"text":"test"}`)
-	_, version := seedInvocationSkill(t, invocationSkillSeed{ID: "derived-coordinate", VersionID: "derived-coordinate-v1", Version: "1.0.0", OwnerType: model.SkillOwnerProject})
+	_, version := seedInvocationSkill(t, invocationSkillSeed{ID: "derived-coordinate", VersionID: "derived-coordinate-v1", Version: "1.0.0"})
 
 	result, err := PreflightInvocation("user-1", InvocationRequest{
 		Source: "direct", SkillVersionID: version.ID, ExpectedOutputArtifactType: "production_script",
@@ -132,7 +132,7 @@ func TestPreflightInvocationDerivesCoordinatesBeforeProjectSkillResolution(t *te
 		t.Fatal(err)
 	}
 	if result.Run.ProjectID != "project-1" || result.Run.EpisodeID != "episode-1" || result.RouteTrace.FinalSkillVersionID != version.ID {
-		t.Fatalf("coordinates were not derived before project Skill resolution: %+v", result)
+		t.Fatalf("coordinates were not derived before Skill resolution: %+v", result)
 	}
 }
 
@@ -202,7 +202,7 @@ func TestRepreflightInvocationUsesCoordinatesDerivedByBlockedPreflight(t *testin
 	if err != nil || blocked.Run.Status != model.InvocationStatusBlocked || blocked.Run.ProjectID != "project-1" || blocked.Run.EpisodeID != "episode-1" {
 		t.Fatalf("blocked preflight did not freeze derived coordinates: result=%+v err=%v", blocked, err)
 	}
-	_, version := seedInvocationSkill(t, invocationSkillSeed{ID: "derived-repreflight", VersionID: "derived-repreflight-v1", Version: "1.0.0", OwnerType: model.SkillOwnerProject})
+	_, version := seedInvocationSkill(t, invocationSkillSeed{ID: "derived-repreflight", VersionID: "derived-repreflight-v1", Version: "1.0.0"})
 	recovered, err := RepreflightInvocation("user-1", blocked.Run.ID, InvocationRequest{
 		Source: "direct", SkillVersionID: version.ID, ExpectedOutputArtifactType: "production_script",
 		InputArtifactRefs: []ArtifactRefInput{{BindingName: "source", ArtifactID: input.Artifact.ID, ContentHash: input.Artifact.ContentHash}},
@@ -220,7 +220,7 @@ func TestRepreflightInvocationFreezesFirstArtifactCoordinatesIntoPersistedRun(t 
 	}
 
 	input := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "source_text", `{"text":"test"}`)
-	_, version := seedInvocationSkill(t, invocationSkillSeed{ID: "late-coordinate", VersionID: "late-coordinate-v1", Version: "1.0.0", OwnerType: model.SkillOwnerProject})
+	_, version := seedInvocationSkill(t, invocationSkillSeed{ID: "late-coordinate", VersionID: "late-coordinate-v1", Version: "1.0.0"})
 	recovered, err := RepreflightInvocation("user-1", blocked.Run.ID, InvocationRequest{
 		Source: "direct", SkillVersionID: version.ID, ExpectedOutputArtifactType: "production_script",
 		InputArtifactRefs: []ArtifactRefInput{{BindingName: "source", ArtifactID: input.Artifact.ID, ContentHash: input.Artifact.ContentHash}},
@@ -500,9 +500,7 @@ func TestPreflightInvocationExactInvalidPackageBlocksWithoutAgentRun(t *testing.
 	input := mustCreateInvocationArtifact(t, "user-1", "project-1", "episode-1", "source_text", `{"text":"test"}`)
 	_, version := seedInvocationSkill(t, invocationSkillSeed{ID: "exact-invalid", VersionID: "exact-invalid-v1", Version: "1.0.0"})
 	version.ContentHash = "wrong-content-hash"
-	if err := repository.SaveSkillVersion(version); err != nil {
-		t.Fatal(err)
-	}
+	saveSkillVersionFixture(t, version)
 	result, err := PreflightInvocation("user-1", InvocationRequest{Source: "direct", ProjectID: "project-1", EpisodeID: "episode-1", SkillVersionID: version.ID, ExpectedOutputArtifactType: "production_script", InputArtifactRefs: []ArtifactRefInput{{BindingName: "source", ArtifactID: input.Artifact.ID, ContentHash: input.Artifact.ContentHash}}})
 	if err != nil {
 		t.Fatal(err)

@@ -6,6 +6,7 @@ import (
 
 	"github.com/basketikun/infinite-canvas/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var (
@@ -20,6 +21,9 @@ func CreateWorkflowDefinitionAggregate(definition model.WorkflowDefinition, vers
 		return err
 	}
 	return database.Transaction(func(tx *gorm.DB) error {
+		if err := validateWorkflowDraftSkillReferences(tx, version.PackageJSON); err != nil {
+			return err
+		}
 		if err := tx.Create(&definition).Error; err != nil {
 			return err
 		}
@@ -81,7 +85,12 @@ func CreateWorkflowVersion(version model.WorkflowVersion) error {
 	if err != nil {
 		return err
 	}
-	return database.Create(&version).Error
+	return database.Transaction(func(tx *gorm.DB) error {
+		if err := validateWorkflowDraftSkillReferences(tx, version.PackageJSON); err != nil {
+			return err
+		}
+		return tx.Create(&version).Error
+	})
 }
 
 func SaveWorkflowDraft(version model.WorkflowVersion) error {
@@ -89,16 +98,28 @@ func SaveWorkflowDraft(version model.WorkflowVersion) error {
 	if err != nil {
 		return err
 	}
-	result := database.Model(&model.WorkflowVersion{}).
-		Where("id = ? AND status = ?", strings.TrimSpace(version.ID), model.WorkflowVersionDraft).
-		Updates(map[string]any{"package_json": version.PackageJSON, "content_hash": version.ContentHash, "updated_at": version.UpdatedAt})
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected != 1 {
-		return ErrWorkflowVersionTransitionConflict
-	}
-	return nil
+	return database.Transaction(func(tx *gorm.DB) error {
+		var current model.WorkflowVersion
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&current, "id = ? AND status = ?", strings.TrimSpace(version.ID), model.WorkflowVersionDraft).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrWorkflowVersionTransitionConflict
+			}
+			return err
+		}
+		if err := validateWorkflowDraftSkillReferences(tx, version.PackageJSON); err != nil {
+			return err
+		}
+		result := tx.Model(&model.WorkflowVersion{}).
+			Where("id = ? AND status = ?", current.ID, model.WorkflowVersionDraft).
+			Updates(map[string]any{"package_json": version.PackageJSON, "content_hash": version.ContentHash, "updated_at": version.UpdatedAt})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrWorkflowVersionTransitionConflict
+		}
+		return nil
+	})
 }
 
 func PublishWorkflowVersion(version model.WorkflowVersion) error {
@@ -106,19 +127,31 @@ func PublishWorkflowVersion(version model.WorkflowVersion) error {
 	if err != nil {
 		return err
 	}
-	result := database.Model(&model.WorkflowVersion{}).
-		Where("id = ? AND status = ?", strings.TrimSpace(version.ID), model.WorkflowVersionDraft).
-		Updates(map[string]any{
-			"package_json": version.PackageJSON, "content_hash": version.ContentHash,
-			"status": model.WorkflowVersionPublished, "published_at": version.PublishedAt, "updated_at": version.UpdatedAt,
-		})
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected != 1 {
-		return ErrWorkflowVersionTransitionConflict
-	}
-	return nil
+	return database.Transaction(func(tx *gorm.DB) error {
+		var current model.WorkflowVersion
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&current, "id = ? AND status = ?", strings.TrimSpace(version.ID), model.WorkflowVersionDraft).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrWorkflowVersionTransitionConflict
+			}
+			return err
+		}
+		if err := validateWorkflowSkillReferences(tx, version.PackageJSON); err != nil {
+			return err
+		}
+		result := tx.Model(&model.WorkflowVersion{}).
+			Where("id = ? AND status = ?", current.ID, model.WorkflowVersionDraft).
+			Updates(map[string]any{
+				"package_json": version.PackageJSON, "content_hash": version.ContentHash,
+				"status": model.WorkflowVersionPublished, "published_at": version.PublishedAt, "updated_at": version.UpdatedAt,
+			})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrWorkflowVersionTransitionConflict
+		}
+		return nil
+	})
 }
 
 func SetRecommendedWorkflowVersion(workflowID, versionID, updatedAt string) error {

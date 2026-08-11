@@ -5,11 +5,14 @@ import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction 
 import type { Asset } from "@/stores/use-asset-store";
 import { defaultConfig, type AiConfig } from "@/stores/use-config-store";
 
-import { buildNodeGenerationContext, hydrateNodeGenerationContext } from "../components/canvas-node-generation";
+import { buildNodeGenerationContext, buildNodeGenerationInputs, hydrateNodeGenerationContext } from "../components/canvas-node-generation";
 import type { CanvasNodeGenerationMode } from "../components/canvas-node-prompt-panel";
 import { buildGenerationConfig } from "../utils/canvas-generation-config";
 import { resolveCanvasEffectivePrompt } from "../utils/canvas-generation-inputs";
 import { directVideoReferenceInputs } from "../utils/canvas-generation-metadata";
+import { canvasPromptEditorDocument } from "../utils/canvas-media-versions";
+import { serializePromptDocument } from "../utils/canvas-prompt-document";
+import { buildReferenceMentionOptions } from "../utils/canvas-reference-mentions";
 import { syncCanvasVolcengineAssetsFromLibrary } from "../utils/canvas-volcengine-asset-sync";
 import { reviewVideoPromptBeforeGeneration, shouldRunVideoPromptReview, type PromptReviewResult } from "../utils/canvas-prompt-review";
 import { buildVideoGenerationPlan, shouldCreateVideoVariant } from "../utils/canvas-video-generation-plan";
@@ -105,7 +108,9 @@ export function useCanvasGenerationFlowActions({
             }
 
             setRunningNodeId(nodeId);
-            const nodePrompt = String(prompt || sourceNode?.metadata?.prompt || sourceNode?.metadata?.finalPrompt || "").trim();
+            const promptDocument = sourceNode ? canvasPromptEditorDocument(sourceNode) : undefined;
+            const submittedPrompt = mode === "video" && promptDocument ? serializePromptDocument(promptDocument, buildReferenceMentionOptions(buildNodeGenerationInputs(nodeId, generationNodes, connectionsRef.current))) : prompt;
+            const nodePrompt = String(submittedPrompt || sourceNode?.metadata?.prompt || sourceNode?.metadata?.finalPrompt || "").trim();
             const sourceTextContent = sourceNode?.type === CanvasNodeType.Text ? sourceNode.metadata?.content?.trim() || "" : "";
             const editingTextNode = mode === "text" && Boolean(sourceTextContent);
             const generationContext = await hydrateNodeGenerationContext(

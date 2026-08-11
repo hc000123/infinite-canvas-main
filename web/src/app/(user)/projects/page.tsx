@@ -184,13 +184,10 @@ export default function ProjectsPage() {
                             ))}
                         </div>
                     ) : (
-                        <section className="studio-panel mt-4 flex min-h-[420px] flex-col items-center justify-center text-center">
+                        <section className="studio-panel mt-4 flex min-h-[320px] flex-col items-center justify-center px-6 text-center">
                             <Folder className="size-11 text-[var(--studio-text-muted)]" />
                             <h2 className="mt-4 text-xl font-medium text-[var(--studio-text-primary)]">没有匹配的项目</h2>
-                            <p className="mt-3 text-sm text-[var(--studio-text-secondary)]">可以清空搜索条件，或新建一个项目开始制作。</p>
-                            <Button className={`mt-6 ${createProjectButtonClass}`} icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)}>
-                                新建项目
-                            </Button>
+                            <p className="mt-3 text-sm text-[var(--studio-text-secondary)]">可以清空搜索条件，或使用右上角“新建项目”开始制作。</p>
                         </section>
                     )}
                 </div>

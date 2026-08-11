@@ -42,6 +42,83 @@ func TestEvaluateSkillRequiresExplicitAPICostConfirmation(t *testing.T) {
 	}
 }
 
+func TestEvaluateSkillRejectsBlankPrimaryVersionWithoutWrites(t *testing.T) {
+	setupInvocationServiceTest(t)
+	db, err := repository.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, versionID := range []string{"", "  "} {
+		var beforeEvaluations, beforeAudits int64
+		if err := db.Model(&model.SkillEvaluation{}).Count(&beforeEvaluations).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Model(&model.SkillAuditLog{}).Count(&beforeAudits).Error; err != nil {
+			t.Fatal(err)
+		}
+		if _, err := EvaluateSkill("admin-1", versionID, SkillEvaluationInput{}); err == nil || !strings.Contains(err.Error(), "Skill 版本不存在") {
+			t.Fatalf("versionID=%q err=%v", versionID, err)
+		}
+		var afterEvaluations, afterAudits int64
+		_ = db.Model(&model.SkillEvaluation{}).Count(&afterEvaluations).Error
+		_ = db.Model(&model.SkillAuditLog{}).Count(&afterAudits).Error
+		if afterEvaluations != beforeEvaluations || afterAudits != beforeAudits {
+			t.Fatalf("versionID=%q evaluations=%d/%d audits=%d/%d", versionID, beforeEvaluations, afterEvaluations, beforeAudits, afterAudits)
+		}
+	}
+}
+
+func TestEvaluateSkillRejectsUnavailableBaselineBeforeExecutorCall(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		prepare func(*testing.T, model.SkillVersion) string
+	}{
+		{name: "missing", prepare: func(*testing.T, model.SkillVersion) string { return "missing-baseline-version" }},
+		{name: "legacy project", prepare: func(t *testing.T, candidate model.SkillVersion) string {
+			skill := model.SkillDefinition{ID: "project-baseline-skill", Name: "Project", OwnerType: model.SkillOwnerProject, Enabled: true}
+			version := candidate
+			version.ID, version.SkillID, version.Version = "project-baseline-version", skill.ID, "1.0.0-project"
+			if err := repository.CreateSkillAggregate(skill, version); err != nil {
+				t.Fatal(err)
+			}
+			return version.ID
+		}},
+		{name: "archived", prepare: func(t *testing.T, candidate model.SkillVersion) string {
+			skill := model.SkillDefinition{ID: "archived-baseline-skill", Name: "Archived", OwnerType: model.SkillOwnerSystem, Enabled: true}
+			version := candidate
+			version.ID, version.SkillID, version.Version, version.Status = "archived-baseline-version", skill.ID, "1.0.0-archived", model.SkillVersionArchived
+			if err := repository.CreateSkillAggregate(skill, version); err != nil {
+				t.Fatal(err)
+			}
+			return version.ID
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			setupVideoWorkflowTest(t)
+			detail := ensureVideoWorkflowTestRun(t)
+			candidate := createSkillTestDraft(t, "workflow.stage.art", "1.4.0")
+			baselineVersionID := test.prepare(t, candidate)
+			calls := 0
+			restore := useSkillEvaluationExecutor(t, fakeSkillExecutor{output: `{}`, calls: &calls})
+			defer restore()
+			database, _ := repository.DB()
+			var beforeEvaluations, beforeAudits int64
+			_ = database.Model(&model.SkillEvaluation{}).Count(&beforeEvaluations).Error
+			_ = database.Model(&model.SkillAuditLog{}).Count(&beforeAudits).Error
+			_, err := EvaluateSkill("admin-1", candidate.ID, SkillEvaluationInput{WorkflowRunID: detail.Run.ID, BaselineVersionID: baselineVersionID, ConfirmAPICost: true})
+			if err == nil || calls != 0 {
+				t.Fatalf("err=%v calls=%d", err, calls)
+			}
+			var afterEvaluations, afterAudits int64
+			_ = database.Model(&model.SkillEvaluation{}).Count(&afterEvaluations).Error
+			_ = database.Model(&model.SkillAuditLog{}).Count(&afterAudits).Error
+			if afterEvaluations != beforeEvaluations || afterAudits != beforeAudits {
+				t.Fatalf("evaluations=%d/%d audits=%d/%d", beforeEvaluations, afterEvaluations, beforeAudits, afterAudits)
+			}
+		})
+	}
+}
+
 func TestDeterministicSkillEvaluationRoundTripsStoredDiff(t *testing.T) {
 	setupVideoWorkflowTest(t)
 	detail := ensureVideoWorkflowTestRun(t)
@@ -56,19 +133,28 @@ func TestDeterministicSkillEvaluationRoundTripsStoredDiff(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stored, err := GetSkillEvaluationResult(result.Evaluation.ID)
+	stored, err := GetManagedSkillEvaluationResult("admin-1", result.Evaluation.ID, true)
 	if err != nil || stored.Diff["sameInput"] != true {
 		t.Fatalf("stored=%+v err=%v", stored, err)
 	}
+	if _, err := GetManagedSkillEvaluationResult("user-1", result.Evaluation.ID, false); err == nil {
+		t.Fatal("non-admin read a managed Skill evaluation")
+	}
 }
 
-type fakeSkillExecutor struct{ output string }
+type fakeSkillExecutor struct {
+	output string
+	calls  *int
+}
 
 func (fakeSkillExecutor) Kind() string                         { return AgentRunExecutorAPI }
 func (fakeSkillExecutor) Available(context.Context) error      { return nil }
 func (fakeSkillExecutor) ReserveCredits(*model.AgentRun) error { return nil }
 func (fakeSkillExecutor) RefundCredits(*model.AgentRun) error  { return nil }
 func (fake fakeSkillExecutor) Call(context.Context, model.AgentRun) agentRunCallResult {
+	if fake.calls != nil {
+		*fake.calls = *fake.calls + 1
+	}
 	return agentRunCallResult{rawOutput: fake.output, structuredJSON: fake.output}
 }
 

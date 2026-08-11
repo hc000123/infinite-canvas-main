@@ -1,72 +1,33 @@
 package service
 
 import (
-	"encoding/json"
+	"errors"
 	"strings"
 
 	"github.com/basketikun/infinite-canvas/model"
 	"github.com/basketikun/infinite-canvas/repository"
 )
 
-func ListVisibleSkillItems(userID, projectID string) ([]SkillAdminItem, error) {
-	skills, err := repository.ListVisibleSkillDefinitions(userID, projectID)
-	if err != nil {
-		return nil, err
-	}
-	return listSkillAdminItems(skills, false)
-}
-
-func ListManagedSkillItems(userID, projectID string, isAdmin bool) ([]SkillAdminItem, error) {
+func GetManagedSkillVersionPackage(userID, versionID string, isAdmin bool) (model.SkillVersion, SkillPackage, error) {
 	if !isAdmin {
-		return ListVisibleSkillItems(userID, projectID)
+		return model.SkillVersion{}, SkillPackage{}, safeMessageError{message: "Skill 版本不存在或无权操作"}
 	}
-	skills, err := repository.ListSkillDefinitions()
-	if err != nil {
-		return nil, err
-	}
-	projectID = strings.TrimSpace(projectID)
-	visible := make([]model.SkillDefinition, 0, len(skills))
-	for _, skill := range skills {
-		if skill.OwnerType == model.SkillOwnerSystem || (skill.OwnerType == model.SkillOwnerProject && skill.OwnerProjectID == projectID) {
-			visible = append(visible, skill)
-		}
-	}
-	return listSkillAdminItems(visible, true)
-}
-
-func GetVisibleSkillVersionPackage(userID, versionID string) (model.SkillVersion, SkillPackage, error) {
 	skill, version, ok, err := repository.GetSkillWithVersion(strings.TrimSpace(versionID))
-	if err != nil || !ok || !skillVisibleTo(skill, userID, skill.OwnerProjectID) {
-		return version, SkillPackage{}, safeMessageError{message: "Skill 版本不存在"}
+	if err != nil {
+		return version, SkillPackage{}, err
+	}
+	if !ok || skill.OwnerType != model.SkillOwnerSystem {
+		return version, SkillPackage{}, safeMessageError{message: "Skill 版本不存在或无权操作"}
 	}
 	packageValue, err := DecodeSkillPackage(version)
 	return version, packageValue, err
 }
 
-func GetManagedSkillVersionPackage(userID, versionID string, isAdmin bool) (model.SkillVersion, SkillPackage, error) {
+func CreateManagedSystemSkill(userID string, isAdmin bool, name, summary string, draft SkillDraftInput) (ResolvedSkill, error) {
 	if !isAdmin {
-		return GetVisibleSkillVersionPackage(userID, versionID)
+		return ResolvedSkill{}, safeMessageError{message: "只有管理员可以创建 Skill"}
 	}
-	return GetSkillVersionPackage(versionID)
-}
-
-func CreateOwnedProjectSkill(userID, projectID, name, summary string, draft SkillDraftInput) (ResolvedSkill, error) {
-	result, err := CreateProjectSkill(userID, projectID, name, summary, draft)
-	if err != nil {
-		return result, err
-	}
-	audit := skillAudit(userID, "create_project_skill", result.Skill, result.Version.ID, now())
-	if err := repository.CreateSkillAuditLog(audit); err != nil {
-		return ResolvedSkill{}, err
-	}
-	return result, nil
-}
-
-func CreateManagedSkill(userID string, isAdmin bool, ownerType model.SkillOwnerType, projectID, name, summary string, draft SkillDraftInput) (ResolvedSkill, error) {
-	if !isAdmin {
-		return ResolvedSkill{}, safeMessageError{message: "只有管理员可以创建 System Skill"}
-	}
-	result, err := CreateSkill(userID, ownerType, projectID, name, summary, draft)
+	result, err := CreateSystemSkill(userID, name, summary, draft)
 	if err != nil {
 		return result, err
 	}
@@ -167,34 +128,6 @@ func RecommendOwnedSkillVersion(userID string, isAdmin bool, skillID, versionID 
 	return RecommendPublishedSkillVersion(userID, skillID, versionID)
 }
 
-func CopySystemSkillToProject(userID string, isAdmin bool, systemSkillID, projectID, name, version string) (ResolvedSkill, error) {
-	source, ok, err := repository.GetSkillDefinition(strings.TrimSpace(systemSkillID))
-	if err != nil || !ok || source.OwnerType != model.SkillOwnerSystem || source.RecommendedVersionID == "" {
-		return ResolvedSkill{}, safeMessageError{message: "System Skill 没有可复制的推荐版本"}
-	}
-	if strings.TrimSpace(userID) == "" && !isAdmin {
-		return ResolvedSkill{}, safeMessageError{message: "未登录或权限不足"}
-	}
-	resolved, err := resolvePublishedSkillVersion(source, source.RecommendedVersionID)
-	if err != nil {
-		return ResolvedSkill{}, err
-	}
-	if strings.TrimSpace(name) == "" {
-		name = source.Name + "（项目版）"
-	}
-	result, err := CreateProjectSkill(userID, projectID, name, source.Summary, SkillDraftInput{Version: version, Package: resolved.Package})
-	if err != nil {
-		return result, err
-	}
-	detail, _ := json.Marshal(map[string]string{"sourceSkillId": source.ID, "sourceSkillVersionId": resolved.Version.ID})
-	audit := skillAudit(userID, "copy_from_system", result.Skill, result.Version.ID, now())
-	audit.DetailJSON = string(detail)
-	if err := repository.CreateSkillAuditLog(audit); err != nil {
-		return ResolvedSkill{}, err
-	}
-	return result, nil
-}
-
 func ArchiveOwnedSkillVersion(userID string, isAdmin bool, versionID string) (model.SkillVersion, error) {
 	skill, version, err := editableSkillVersion(userID, isAdmin, versionID)
 	if err != nil {
@@ -203,7 +136,7 @@ func ArchiveOwnedSkillVersion(userID string, isAdmin bool, versionID string) (mo
 	stamp := now()
 	audit := skillAudit(userID, "archive_version", skill, version.ID, stamp)
 	if err := repository.ArchiveSkillVersionWithAudit(version.ID, skill.ID, stamp, audit); err != nil {
-		return version, err
+		return version, safeSkillLifecycleError(err)
 	}
 	version.Status, version.UpdatedAt = model.SkillVersionArchived, stamp
 	return version, nil
@@ -214,7 +147,7 @@ func DeleteOwnedSkillVersion(userID string, isAdmin bool, versionID string) erro
 	if err != nil {
 		return err
 	}
-	return repository.DeleteUnreferencedSkillDraftWithAudit(version.ID, skillAudit(userID, "delete_draft", skill, version.ID, now()))
+	return safeSkillLifecycleError(repository.DeleteUnreferencedSkillDraftWithAudit(version.ID, skillAudit(userID, "delete_draft", skill, version.ID, now())))
 }
 
 func DeleteOwnedSkillDefinition(userID string, isAdmin bool, skillID string) error {
@@ -222,7 +155,30 @@ func DeleteOwnedSkillDefinition(userID string, isAdmin bool, skillID string) err
 	if err != nil {
 		return err
 	}
-	return repository.DeleteUnpublishedSkillDefinitionWithAudit(skill.ID, skillAudit(userID, "delete_definition", skill, "", now()))
+	return safeSkillLifecycleError(repository.DeleteUnpublishedSkillDefinitionWithAudit(skill.ID, skillAudit(userID, "delete_definition", skill, "", now())))
+}
+
+func safeSkillLifecycleError(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, repository.ErrSkillVersionMustBePublished):
+		return safeMessageError{message: "只能归档已发布 Skill 版本"}
+	case errors.Is(err, repository.ErrSkillVersionActiveReference):
+		return safeMessageError{message: "Skill 版本仍被已发布 Workflow、Agent 或工作流阶段绑定引用，不能归档"}
+	case errors.Is(err, repository.ErrSkillVersionMustBeDraft):
+		return safeMessageError{message: "只能删除未发布草稿版本"}
+	case errors.Is(err, repository.ErrSkillVersionReferenced):
+		return safeMessageError{message: "Skill 已有评测、绑定或引用，不能删除"}
+	case errors.Is(err, repository.ErrSkillDefinitionSeedProtected):
+		return safeMessageError{message: "系统种子 Skill 不能删除"}
+	case errors.Is(err, repository.ErrSkillDefinitionHasHistory):
+		return safeMessageError{message: "已发布或已归档 Skill 不能删除"}
+	case errors.Is(err, repository.ErrSkillDefinitionReferenced):
+		return safeMessageError{message: "Skill Definition 已被 Workflow 或 Agent 引用，不能删除"}
+	default:
+		return err
+	}
 }
 
 func editableSkill(userID string, isAdmin bool, skillID string) (model.SkillDefinition, error) {
@@ -230,7 +186,7 @@ func editableSkill(userID string, isAdmin bool, skillID string) (model.SkillDefi
 	if err != nil {
 		return skill, err
 	}
-	if !ok || (!isAdmin && (skill.OwnerType != model.SkillOwnerProject || skill.OwnerUserID != strings.TrimSpace(userID))) {
+	if !ok || !isAdmin || skill.OwnerType != model.SkillOwnerSystem {
 		return skill, safeMessageError{message: "Skill 不存在或无权操作"}
 	}
 	return skill, nil

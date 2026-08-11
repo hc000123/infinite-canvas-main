@@ -141,7 +141,7 @@
 后台“模型渠道”提供“一键配置厂商”，用于一次写入标准协议、地址、模型、能力和正式环境：
 
 - 火山 Ark：填写 API Key 和 Endpoint / EP，自动建立 `doubao-seedance-2-0` 到 EP 的映射。
-- 星链云：填写一次 API Key，自动开放全部九个 SD2 模型。
+- 星链云：填写一次 API Key，自动配置当前 15 个 SD2 / SD2.5 模型；预检会读取当前密钥实际可用模型与余额。
 - 即梦 CLI：无需 Base URL 或 API Key，自动配置六个模型（含 `seedance2.5`）；普通用户随后在个人配置中完成网页授权。
 - Comfly：填写一次 API Key，自动拆分为文本、图片和视频三个渠道，避免模型能力混用。
 - GeekNow：填写一次 API Key，使用已验证网关 `https://geeknow.ai/v1` 创建 `geeknow-text`、`geeknow-image`、`geeknow-video` 三个稳定私有渠道。文本覆盖 GPT、Claude、Gemini、DeepSeek、Qwen 核心族，图片覆盖 GPT Image、Seedream、Grok，视频覆盖 Grok、Sora、Veo、Seedance、MiniMax、manxue、Omni。
@@ -153,9 +153,11 @@ GeekNow 预设默认只写入三个私有渠道，不自动公开任何新模型
 
 ### 星链云 SD2 视频渠道
 
-新增 `xinglian-cloud` 渠道后，填写星链云 API 地址（如 `https://www.vjimeng.vip/v1`）、API Key 和 SD2 模型名。后端会把项目内的统一视频接口转换为 `/v1/video/submit/generate` 和 `/v1/video/fetch/{task_id}`，不会向浏览器暴露 API Key；预检只查询 `/api/user/balance`，不会创建视频任务或扣费。
+新增 `xinglian-cloud` 渠道后，填写星链云 API 地址（如 `https://www.vjimeng.vip/v1`）、API Key 和 SD2 模型名。后端会把项目内的统一视频接口转换为 `/v1/video/submit/generate` 和 `/v1/video/fetch/{task_id}`，不会向浏览器暴露 API Key；预检查询 `/v1/models` 与 `/api/user/balance`，验证当前 Key 的模型权限和余额，但不会创建视频任务或扣费。
 
-已支持 `sd2-720p-fast`、`sd2-720p`、`sd2-720p-sh`、`sd2-720p-mini`、`sd2-1080p-mini`、`sd2-1080p-fast`、`sd2-1080p`、`sd2-720p-ax-fast` 与 `sd2-720p-ax`。图、音频、视频参考素材必须是可访问的 HTTPS URL；浏览器本地素材的星链云 OSS 上传仍需先由用户上传后再作为引用使用。
+当前预设包含 `sd2-720p-ap-fast`、`sd2-720p-ap`、`sd2-1080p-ap-fast`、`sd2-1080p-ap`、`sd2-720p-ax-fast`、`sd2-720p-ax`、`sd2-720p-ds`、`sd2-720p-ds-fast`、`sd2-720p-ax2`、`sd2-720p-ax2-fast`、`sd2-720p-ds-v933`、`sd2.5-480p-ax2`、`sd2.5-720p-ax2`、`sd2.5-480p-ax2-20s` 与 `sd2.5-720p-ax2-20s`。实际可用范围仍以当前 API Key 调用 `/v1/models` 的结果为准。
+
+SD2.5 AX2 支持 4–30 秒；带 `-20s` 后缀的模型固定为 20 秒；DS 系列只允许 10 秒或 15 秒。分辨率由模型名决定。图、音频、视频参考素材必须是可访问的 HTTPS URL；星链云 OSS 上传使用独立的 `https://oss.vjimeng.vip` 直传服务，不与视频 Base URL 混用，当前仍需先上传后再把 URL 作为引用提交。
 
 ### 即梦 CLI 视频渠道
 

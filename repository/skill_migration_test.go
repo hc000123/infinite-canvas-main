@@ -89,7 +89,7 @@ func TestSkillOwnerIndexMigratesLegacyUniqueIndexToNonUniqueLookupIndex(t *testi
 	}
 	for _, userID := range []string{"user-1", "user-2"} {
 		if err := CreateSkillDefinition(model.SkillDefinition{
-			ID: "skill-" + userID, Name: "同名技能", OwnerType: model.SkillOwnerProject,
+			ID: "skill-" + userID, Name: "同名技能", OwnerType: model.SkillOwnerType("project"),
 			OwnerUserID: userID, OwnerProjectID: "project-1", Enabled: true,
 		}); err != nil {
 			t.Fatalf("user=%s err=%v", userID, err)
@@ -97,7 +97,7 @@ func TestSkillOwnerIndexMigratesLegacyUniqueIndexToNonUniqueLookupIndex(t *testi
 	}
 	for _, id := range []string{"skill-same-owner-1", "skill-same-owner-2"} {
 		if err := CreateSkillDefinition(model.SkillDefinition{
-			ID: id, Name: "同名技能", OwnerType: model.SkillOwnerProject,
+			ID: id, Name: "同名技能", OwnerType: model.SkillOwnerType("project"),
 			OwnerUserID: "user-1", OwnerProjectID: "project-1", Enabled: true,
 		}); err != nil {
 			t.Fatalf("same owner definition %s err=%v", id, err)

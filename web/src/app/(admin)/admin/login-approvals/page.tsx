@@ -1,7 +1,7 @@
 "use client";
 
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
-import { Button, Card, Flex, Select, Space, Tag, Typography } from "antd";
+import { Button, Card, Empty, Flex, Select, Space, Tag, Typography } from "antd";
 import dayjs from "dayjs";
 
 import type { AdminLoginApproval } from "@/services/api/admin";
@@ -78,6 +78,7 @@ export default function LoginApprovalsPage() {
                         />,
                     ]}
                     pagination={false}
+                    locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前没有需要处理的登录申请" className="py-5" /> }}
                 />
             </Card>
         </main>

@@ -111,7 +111,7 @@ func TestAgentPlanPreflightRechecksSkillAccessPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := database.Model(&model.SkillDefinition{}).Where("id = ?", "plan-profile").Updates(map[string]any{
-		"owner_type": model.SkillOwnerProject, "owner_user_id": "user-2", "owner_project_id": "project-2",
+		"owner_type": model.SkillOwnerType("project"), "owner_user_id": "user-2", "owner_project_id": "project-2",
 	}).Error; err != nil {
 		t.Fatal(err)
 	}

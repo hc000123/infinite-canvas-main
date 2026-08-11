@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
-import type { SkillAdminItem, SkillOwnerType } from "@/services/api/admin-skills.ts";
+import type { SkillAdminItem } from "@/services/api/admin-skills.ts";
 import { groupSkillItemsByStage, resolveOpenSkillStageKeys } from "../../../../components/skills/skill-stage-groups.ts";
 import { canPublishSkill, filterSkillItems, nextDraftVersion, nextPatchVersion, skillLifecycleLabel } from "./skill-view.ts";
 
-function skillItem(id: string, ownerType: SkillOwnerType, capabilities: string[], inputArtifactTypes: string[], outputArtifactTypes: string[], projectTags: string[], stageKey = ""): SkillAdminItem {
+function skillItem(id: string, capabilities: string[], inputArtifactTypes: string[], outputArtifactTypes: string[], projectTags: string[], stageKey = ""): SkillAdminItem {
     return {
-        skill: { id, name: id, summary: id, ownerType, ownerUserId: "", ownerProjectId: ownerType === "project" ? "p1" : "", stageKey, enabled: true, recommendedVersionId: `${id}-v1`, createdAt: "", updatedAt: "" },
+        skill: { id, name: id, summary: id, ownerType: "system", ownerUserId: "", ownerProjectId: "", stageKey, enabled: true, recommendedVersionId: `${id}-v1`, createdAt: "", updatedAt: "" },
         versions: [],
         bindings: [],
         evaluations: [],
@@ -24,16 +24,16 @@ function skillItem(id: string, ownerType: SkillOwnerType, capabilities: string[]
     };
 }
 
-test("filters skills by capability, artifact type, tag, and owner", () => {
+test("filters skills by capability, artifact type, and tag", () => {
     const items = [
-        skillItem("system-storyboard", "system", ["workflow.stage.storyboard"], ["production_script"], ["storyboard_package"], ["vertical"]),
-        skillItem("project-image", "project", ["asset.character.rendition"], ["asset_record"], ["asset_brief"], ["short_drama"]),
+        skillItem("storyboard", ["workflow.stage.storyboard"], ["production_script"], ["storyboard_package"], ["vertical"]),
+        skillItem("image", ["asset.character.rendition"], ["asset_record"], ["asset_brief"], ["short_drama"]),
     ];
     assert.deepEqual(
-        filterSkillItems(items, { search: "", capability: "asset.character.rendition", inputArtifactType: "asset_record", outputArtifactType: "asset_brief", projectTag: "short_drama", ownerType: "project" }).map(
+        filterSkillItems(items, { search: "", capability: "asset.character.rendition", inputArtifactType: "asset_record", outputArtifactType: "asset_brief", projectTag: "short_drama" }).map(
             (item) => item.skill.id,
         ),
-        ["project-image"],
+        ["image"],
     );
 });
 
@@ -59,11 +59,14 @@ test("folder-first lifecycle uses production language", () => {
     assert.equal(skillLifecycleLabel({ status: "archived" } as never, false, false), "已停用");
 });
 
-test("skill center is generic and exposes manifest filters", () => {
+test("skill center keeps automatically detected technical filters collapsed by default", () => {
     const page = fs.readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
-    for (const text of ["Skill 中心", "Capability", "输入 Artifact", "输出 Artifact", "所有者", "项目标签"]) {
+    for (const text of ["Skill 中心", "高级筛选", "能力类型", "输入类型", "输出类型", "适用标签", "已由系统从 Skill 清单自动识别", "全部 Skill 由管理员统一维护，发布后供所有账号和项目使用。"]) {
         assert.ok(page.includes(text), `missing ${text}`);
     }
+    assert.match(page, /const \[advancedFiltersOpen, setAdvancedFiltersOpen\] = useState\(false\)/);
+    assert.match(page, /advancedFiltersOpen \? <div/);
+    assert.equal(page.includes("所有者"), false);
     assert.equal(page.includes("workflowSkillStageNumbers"), false);
     assert.equal(page.includes('disabled={!detailQuery.data}'), false);
     for (const text of ["导入外部 Skill", "导入新版本", "独立试运行", "设为可用", "技术详情与底层契约"]) assert.ok(page.includes(text), `missing Skill action ${text}`);
@@ -75,6 +78,13 @@ test("new version import compares against the selected version", () => {
     assert.match(page, /previousVersionId=\{folderImportMode === "version" \? activeVersionId : undefined\}/);
 });
 
+test("admin Skill deletion uses the protected lifecycle endpoint and confirmation", () => {
+    const page = fs.readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
+    for (const text of ["deleteAdminSkill,", "deleteAdminSkill(token, activeItem!.skill.id)", "confirmSkillDelete", "删除 Skill", "仅有空草稿时会一并删除", "deleteSkillMutation.mutateAsync()"]) {
+        assert.ok(page.includes(text), `missing Skill deletion wiring ${text}`);
+    }
+});
+
 test("folder-imported admin versions keep technical contracts read-only", () => {
     const page = fs.readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
     assert.match(page, /const importedFolderVersion = activeVersion\?\.sourceKind === "folder_import";/);
@@ -84,14 +94,14 @@ test("folder-imported admin versions keep technical contracts read-only", () => 
 
 test("groups skills by explicit stage before manifest fallback", () => {
     const groups = groupSkillItemsByStage([
-        skillItem("explicit-rendition", "system", ["workflow.stage.script"], [], ["production_script"], [], "asset-rendition-scene"),
-        skillItem("content", "system", ["content.classify"], ["production_script"], ["content_profile"], []),
-        skillItem("extract", "project", ["workflow.stage.art"], ["production_script"], ["asset_catalog"], []),
-        skillItem("brief", "system", ["asset.scene.brief"], ["asset_catalog"], ["asset_brief"], []),
-        skillItem("storyboard", "project", ["storyboard.vertical.short"], [], ["storyboard_package"], []),
-        skillItem("video", "system", [], [], ["video_prompt_package"], []),
-        skillItem("delivery", "system", [], [], ["delivery_report"], []),
-        skillItem("unknown", "project", ["custom.general"], [], ["custom_result"], []),
+        skillItem("explicit-rendition", ["workflow.stage.script"], [], ["production_script"], [], "asset-rendition-scene"),
+        skillItem("content", ["content.classify"], ["production_script"], ["content_profile"], []),
+        skillItem("extract", ["workflow.stage.art"], ["production_script"], ["asset_catalog"], []),
+        skillItem("brief", ["asset.scene.brief"], ["asset_catalog"], ["asset_brief"], []),
+        skillItem("storyboard", ["storyboard.vertical.short"], [], ["storyboard_package"], []),
+        skillItem("video", [], [], ["video_prompt_package"], []),
+        skillItem("delivery", [], [], ["delivery_report"], []),
+        skillItem("unknown", ["custom.general"], [], ["custom_result"], []),
     ]);
 
     assert.deepEqual(groups.map((group) => [group.key, group.items.map((item) => item.skill.id)]), [
@@ -106,16 +116,16 @@ test("groups skills by explicit stage before manifest fallback", () => {
     ]);
 });
 
-test("stage groups expose visible owner counts and default open keys", () => {
+test("stage groups expose visible totals and default open keys", () => {
     const groups = groupSkillItemsByStage([
-        skillItem("system-script", "system", ["workflow.stage.script"], [], ["production_script"], []),
-        skillItem("project-script", "project", ["content.classify"], [], ["content_profile"], []),
-        skillItem("scene-image", "system", ["asset.rendition.generate"], [], ["asset_rendition"], []),
+        skillItem("primary-script", ["workflow.stage.script"], [], ["production_script"], []),
+        skillItem("content-script", ["content.classify"], [], ["content_profile"], []),
+        skillItem("scene-image", ["asset.rendition.generate"], [], ["asset_rendition"], []),
     ]);
 
-    assert.deepEqual(groups.map(({ key, totalCount, systemCount, projectCount }) => ({ key, totalCount, systemCount, projectCount })), [
-        { key: "script", totalCount: 2, systemCount: 1, projectCount: 1 },
-        { key: "asset-rendition", totalCount: 1, systemCount: 1, projectCount: 0 },
+    assert.deepEqual(groups.map(({ key, totalCount }) => ({ key, totalCount })), [
+        { key: "script", totalCount: 2 },
+        { key: "asset-rendition", totalCount: 1 },
     ]);
     assert.deepEqual(resolveOpenSkillStageKeys(groups, "scene-image", false), ["asset-rendition"]);
     assert.deepEqual(resolveOpenSkillStageKeys(groups, "", false), ["script"]);
@@ -124,9 +134,11 @@ test("stage groups expose visible owner counts and default open keys", () => {
 
 test("admin registry renders production-stage collapse groups", () => {
     const page = fs.readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
-    for (const text of ["groupSkillItemsByStage", "resolveOpenSkillStageKeys", "openStageKeys", "group.systemCount", "group.projectCount", "group.items.map"]) {
+    for (const text of ["groupSkillItemsByStage", "resolveOpenSkillStageKeys", "openStageKeys", "group.totalCount", "group.items.map"]) {
         assert.ok(page.includes(text), `missing stage group wiring ${text}`);
     }
+    assert.equal(page.includes("group.systemCount"), false);
+    assert.equal(page.includes("group.projectCount"), false);
     assert.equal(page.includes("visibleItems.map((item) => <SkillCard"), false);
 });
 

@@ -276,7 +276,7 @@ func createImageCapabilityFixtureSkill(t *testing.T) service.ResolvedSkill {
 		},
 		QualityGateProfile: []string{"schema", "asset"},
 	}
-	created, err := service.CreateSkill("fixture-admin", model.SkillOwnerSystem, "", "图片资产提示词", "固定剧本 HTTP E2E", service.SkillDraftInput{Version: "1.0.0", Package: packageValue})
+	created, err := service.CreateSystemSkill("fixture-admin", "图片资产提示词", "固定剧本 HTTP E2E", service.SkillDraftInput{Version: "1.0.0", Package: packageValue})
 	if err != nil {
 		t.Fatal(err)
 	}

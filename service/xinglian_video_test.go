@@ -55,6 +55,46 @@ func TestBuildXinglianVideoCreateRequestMapsExistingVideoFields(t *testing.T) {
 	}
 }
 
+func TestBuildXinglianVideoCreateRequestAllowsSD25ThirtySeconds(t *testing.T) {
+	body, _, err := BuildXinglianVideoCreateRequest([]byte(`{
+		"model":"sd2.5-720p-ax2",
+		"prompt":"城市夜景",
+		"duration":30
+	}`), "application/json")
+	if err != nil {
+		t.Fatalf("BuildXinglianVideoCreateRequest returned error: %v", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["duration"] != float64(30) {
+		t.Fatalf("duration = %#v, want 30", payload["duration"])
+	}
+}
+
+func TestBuildXinglianVideoCreateRequestRejectsWrongFixedDuration(t *testing.T) {
+	_, _, err := BuildXinglianVideoCreateRequest([]byte(`{
+		"model":"sd2.5-480p-ax2-20s",
+		"prompt":"城市夜景",
+		"duration":4
+	}`), "application/json")
+	if err == nil || !strings.Contains(err.Error(), "固定 20 秒") {
+		t.Fatalf("error = %v, want fixed 20 second message", err)
+	}
+}
+
+func TestBuildXinglianVideoCreateRequestRejectsUnsupportedDSDuration(t *testing.T) {
+	_, _, err := BuildXinglianVideoCreateRequest([]byte(`{
+		"model":"sd2-720p-ds",
+		"prompt":"城市夜景",
+		"duration":12
+	}`), "application/json")
+	if err == nil || !strings.Contains(err.Error(), "仅支持 10 秒或 15 秒") {
+		t.Fatalf("error = %v, want DS duration message", err)
+	}
+}
+
 func TestNormalizeXinglianVideoTaskResponseMapsCompletedVideoURL(t *testing.T) {
 	body, err := NormalizeXinglianVideoTaskResponse([]byte(`{
 		"id":"task-1",

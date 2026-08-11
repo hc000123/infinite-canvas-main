@@ -1,12 +1,13 @@
 "use client";
 
-import { CheckCircleOutlined, CloudUploadOutlined, DeleteOutlined, EditOutlined, ExperimentOutlined, FileAddOutlined, LinkOutlined, PlusOutlined, ReloadOutlined, SaveOutlined, SafetyCertificateOutlined, StopOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, CloudUploadOutlined, DeleteOutlined, EditOutlined, ExperimentOutlined, FileAddOutlined, FilterOutlined, LinkOutlined, PlusOutlined, ReloadOutlined, SaveOutlined, SafetyCertificateOutlined, StopOutlined } from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { App, Button, Card, Collapse, Empty, Flex, Input, Modal, Segmented, Select, Skeleton, Space, Switch, Tag, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 
 import {
     archiveAdminSkillVersion,
+    deleteAdminSkill,
     deleteAdminSkillVersion,
     fetchAdminSkills,
     fetchAdminSkillVersion,
@@ -28,7 +29,7 @@ import { groupSkillItemsByStage, resolveOpenSkillStageKeys } from "@/components/
 import { SkillTrialPanel } from "@/components/skills/skill-trial-panel";
 import { canPublishSkill, filterSkillItems, latestPassingEvaluation, shortSkillHash, skillLifecycleLabel, type SkillFilter } from "./skill-view";
 
-const initialFilters: SkillFilter = { search: "", capability: "", inputArtifactType: "", outputArtifactType: "", projectTag: "", ownerType: "" };
+const initialFilters: SkillFilter = { search: "", capability: "", inputArtifactType: "", outputArtifactType: "", projectTag: "" };
 
 function newSkillPackage(capability = "custom.general", inputType = "source_text", outputType = "structured_result"): SkillPackage {
     return {
@@ -57,6 +58,7 @@ export default function AdminSkillsPage() {
     const [folderImportMode, setFolderImportMode] = useState<"new" | "version" | "">("");
     const [trialOpen, setTrialOpen] = useState(false);
     const [openStageKeys, setOpenStageKeys] = useState<string[]>([]);
+    const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
 
     const skillsQuery = useQuery({ queryKey: ["admin", "skills", token], queryFn: () => fetchAdminSkills(token), enabled: Boolean(token), retry: false });
     const allItems = skillsQuery.data || [];
@@ -64,6 +66,7 @@ export default function AdminSkillsPage() {
     const activeItem = visibleItems.find((item) => item.skill.id === activeSkillId) || visibleItems[0];
     const stageGroups = useMemo(() => groupSkillItemsByStage(visibleItems), [visibleItems]);
     const hasActiveFilters = Object.values(filters).some(Boolean);
+    const advancedFilterCount = [filters.capability, filters.inputArtifactType, filters.outputArtifactType, filters.projectTag].filter(Boolean).length;
     const visibleVersions = useMemo(() => activeItem?.versions.filter((version) => showArchivedVersions || version.status !== "archived") || [], [activeItem, showArchivedVersions]);
     const activeVersion = activeItem?.versions.find((item) => item.id === activeVersionId);
     const detailQuery = useQuery({ queryKey: ["admin", "skill-version", activeVersionId, token], queryFn: () => fetchAdminSkillVersion(token, activeVersionId), enabled: Boolean(token && activeVersionId), retry: false });
@@ -113,6 +116,7 @@ export default function AdminSkillsPage() {
     const validateMutation = useMutation({ mutationFn: () => validateAdminSkillVersion(token, activeVersionId), onSuccess: (result) => message.success(`契约校验通过：${shortSkillHash(result.contentHash)}`), onError: mutationError });
     const publishMutation = useMutation({ mutationFn: () => publishAdminSkillVersion(token, activeVersionId), onSuccess: async () => { await invalidateAll(); message.success("不可变版本已发布，推荐版保持不变"); }, onError: mutationError });
     const recommendMutation = useMutation({ mutationFn: () => recommendAdminSkillVersion(token, activeItem!.skill.id, activeVersionId), onSuccess: async () => { await invalidateAll(); message.success("推荐版本已切换"); }, onError: mutationError });
+    const deleteSkillMutation = useMutation({ mutationFn: () => deleteAdminSkill(token, activeItem!.skill.id), onSuccess: async () => { setActiveSkillId(""); setActiveVersionId(""); await invalidateAll(); message.success("Skill 已删除"); }, onError: mutationError });
     const deleteVersionMutation = useMutation({ mutationFn: () => deleteAdminSkillVersion(token, activeVersionId), onSuccess: async () => { setActiveVersionId(""); await invalidateAll(); message.success("草稿版本已删除"); }, onError: mutationError });
     const archiveVersionMutation = useMutation({ mutationFn: () => archiveAdminSkillVersion(token, activeVersionId), onSuccess: async () => { setActiveVersionId(""); await invalidateAll(); message.success("已发布版本已停用"); }, onError: mutationError });
     const enabledMutation = useMutation({ mutationFn: (enabled: boolean) => updateAdminSkill(token, activeItem!.skill.id, { enabled }), onSuccess: invalidateAll, onError: mutationError });
@@ -128,6 +132,17 @@ export default function AdminSkillsPage() {
     const recommendedVersion = activeItem?.versions.find((version) => version.id === activeItem.skill.recommendedVersionId);
     const recommendationAction = activeVersion?.status === "published" && activeVersion.id !== activeItem?.skill.recommendedVersionId ? (recommendedVersion && activeVersion.createdAt < recommendedVersion.createdAt ? "回滚推荐到此版" : "设为推荐版") : "";
     const openDefinitionEdit = () => { setDefinitionForm({ name: activeItem?.skill.name || "", summary: activeItem?.skill.summary || "" }); setDefinitionOpen(true); };
+    const confirmSkillDelete = () => {
+        if (!activeItem) return;
+        modal.confirm({
+            title: `删除 Skill“${activeItem.skill.name}”？`,
+            content: "只有从未发布、没有停用历史、没有真实引用且不受种子保护的 Skill 才能删除；仅有空草稿时会一并删除。服务端会再次校验并拒绝不安全的删除。",
+            okText: "删除 Skill",
+            cancelText: "取消",
+            okButtonProps: { danger: true },
+            onOk: () => deleteSkillMutation.mutateAsync(),
+        });
+    };
     const confirmVersionLifecycle = () => {
         if (!activeVersion || activeVersion.status === "archived") return;
         const deleting = activeVersion.status === "draft";
@@ -146,22 +161,28 @@ export default function AdminSkillsPage() {
             <Flex vertical gap={14}>
                 <Card className="studio-panel" variant="borderless">
                     <Flex justify="space-between" align="flex-start" gap={18} wrap>
-                        <div><Typography.Text className="text-xs font-semibold tracking-[0.18em] text-[var(--studio-accent)]">COMPOSABLE CAPABILITY REGISTRY</Typography.Text><Typography.Title level={2} style={{ margin: "8px 0 4px" }}>Skill 中心</Typography.Title><Typography.Text type="secondary">Skill 独立发布、版本冻结、按能力检索；工作流只是其中一个调用方。</Typography.Text></div>
+                        <div><Typography.Text className="text-xs font-semibold tracking-[0.18em] text-[var(--studio-accent)]">COMPOSABLE CAPABILITY REGISTRY</Typography.Text><Typography.Title level={2} style={{ margin: "8px 0 4px" }}>Skill 中心</Typography.Title><Typography.Text type="secondary">全部 Skill 由管理员统一维护，发布后供所有账号和项目使用。</Typography.Text></div>
                         <Space wrap><Tag icon={<SafetyCertificateOutlined />} color="success">外部载入 · 独立试跑 · 版本冻结</Tag><Button type="primary" icon={<PlusOutlined />} onClick={() => setFolderImportMode("new")}>导入外部 Skill</Button></Space>
                     </Flex>
-                    <Space wrap className="mt-5">
-                        <Input.Search placeholder="搜索 Skill 名称或说明" value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} style={{ width: 230 }} />
-                        <Select aria-label="Capability" placeholder="Capability" allowClear options={filterOptions.capabilities} value={filters.capability || undefined} onChange={(capability) => setFilters({ ...filters, capability: capability || "" })} style={{ width: 210 }} />
-                        <Select aria-label="输入 Artifact" placeholder="输入 Artifact" allowClear options={filterOptions.inputs} value={filters.inputArtifactType || undefined} onChange={(inputArtifactType) => setFilters({ ...filters, inputArtifactType: inputArtifactType || "" })} style={{ width: 170 }} />
-                        <Select aria-label="输出 Artifact" placeholder="输出 Artifact" allowClear options={filterOptions.outputs} value={filters.outputArtifactType || undefined} onChange={(outputArtifactType) => setFilters({ ...filters, outputArtifactType: outputArtifactType || "" })} style={{ width: 170 }} />
-                        <Select aria-label="项目标签" placeholder="项目标签" allowClear options={filterOptions.tags} value={filters.projectTag || undefined} onChange={(projectTag) => setFilters({ ...filters, projectTag: projectTag || "" })} style={{ width: 150 }} />
-                        <Segmented aria-label="所有者" options={[{ label: "全部", value: "" }, { label: "系统", value: "system" }, { label: "项目", value: "project" }]} value={filters.ownerType} onChange={(ownerType) => setFilters({ ...filters, ownerType: ownerType as SkillFilter["ownerType"] })} />
-                    </Space>
+                    <Flex gap={8} align="center" wrap className="mt-5">
+                        <Input.Search placeholder="搜索 Skill 名称或说明" value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} style={{ width: 280 }} />
+                        <Button type={advancedFiltersOpen ? "default" : "text"} icon={<FilterOutlined />} aria-expanded={advancedFiltersOpen} onClick={() => setAdvancedFiltersOpen((value) => !value)}>{advancedFiltersOpen ? "收起高级筛选" : "高级筛选"}{advancedFilterCount ? ` · ${advancedFilterCount}` : ""}</Button>
+                        {advancedFilterCount ? <Button type="link" onClick={() => setFilters({ ...filters, capability: "", inputArtifactType: "", outputArtifactType: "", projectTag: "" })}>清除筛选</Button> : null}
+                    </Flex>
+                    {advancedFiltersOpen ? <div className="mt-3 rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-3">
+                        <Typography.Text type="secondary" className="text-xs">能力和输入输出类型已由系统从 Skill 清单自动识别，仅在需要精确查找时使用。</Typography.Text>
+                        <Space wrap className="mt-2">
+                            <Select aria-label="能力类型" placeholder="能力类型" allowClear options={filterOptions.capabilities} value={filters.capability || undefined} onChange={(capability) => setFilters({ ...filters, capability: capability || "" })} style={{ width: 210 }} />
+                            <Select aria-label="输入类型" placeholder="输入类型" allowClear options={filterOptions.inputs} value={filters.inputArtifactType || undefined} onChange={(inputArtifactType) => setFilters({ ...filters, inputArtifactType: inputArtifactType || "" })} style={{ width: 170 }} />
+                            <Select aria-label="输出类型" placeholder="输出类型" allowClear options={filterOptions.outputs} value={filters.outputArtifactType || undefined} onChange={(outputArtifactType) => setFilters({ ...filters, outputArtifactType: outputArtifactType || "" })} style={{ width: 170 }} />
+                            <Select aria-label="适用标签" placeholder="适用标签" allowClear options={filterOptions.tags} value={filters.projectTag || undefined} onChange={(projectTag) => setFilters({ ...filters, projectTag: projectTag || "" })} style={{ width: 150 }} />
+                        </Space>
+                    </div> : null}
                 </Card>
 
                 {!activeItem ? <Card className="studio-panel" variant="borderless"><Empty description="没有匹配的 Skill" /></Card> : (
-                    <div className="grid grid-cols-[290px_minmax(540px,1fr)_290px] gap-4 max-2xl:grid-cols-[260px_minmax(500px,1fr)] max-xl:grid-cols-1">
-                        <Flex vertical gap={12}>
+                    <div className="grid grid-cols-[240px_minmax(440px,1fr)_240px] gap-3 xl:overflow-hidden max-[1180px]:grid-cols-[230px_minmax(420px,1fr)] max-[900px]:grid-cols-1">
+                        <Flex vertical gap={12} className="min-h-0 xl:max-h-[calc(100dvh-250px)] xl:overflow-y-auto xl:pr-1">
                             <Card className="studio-panel" variant="borderless" title={`注册表 · ${visibleItems.length}`} extra={<Button type="text" icon={<ReloadOutlined />} onClick={() => skillsQuery.refetch()} />}>
                                 <Collapse
                                     ghost
@@ -169,7 +190,7 @@ export default function AdminSkillsPage() {
                                     onChange={(keys) => setOpenStageKeys(Array.isArray(keys) ? keys : [keys])}
                                     items={stageGroups.map((group) => ({
                                         key: group.key,
-                                        label: <Flex justify="space-between" align="center" gap={8} wrap><Typography.Text strong>{group.label}</Typography.Text><Space size={4} wrap><Tag>{group.totalCount} 个</Tag>{group.systemCount ? <Tag color="blue">系统 {group.systemCount}</Tag> : null}{group.projectCount ? <Tag color="gold">项目 {group.projectCount}</Tag> : null}</Space></Flex>,
+                                        label: <Flex justify="space-between" align="center" gap={8} wrap><Typography.Text strong>{group.label}</Typography.Text><Tag>{group.totalCount} 个</Tag></Flex>,
                                         children: <Flex vertical gap={8}>{group.items.map((item) => <SkillCard key={item.skill.id} item={item} active={item.skill.id === activeItem.skill.id} onClick={() => { setActiveSkillId(item.skill.id); setActiveVersionId(""); }} />)}</Flex>,
                                     }))}
                                 />
@@ -179,15 +200,15 @@ export default function AdminSkillsPage() {
                             </Card>
                         </Flex>
 
-                        <Flex vertical gap={12} style={{ minWidth: 0 }}>
+                        <Flex vertical gap={12} className="min-h-0 xl:max-h-[calc(100dvh-250px)] xl:overflow-y-auto xl:pr-1" style={{ minWidth: 0 }}>
                             <Card className="studio-panel" variant="borderless" styles={{ body: { padding: 14 } }}>
-                                <Flex justify="space-between" align="center" gap={12} wrap><div><Flex gap={8} align="center" wrap><Typography.Title level={4} style={{ margin: 0 }}>{activeItem.skill.name} · v{activeVersion?.version || "-"}</Typography.Title><Button type="text" size="small" icon={<EditOutlined />} onClick={openDefinitionEdit}>编辑名称</Button><Tag color={activeVersion?.status === "draft" ? "warning" : activeVersion?.status === "published" ? "success" : "default"}>{activeVersion ? skillLifecycleLabel(activeVersion, Boolean(passingEvaluation), activeVersion.id === activeItem.skill.recommendedVersionId) : "未选择版本"}</Tag></Flex><Typography.Text type="secondary">{activeItem.skill.summary}</Typography.Text></div><Space wrap><Button icon={<ExperimentOutlined />} disabled={!activeVersion || activeVersion.status === "archived"} onClick={() => setTrialOpen(true)}>独立试运行</Button>{activeVersion?.status === "draft" ? <Button type="primary" icon={<CloudUploadOutlined />} disabled={!publishReady} loading={publishMutation.isPending} onClick={() => publishMutation.mutate()}>设为可用</Button> : null}{recommendationAction ? <Button type="primary" onClick={() => recommendMutation.mutate()} loading={recommendMutation.isPending}>{recommendationAction}</Button> : null}{activeVersion?.status === "draft" ? <Button danger icon={<DeleteOutlined />} loading={deleteVersionMutation.isPending} onClick={confirmVersionLifecycle}>删除草稿</Button> : null}{activeVersion?.status === "published" ? <Button danger icon={<StopOutlined />} loading={archiveVersionMutation.isPending} onClick={confirmVersionLifecycle}>停用版本</Button> : null}</Space></Flex>
+                                <Flex justify="space-between" align="center" gap={12} wrap><div><Flex gap={8} align="center" wrap><Typography.Title level={4} style={{ margin: 0 }}>{activeItem.skill.name} · v{activeVersion?.version || "-"}</Typography.Title><Button type="text" size="small" icon={<EditOutlined />} onClick={openDefinitionEdit}>编辑名称</Button><Tag color={activeVersion?.status === "draft" ? "warning" : activeVersion?.status === "published" ? "success" : "default"}>{activeVersion ? skillLifecycleLabel(activeVersion, Boolean(passingEvaluation), activeVersion.id === activeItem.skill.recommendedVersionId) : "未选择版本"}</Tag></Flex><Typography.Text type="secondary">{activeItem.skill.summary}</Typography.Text></div><Space wrap><Button icon={<ExperimentOutlined />} disabled={!activeVersion || activeVersion.status === "archived"} onClick={() => setTrialOpen(true)}>独立试运行</Button>{activeVersion?.status === "draft" ? <Button type="primary" icon={<CloudUploadOutlined />} disabled={!publishReady} loading={publishMutation.isPending} onClick={() => publishMutation.mutate()}>设为可用</Button> : null}{recommendationAction ? <Button type="primary" onClick={() => recommendMutation.mutate()} loading={recommendMutation.isPending}>{recommendationAction}</Button> : null}{activeVersion?.status === "draft" ? <Button danger icon={<DeleteOutlined />} loading={deleteVersionMutation.isPending} onClick={confirmVersionLifecycle}>删除草稿</Button> : null}{activeVersion?.status === "published" ? <Button danger icon={<StopOutlined />} loading={archiveVersionMutation.isPending} onClick={confirmVersionLifecycle}>停用版本</Button> : null}<Button danger icon={<DeleteOutlined />} loading={deleteSkillMutation.isPending} onClick={confirmSkillDelete}>删除 Skill</Button></Space></Flex>
                             </Card>
                             {activeVersion?.sourceKind === "folder_import" ? <Card className="studio-panel" variant="borderless" title="导入内容"><SkillSourceBrowser token={token} versionId={activeVersion.id} /></Card> : null}
                             {detailQuery.isLoading ? <Skeleton active paragraph={{ rows: 12 }} /> : detailQuery.data ? <Collapse items={[{ key: "technical", label: "技术详情与底层契约", children: <><SkillEditor value={editorValue} readOnly={activeVersion?.status !== "draft" || importedFolderVersion} onChange={setEditorValue} />{activeVersion?.status === "draft" && !importedFolderVersion ? <Flex justify="flex-end" gap={8} className="mt-3"><Button icon={<CheckCircleOutlined />} loading={validateMutation.isPending} onClick={() => validateMutation.mutate()}>校验契约</Button><Button icon={<SaveOutlined />} disabled={!isDirty} loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>保存底层修改</Button></Flex> : null}</> }]} /> : <Empty description="请选择版本" />}
                         </Flex>
 
-                        <Flex vertical gap={12} className="max-2xl:col-span-2 max-xl:col-span-1">
+                        <Flex vertical gap={12} className="min-h-0 xl:max-h-[calc(100dvh-250px)] xl:overflow-y-auto xl:pr-1 max-[1180px]:col-span-2 max-[900px]:col-span-1">
                             <Card className="studio-panel" variant="borderless" title="运行状态">
                                 <Flex vertical gap={10}><Flex justify="space-between"><Typography.Text type="secondary">启用</Typography.Text><Switch checked={activeItem.skill.enabled} loading={enabledMutation.isPending} onChange={(enabled) => enabledMutation.mutate(enabled)} /></Flex><Status label="内容哈希" value={shortSkillHash(activeVersion?.contentHash || "")} /><Status label="评测" value={passingEvaluation ? "同哈希已通过" : "暂无通过记录"} /><Status label="推荐版" value={recommendedVersion ? `v${recommendedVersion.version}` : "未设置"} /></Flex>
                             </Card>
@@ -215,7 +236,7 @@ export default function AdminSkillsPage() {
 
 function SkillCard({ item, active, onClick }: { item: ReturnType<typeof filterSkillItems>[number]; active: boolean; onClick: () => void }) {
     const manifest = item.recommendedPackage?.manifest;
-    return <button type="button" onClick={onClick} className={`w-full rounded-lg border p-3 text-left transition ${active ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] hover:border-[var(--studio-border-strong)]"}`}><Flex justify="space-between" gap={8}><Typography.Text strong>{item.skill.name}</Typography.Text><Tag>{item.skill.ownerType === "system" ? "系统" : "项目"}</Tag></Flex><Typography.Text type="secondary" className="mt-1 block line-clamp-2 text-xs">{item.skill.summary}</Typography.Text><Flex gap={4} wrap className="mt-2">{manifest?.capabilities.slice(0, 2).map((value) => <Tag key={value} color="blue">{value}</Tag>)}</Flex><Typography.Text type="secondary" className="mt-2 block text-[11px]">{manifest ? `${manifest.inputArtifactTypes.join(", ")} → ${manifest.outputArtifactTypes.join(", ")}` : "尚未设置推荐版本"}</Typography.Text></button>;
+    return <button type="button" onClick={onClick} className={`w-full rounded-lg border p-3 text-left transition ${active ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] hover:border-[var(--studio-border-strong)]"}`}><Typography.Text strong>{item.skill.name}</Typography.Text><Typography.Text type="secondary" className="mt-1 block line-clamp-2 text-xs">{item.skill.summary}</Typography.Text><Flex gap={4} wrap className="mt-2">{manifest?.capabilities.slice(0, 2).map((value) => <Tag key={value} color="blue">{value}</Tag>)}</Flex><Typography.Text type="secondary" className="mt-2 block text-[11px]">{manifest ? `${manifest.inputArtifactTypes.join(", ")} → ${manifest.outputArtifactTypes.join(", ")}` : "尚未设置推荐版本"}</Typography.Text></button>;
 }
 function VersionButton({ version, active, label, onClick }: { version: SkillVersion; active: boolean; label: string; onClick: () => void }) { const color = label === "推荐" ? "blue" : label === "可使用" ? "success" : label === "待试跑" ? "warning" : "default"; return <button type="button" onClick={onClick} className={`w-full rounded-lg border p-3 text-left ${active ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]"}`}><Flex justify="space-between"><Typography.Text strong>v{version.version}</Typography.Text><Tag color={color}>{label}</Tag></Flex><Typography.Text type="secondary" className="mt-2 block text-xs">{shortSkillHash(version.contentHash)}</Typography.Text></button>; }
 function Status({ label, value }: { label: string; value: string }) { return <Flex justify="space-between" gap={10}><Typography.Text type="secondary">{label}</Typography.Text><Typography.Text>{value}</Typography.Text></Flex>; }

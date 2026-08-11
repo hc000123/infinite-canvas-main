@@ -67,6 +67,41 @@ func TestWorkflowRegistryVersionTrackAndRecommendation(t *testing.T) {
 	}
 }
 
+func TestWorkflowDraftWritesRejectUnavailableSkillReferences(t *testing.T) {
+	setupRepositoryTestDB(t)
+	invalidPackage := workflowVersionReferenceJSON("missing-draft-skill-version")
+	definition := model.WorkflowDefinition{ID: "invalid-workflow-create", Name: "Invalid", OwnerType: model.WorkflowOwnerProject}
+	version := model.WorkflowVersion{ID: "invalid-workflow-create-version", WorkflowID: definition.ID, Version: "1.0.0", Status: model.WorkflowVersionDraft, PackageJSON: invalidPackage}
+	if err := CreateWorkflowDefinitionAggregate(definition, version); !errors.Is(err, ErrSkillReferenceTargetUnavailable) {
+		t.Fatalf("aggregate err=%v", err)
+	}
+	if _, ok, _ := GetWorkflowDefinition(definition.ID); ok {
+		t.Fatal("invalid Workflow definition persisted")
+	}
+
+	_, existing := mustCreateWorkflowAggregate(t, model.WorkflowOwnerProject, "user-1", "project-1", "invalid-draft-save")
+	originalPackage := existing.PackageJSON
+	existing.PackageJSON = invalidPackage
+	if err := SaveWorkflowDraft(existing); !errors.Is(err, ErrSkillReferenceTargetUnavailable) {
+		t.Fatalf("save err=%v", err)
+	}
+	stored, ok, err := GetWorkflowVersion(existing.ID)
+	if err != nil || !ok || stored.PackageJSON != originalPackage {
+		t.Fatalf("stored=%+v ok=%v err=%v", stored, ok, err)
+	}
+
+	archived := createReferenceTestSkill(t, "workflow-draft-archived", model.SkillOwnerSystem, true, model.SkillVersionArchived)
+	createdVersion := existing
+	createdVersion.ID = "invalid-workflow-new-version"
+	createdVersion.PackageJSON = workflowVersionReferenceJSON(archived.ID)
+	if err := CreateWorkflowVersion(createdVersion); !errors.Is(err, ErrSkillReferenceTargetUnavailable) {
+		t.Fatalf("version err=%v", err)
+	}
+	if _, ok, _ := GetWorkflowVersion(createdVersion.ID); ok {
+		t.Fatal("invalid Workflow version persisted")
+	}
+}
+
 func TestWorkflowRegistryExecutionCreateIsIdempotent(t *testing.T) {
 	setupRepositoryTestDB(t)
 	key := "workflow-execution-key"

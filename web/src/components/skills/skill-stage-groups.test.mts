@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { SkillAdminItem, SkillOwnerType } from "@/services/api/admin-skills.ts";
+import type { SkillAdminItem } from "@/services/api/admin-skills.ts";
 import { groupSkillItemsByStage, resolveOpenSkillStageKeys } from "./skill-stage-groups.ts";
 
-function skillItem(id: string, ownerType: SkillOwnerType, capabilities: string[], outputArtifactTypes: string[], stageKey = ""): SkillAdminItem {
+function skillItem(id: string, capabilities: string[], outputArtifactTypes: string[], stageKey = ""): SkillAdminItem {
     return {
-        skill: { id, name: id, summary: id, ownerType, ownerUserId: "", ownerProjectId: ownerType === "project" ? "p1" : "", stageKey, enabled: true, recommendedVersionId: `${id}-v1`, createdAt: "", updatedAt: "" },
+        skill: { id, name: id, summary: id, ownerType: "system", ownerUserId: "", ownerProjectId: "", stageKey, enabled: true, recommendedVersionId: `${id}-v1`, createdAt: "", updatedAt: "" },
         versions: [],
         bindings: [],
         evaluations: [],
@@ -22,28 +22,26 @@ function skillItem(id: string, ownerType: SkillOwnerType, capabilities: string[]
     };
 }
 
-test("groups visible Skills in fixed production-stage order with owner counts", () => {
+test("groups visible Skills in fixed production-stage order with totals", () => {
     const groups = groupSkillItemsByStage([
-        skillItem("script", "system", ["workflow.stage.script"], ["production_script"]),
-        skillItem("extract", "project", ["workflow.stage.art"], ["asset_catalog"]),
-        skillItem("brief", "system", ["asset.scene.brief"], ["asset_brief"]),
-        skillItem("rendition", "project", ["asset.rendition.generate"], ["asset_rendition"]),
-        skillItem("storyboard", "system", ["storyboard.vertical.short"], ["storyboard_package"]),
-        skillItem("video", "system", [], ["video_prompt_package"]),
-        skillItem("delivery", "project", [], ["delivery_report"]),
-        skillItem("other", "project", ["custom.general"], ["custom_result"]),
+        skillItem("script", ["workflow.stage.script"], ["production_script"]),
+        skillItem("extract", ["workflow.stage.art"], ["asset_catalog"]),
+        skillItem("brief", ["asset.scene.brief"], ["asset_brief"]),
+        skillItem("rendition", ["asset.rendition.generate"], ["asset_rendition"]),
+        skillItem("storyboard", ["storyboard.vertical.short"], ["storyboard_package"]),
+        skillItem("video", [], ["video_prompt_package"]),
+        skillItem("delivery", [], ["delivery_report"]),
+        skillItem("other", ["custom.general"], ["custom_result"]),
     ]);
 
     assert.deepEqual(groups.map(({ key }) => key), ["script", "asset-extraction", "asset-brief", "asset-rendition", "storyboard", "video", "delivery", "other"]);
-    assert.deepEqual(groups.map(({ totalCount, systemCount, projectCount }) => [totalCount, systemCount, projectCount]), [
-        [1, 1, 0], [1, 0, 1], [1, 1, 0], [1, 0, 1], [1, 1, 0], [1, 1, 0], [1, 0, 1], [1, 0, 1],
-    ]);
+    assert.deepEqual(groups.map(({ totalCount }) => totalCount), [1, 1, 1, 1, 1, 1, 1, 1]);
 });
 
 test("opens the selected stage or every filtered stage", () => {
     const groups = groupSkillItemsByStage([
-        skillItem("script", "system", ["workflow.stage.script"], ["production_script"]),
-        skillItem("scene-image", "system", ["asset.rendition.generate"], ["asset_rendition"]),
+        skillItem("script", ["workflow.stage.script"], ["production_script"]),
+        skillItem("scene-image", ["asset.rendition.generate"], ["asset_rendition"]),
     ]);
 
     assert.deepEqual(resolveOpenSkillStageKeys(groups, "scene-image", false), ["asset-rendition"]);

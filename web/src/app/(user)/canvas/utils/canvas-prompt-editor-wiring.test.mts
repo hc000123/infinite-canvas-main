@@ -74,9 +74,12 @@ test("image and video generation preserve the active prompt document", () => {
 test("generation serializes structured references against the latest input order", () => {
     const promptPanel = readCanvasFile("../components/canvas-node-prompt-panel.tsx");
     const layer = readCanvasFile("../components/canvas-nodes-layer.tsx");
+    const flow = readCanvasFile("../hooks/use-canvas-generation-flow-actions.ts");
 
-    assert.match(promptPanel, /serializePromptDocument\(promptDocument, promptReferenceOptions\)\.trim\(\)/);
+    assert.match(promptPanel, /serializePromptDocument\(promptDocument, referenceMentionOptions\)\.trim\(\)/);
     assert.match(layer, /serializePromptDocument\(target\.metadata\.promptDocument, buildReferenceMentionOptions\(inputs\)\)/);
+    assert.match(flow, /mode === "video" && promptDocument/);
+    assert.match(flow, /serializePromptDocument\(promptDocument, buildReferenceMentionOptions\(buildNodeGenerationInputs\(/);
 });
 
 test("video submit keeps the prompt visible while generation is running", () => {

@@ -246,7 +246,7 @@ func mustImportPublishedFolderSkill(t *testing.T, stageKey string) ResolvedSkill
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{OwnerType: model.SkillOwnerSystem, StageKey: stageKey, Snapshot: snapshot})
+	created, err := ImportManagedSkillFolder("admin-1", true, SkillFolderImportInput{StageKey: stageKey, Snapshot: snapshot})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,9 +267,7 @@ func mustImportPublishedFolderSkill(t *testing.T, stageKey string) ResolvedSkill
 	}
 	created.Version.Status = model.SkillVersionPublished
 	created.Skill.RecommendedVersionID = created.Version.ID
-	if err := repository.SaveSkillVersion(created.Version); err != nil {
-		t.Fatal(err)
-	}
+	saveSkillVersionFixture(t, created.Version)
 	if err := repository.SaveSkillDefinition(created.Skill); err != nil {
 		t.Fatal(err)
 	}
