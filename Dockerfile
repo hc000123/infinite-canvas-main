@@ -44,8 +44,11 @@ FROM node:22-bookworm-slim AS dreamina-build
 
 ARG TARGETARCH
 ARG DREAMINA_CLI_BASE=https://lf3-static.bytednsdoc.com/obj/eden-cn/psj_hupthlyk/ljhwZthlaukjlkulzlp/dreamina_cli_beta
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl \
+RUN for attempt in 1 2 3 4 5; do \
+        if apt-get update && apt-get install -y --no-install-recommends ca-certificates curl; then break; fi; \
+        if [ "$attempt" = 5 ]; then exit 1; fi; \
+        sleep 2; \
+    done \
     && case "$TARGETARCH" in \
         amd64) dreamina_file=dreamina_cli_linux_amd64; dreamina_sha=7c2817bc844e5a93cc5c6e57f876ccaea91d438e520ad50f665a515e816c7dc6 ;; \
         arm64) dreamina_file=dreamina_cli_linux_arm64; dreamina_sha=696216eee0fe55ba5e5d781429a3eb304cfdb539823397742a4d1a7575ab1202 ;; \

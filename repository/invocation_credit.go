@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/basketikun/infinite-canvas/model"
 	"gorm.io/gorm"
@@ -21,39 +22,45 @@ func ReserveInvocationAttemptCreditsTx(agentRun model.AgentRun, stamp string) (m
 		return model.AgentRun{}, err
 	}
 	var result model.AgentRun
-	err = database.Transaction(func(tx *gorm.DB) error {
-		current, attempt, err := lockedInvocationCreditContext(tx, agentRun)
-		if err != nil {
-			return err
+	for range 20 {
+		err = database.Transaction(func(tx *gorm.DB) error {
+			current, attempt, err := lockedInvocationCreditContext(tx, agentRun)
+			if err != nil {
+				return err
+			}
+			reserved, refunded, err := reserveInvocationCreditsTx(tx, current, stamp)
+			if err != nil {
+				return err
+			}
+			agentUpdate := tx.Model(&model.AgentRun{}).
+				Where("id = ? AND status = ? AND lease_owner = ?", current.ID, model.AgentRunStatusRunning, current.LeaseOwner).
+				Updates(map[string]any{"credits_reserved": reserved, "credits_refunded": refunded, "updated_at": stamp})
+			wantedAgent := current
+			wantedAgent.UpdatedAt = stamp
+			if err := verifyInvocationAgentCreditUpdateTx(tx, agentUpdate, wantedAgent, reserved, refunded); err != nil {
+				return err
+			}
+			if err := invokeRepositoryHook("credit", "agent_run"); err != nil {
+				return err
+			}
+			attemptUpdate := tx.Model(&model.InvocationAttempt{}).
+				Where("id = ? AND invocation_id = ? AND status = ? AND finished_at = ''", attempt.ID, attempt.InvocationID, string(model.AgentRunStatusRunning)).
+				Updates(map[string]any{"credits_reserved": reserved, "credits_refunded": refunded, "updated_at": stamp})
+			wantedAttempt := attempt
+			wantedAttempt.UpdatedAt = stamp
+			if err := verifyInvocationAttemptCreditUpdateTx(tx, attemptUpdate, wantedAttempt, reserved, refunded); err != nil {
+				return err
+			}
+			if err := invokeRepositoryHook("credit", "attempt"); err != nil {
+				return err
+			}
+			return tx.Where("id = ?", current.ID).First(&result).Error
+		})
+		if !isSQLiteContention(database, err) {
+			break
 		}
-		reserved, refunded, err := reserveInvocationCreditsTx(tx, current, stamp)
-		if err != nil {
-			return err
-		}
-		agentUpdate := tx.Model(&model.AgentRun{}).
-			Where("id = ? AND status = ? AND lease_owner = ?", current.ID, model.AgentRunStatusRunning, current.LeaseOwner).
-			Updates(map[string]any{"credits_reserved": reserved, "credits_refunded": refunded, "updated_at": stamp})
-		wantedAgent := current
-		wantedAgent.UpdatedAt = stamp
-		if err := verifyInvocationAgentCreditUpdateTx(tx, agentUpdate, wantedAgent, reserved, refunded); err != nil {
-			return err
-		}
-		if err := invokeRepositoryHook("credit", "agent_run"); err != nil {
-			return err
-		}
-		attemptUpdate := tx.Model(&model.InvocationAttempt{}).
-			Where("id = ? AND invocation_id = ? AND status = ? AND finished_at = ''", attempt.ID, attempt.InvocationID, string(model.AgentRunStatusRunning)).
-			Updates(map[string]any{"credits_reserved": reserved, "credits_refunded": refunded, "updated_at": stamp})
-		wantedAttempt := attempt
-		wantedAttempt.UpdatedAt = stamp
-		if err := verifyInvocationAttemptCreditUpdateTx(tx, attemptUpdate, wantedAttempt, reserved, refunded); err != nil {
-			return err
-		}
-		if err := invokeRepositoryHook("credit", "attempt"); err != nil {
-			return err
-		}
-		return tx.Where("id = ?", current.ID).First(&result).Error
-	})
+		time.Sleep(time.Millisecond)
+	}
 	return result, err
 }
 

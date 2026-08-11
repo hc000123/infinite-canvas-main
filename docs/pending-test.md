@@ -98,6 +98,8 @@
 
 ### v0.3.3 上线前冒烟
 
+- 提交后复测复现并修复 Invocation 并发扣费幂等请求偶发返回 SQLite 锁冲突的问题；原失败测试连续 50 次、全部并发 / 竞态仓库测试连续 10 轮通过，且只会重试 SQLite 的 `SQLITE_BUSY` / `database is locked`，其他业务错误仍立即返回。
+- Docker `--no-cache` 复测连续两次捕获 Debian CDN 瞬时 502，Dreamina 构建阶段已为 `apt-get update/install` 增加 5 次有限重试；修复后的无缓存构建实际命中首轮 502 后自动恢复并成功，固定 CLI 哈希、版本校验和不使用缓存的发布门禁保持不变。
 - 后端格式、模块校验、依赖差异、Vet、Linux amd64 编译和全包测试已通过；前端 1132 项测试、TypeScript、ESLint、oxlint、零漏洞依赖审计和 Next.js 生产构建已通过，ESLint 仅保留 155 条既有 warning、无 error。
 - Docker 生产镜像已使用 `--no-cache` 重新构建；Dreamina CLI 固定哈希与版本校验、容器健康、单端口页面和 API 代理、真实 `/api/uploaded-assets/...` 素材读取、生产镜像无 Codex CLI 均通过。
 - 浏览器已实际完成唯一用户注册、退出重登、普通用户后台权限拦截、项目与分集创建和刷新恢复、核心工作台页面、后台 Skill 中心、星链 15 模型、GeekNow 与 MiniMax H3 厂商预设 / 手动协议入口检查；控制台无 error。
