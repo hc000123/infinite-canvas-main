@@ -21,6 +21,7 @@ const (
 	modelProtocolVolcengineArk = string(model.ModelProtocolVolcengineArk)
 	modelProtocolJimengCLI     = string(model.ModelProtocolJimengCLI)
 	modelProtocolXinglianCloud = string(model.ModelProtocolXinglianCloud)
+	modelProtocolMiniMax       = string(model.ModelProtocolMiniMax)
 	maskedAPIKey               = "********"
 	textEndpointChat           = "chat_completions"
 	textEndpointResponses      = "responses"
@@ -476,7 +477,7 @@ func normalizePublicModelChannelWithPrivate(public model.PublicModelChannelSetti
 		modelName = models[0]
 		capabilities, hasMetadata := modelCapabilities[modelName]
 		protocol := normalizeModelProtocol(modelProtocols[modelName])
-		if hasMetadata && (protocol == modelProtocolJimengCLI || protocol == modelProtocolXinglianCloud) && !containsNormalizedString(capabilities, capability) {
+		if hasMetadata && (protocol == modelProtocolJimengCLI || protocol == modelProtocolXinglianCloud || protocol == modelProtocolMiniMax) && !containsNormalizedString(capabilities, capability) {
 			return ""
 		}
 		return modelName
@@ -991,7 +992,7 @@ func stableModelChannelID(channel model.ModelChannel) string {
 }
 
 func normalizeModelChannelCapabilities(capabilities []string, protocol string) []string {
-	if IsJimengCLIProtocol(protocol) || IsXinglianCloudProtocol(protocol) {
+	if IsJimengCLIProtocol(protocol) || IsXinglianCloudProtocol(protocol) || IsMiniMaxProtocol(protocol) {
 		return []string{"video"}
 	}
 	if len(capabilities) == 0 {
@@ -1100,6 +1101,10 @@ func IsXinglianCloudProtocol(protocol string) bool {
 	return normalizeModelProtocol(protocol) == modelProtocolXinglianCloud
 }
 
+func IsMiniMaxProtocol(protocol string) bool {
+	return normalizeModelProtocol(protocol) == modelProtocolMiniMax
+}
+
 func normalizeModelProtocol(protocol string) string {
 	switch strings.TrimSpace(protocol) {
 	case "", modelProtocolOpenAI:
@@ -1110,6 +1115,8 @@ func normalizeModelProtocol(protocol string) string {
 		return modelProtocolJimengCLI
 	case modelProtocolXinglianCloud:
 		return modelProtocolXinglianCloud
+	case modelProtocolMiniMax:
+		return modelProtocolMiniMax
 	default:
 		return modelProtocolOpenAI
 	}

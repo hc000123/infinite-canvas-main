@@ -31,6 +31,7 @@ const protocolOptions: { value: AdminModelChannel["protocol"]; title: string; de
     { value: "volcengine-ark", title: "火山方舟 Ark", description: "使用本地模型名映射企业 Ark Endpoint。", tag: "企业视频" },
     { value: "jimeng-cli", title: "即梦 CLI", description: "由后台调用 dreamina CLI 执行即梦生成任务。", tag: "本地 CLI" },
     { value: "xinglian-cloud", title: "星链云 SD2", description: "对接星链云 SD2 / SD2.5 提交、查询与余额预检。", tag: "SD2" },
+    { value: "minimax", title: "MiniMax H3", description: "对接 MiniMax 官方视频生成 V2 接口。", tag: "H3" },
 ];
 const capabilityOptions = [
     { label: "文本 Agent", value: "text" },

@@ -91,6 +91,7 @@ function modelProtocolLabel(protocol: AdminModelSource["protocol"]) {
     if (protocol === "volcengine-ark") return "火山 Ark";
     if (protocol === "jimeng-cli") return "即梦 CLI";
     if (protocol === "xinglian-cloud") return "星链云 SD2";
+    if (protocol === "minimax") return "MiniMax H3";
     return "OpenAI 兼容";
 }
 

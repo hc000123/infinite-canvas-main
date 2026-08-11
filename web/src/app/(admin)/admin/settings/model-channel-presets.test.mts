@@ -152,6 +152,27 @@ test("reapplies GeekNow without removing custom models or runtime and publicatio
     assert.deepEqual(result.settings.public.modelChannel.modelCosts, [{ model: "custom-geek-video", credits: 36 }]);
 });
 
+test("applies the official MiniMax H3 channel idempotently without publishing it", () => {
+    const first = applyModelChannelPreset(emptySettings(), "minimax", { apiKey: "minimax-key" });
+    const second = applyModelChannelPreset(first.settings, "minimax", { apiKey: "" });
+    const channels = second.settings.private.channels.filter((item) => item.id === "minimax-video");
+
+    assert.equal(channels.length, 1);
+    assert.equal(channels[0].protocol, "minimax");
+    assert.equal(channels[0].baseUrl, "https://api.minimaxi.com");
+    assert.equal(channels[0].apiKey, "minimax-key");
+    assert.deepEqual(channels[0].models, ["MiniMax-H3"]);
+    assert.deepEqual(channels[0].capabilities, ["video", "video_query"]);
+    assert.equal(second.settings.public.modelChannel.availableModels.includes("MiniMax-H3"), false);
+});
+
+test("requires a MiniMax API key unless the preset already has one", () => {
+    assert.throws(() => applyModelChannelPreset(emptySettings(), "minimax", {}), /MiniMax API Key/);
+    const configured = emptySettings();
+    configured.private.channels = [channel({ id: "minimax-video", protocol: "minimax", baseUrl: "https://api.minimaxi.com", apiKey: "saved-key", models: ["MiniMax-H3"], capabilities: ["video", "video_query"] })];
+    assert.doesNotThrow(() => applyModelChannelPreset(configured, "minimax", {}));
+});
+
 test("migrates an existing Ark provider channel and preserves its key and EP", () => {
     const settings = emptySettings();
     settings.private.channels = [

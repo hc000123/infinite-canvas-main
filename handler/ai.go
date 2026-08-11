@@ -144,6 +144,10 @@ func proxyAIGetRequest(w http.ResponseWriter, r *http.Request, path string) {
 		proxyXinglianVideoGetRequest(w, r.Context(), channel, path, localAITaskID, userID)
 		return
 	}
+	if service.IsMiniMaxProtocol(channel.Protocol) && strings.HasPrefix(path, "/videos/") {
+		proxyMiniMaxVideoGetRequest(w, r.Context(), channel, path, localAITaskID, userID)
+		return
+	}
 	request, err := http.NewRequest(http.MethodGet, service.BuildModelChannelURL(channel, path), nil)
 	if err != nil {
 		Fail(w, "AI 接口请求失败")
@@ -268,6 +272,15 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 			return
 		}
 	}
+	isMiniMaxVideoTask := service.IsMiniMaxProtocol(channel.Protocol) && path == "/videos"
+	if isMiniMaxVideoTask {
+		upstreamBody, upstreamContentType, err = service.BuildMiniMaxVideoCreateRequest(body, contentType)
+		if err != nil {
+			log.Printf("MiniMax video request invalid: model=%s err=%v", modelName, err)
+			Fail(w, err.Error())
+			return
+		}
+	}
 	upstreamBody, err = service.ApplyHighestReasoning(upstreamBody, upstreamContentType, upstreamPath, channel)
 	if err != nil {
 		log.Printf("AI proxy reasoning payload failed: model=%s path=%s err=%v", modelName, path, err)
@@ -339,6 +352,15 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 		}
 		requestURL = endpoints.Submit
 	}
+	if isMiniMaxVideoTask {
+		endpoints, endpointErr := service.ResolveMiniMaxVideoEndpoints(channel.BaseURL)
+		if endpointErr != nil {
+			_ = service.MarkAITaskFailed(aiTask.ID, "MiniMax 接口地址无效", nil, "")
+			Fail(w, "MiniMax 接口地址无效")
+			return
+		}
+		requestURL = endpoints.Create
+	}
 	request, err := http.NewRequest(http.MethodPost, requestURL, bytes.NewReader(upstreamBody))
 	if err != nil {
 		log.Printf("AI proxy build request failed: url=%s err=%v", safeLogURL(requestURL), err)
@@ -379,6 +401,15 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 		copyXinglianVideoTaskResponse(w, request, refundAndFailTask, func(_ int, _ []byte, normalized []byte) {
 			if err := service.MarkAITaskArkCreated(aiTask.ID, normalized); err != nil {
 				log.Printf("Xinglian video task record failed: task=%s err=%v", aiTask.ID, err)
+			}
+			writeAITaskHeaders(w, aiTask, consumeLogID, arkTaskIDFromNormalized(normalized), string(model.AITaskStatusQueued))
+		})
+		return
+	}
+	if isMiniMaxVideoTask {
+		copyMiniMaxVideoTaskResponse(w, request, refundAndFailTask, func(_ int, _ []byte, normalized []byte) {
+			if err := service.MarkAITaskArkCreated(aiTask.ID, normalized); err != nil {
+				log.Printf("MiniMax video task record failed: task=%s err=%v", aiTask.ID, err)
 			}
 			writeAITaskHeaders(w, aiTask, consumeLogID, arkTaskIDFromNormalized(normalized), string(model.AITaskStatusQueued))
 		})
@@ -651,6 +682,63 @@ func proxyArkVideoGetByConfig(w http.ResponseWriter, ctx context.Context, baseUR
 	proxyArkVideoGetByConfigWithClient(w, ctx, strings.TrimRight(baseURL, "/"), apiKey, path, &http.Client{Timeout: service.AIVideoTaskTimeout}, localAITaskID, userID)
 }
 
+func proxyMiniMaxVideoGetRequest(w http.ResponseWriter, ctx context.Context, channel model.ModelChannel, path string, localAITaskID string, userID string) {
+	taskID, contentRequest := parseVideoTaskPath(path)
+	if taskID == "" {
+		Fail(w, "缺少视频任务 ID")
+		return
+	}
+	endpoints, err := service.ResolveMiniMaxVideoEndpoints(channel.BaseURL)
+	if err != nil {
+		Fail(w, "MiniMax 接口地址无效")
+		return
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoints.Query(taskID), nil)
+	if err != nil {
+		Fail(w, "AI 接口请求失败")
+		return
+	}
+	request.Header.Set("Authorization", "Bearer "+channel.APIKey)
+	response, err := service.DoAIHTTPRequest(request)
+	if err != nil {
+		log.Printf("MiniMax video task query failed: url=%s err=%v", safeLogRequestURL(request), err)
+		Fail(w, "AI 接口请求失败")
+		return
+	}
+	defer response.Body.Close()
+	body, _ := io.ReadAll(response.Body)
+	if response.StatusCode >= http.StatusBadRequest {
+		Fail(w, upstreamErrorMessage(body, "AI 接口请求失败"))
+		return
+	}
+	normalized, err := service.NormalizeMiniMaxVideoTaskResponse(body)
+	if err != nil {
+		Fail(w, "AI 接口请求失败")
+		return
+	}
+	if err := syncSelectedVideoAITaskStatus(localAITaskID, userID, taskID, normalized, service.SyncArkVideoAITaskStatus); err != nil {
+		log.Printf("MiniMax video task sync failed: task=%s err=%v", taskID, err)
+	}
+	if contentRequest {
+		videoURL := service.MiniMaxTaskVideoURL(body)
+		if videoURL == "" {
+			Fail(w, "视频任务尚未返回可下载地址")
+			return
+		}
+		if proxyMiniMaxVideoContent(w, ctx, videoURL) {
+			if err := markSelectedVideoAITaskContentFetched(localAITaskID, userID, taskID, service.MarkArkVideoAITaskContentFetched); err != nil {
+				log.Printf("MiniMax video content record failed: task=%s err=%v", taskID, err)
+			}
+		}
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(normalized)
+}
+
+var proxyMiniMaxVideoContent = proxyArkVideoContent
+
 func proxyArkVideoGetByCustomConfig(w http.ResponseWriter, ctx context.Context, baseURL string, apiKey string, path string) {
 	validBaseURL, err := validateCustomAIBaseURL(ctx, baseURL)
 	if err != nil {
@@ -780,6 +868,41 @@ func copyGeekNowVideoTaskResponse(w http.ResponseWriter, request *http.Request, 
 		return
 	}
 	normalized, err := service.NormalizeGeekNowVideoTaskResponse(body)
+	if err != nil {
+		if onFailure != nil {
+			onFailure("AI 接口请求失败", body)
+		}
+		Fail(w, "AI 接口请求失败")
+		return
+	}
+	if len(onSuccess) > 0 && onSuccess[0] != nil {
+		onSuccess[0](response.StatusCode, body, normalized)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(response.StatusCode)
+	_, _ = w.Write(normalized)
+}
+
+func copyMiniMaxVideoTaskResponse(w http.ResponseWriter, request *http.Request, onFailure func(string, []byte), onSuccess ...func(int, []byte, []byte)) {
+	response, err := service.DoAIHTTPRequest(request)
+	if err != nil {
+		if onFailure != nil {
+			onFailure("AI 接口请求失败", nil)
+		}
+		Fail(w, "AI 接口请求失败")
+		return
+	}
+	defer response.Body.Close()
+	body, _ := io.ReadAll(response.Body)
+	if response.StatusCode >= http.StatusBadRequest {
+		message := upstreamErrorMessage(body, "AI 接口请求失败")
+		if onFailure != nil {
+			onFailure(message, body)
+		}
+		Fail(w, message)
+		return
+	}
+	normalized, err := service.NormalizeMiniMaxVideoCreateResponse(body)
 	if err != nil {
 		if onFailure != nil {
 			onFailure("AI 接口请求失败", body)

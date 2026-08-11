@@ -212,6 +212,7 @@ function presetHasSavedKey(settings: AdminSettings, presetId: ModelChannelPreset
     if (values.apiKey?.trim()) return true;
     if (presetId === "volcengine") return settings.private.channels.some((item) => item.protocol === "volcengine-ark" && Boolean(item.apiKey));
     if (presetId === "xinglian") return settings.private.channels.some((item) => item.protocol === "xinglian-cloud" && Boolean(item.apiKey));
+    if (presetId === "minimax") return settings.private.channels.some((item) => item.protocol === "minimax" && Boolean(item.apiKey));
     if (presetId === "comfly") return settings.private.channels.some((item) => item.baseUrl.replace(/\/+$/, "") === "https://ai.comfly.org" && Boolean(item.apiKey));
     if (presetId === "geeknow") return settings.private.channels.some((item) => item.id.startsWith("geeknow-") && Boolean(item.apiKey));
     if (presetId === "openai-compatible" && values.name) return settings.private.channels.some((item) => item.name === values.name && Boolean(item.apiKey));

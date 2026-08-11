@@ -52,6 +52,20 @@ test("describes Xinglian DS models as 10 or 15 second generation", () => {
     assert.deepEqual(capability?.references, { images: 9, videos: 3, audios: 3, total: 12, allowAudioOnly: false });
 });
 
+test("describes MiniMax H3 generation capabilities", () => {
+    const base = { protocol: "minimax" as const, model: "MiniMax-H3", mode: "multimodal2video" as const };
+    const capability = resolveDreaminaVideoCapability(base);
+
+    assert.equal(capability?.label, "H3 · 4–15s · 多模态");
+    assert.deepEqual(capability?.duration, { min: 4, max: 15 });
+    assert.deepEqual(capability?.resolutions, ["768", "2160"]);
+    assert.equal(capability?.fallbackResolution, "768");
+    assert.deepEqual(capability?.references, { images: 9, videos: 3, audios: 3, total: 12, allowAudioOnly: true });
+    assert.equal(validateDreaminaReferences({ ...base, images: 0, videos: 0, audios: 1 }).error, "");
+    assert.deepEqual(normalizeDreaminaVideoSettings({ ...base, seconds: "20", resolution: "720" }), { seconds: "15", resolution: "768" });
+    assert.match(validateDreaminaReferences({ ...base, mode: "multiframe2video", images: 2, videos: 0, audios: 0 }).error, /不支持多帧故事/);
+});
+
 test("does not treat longer Seedance version names as 2.5", () => {
     const ark = resolveDreaminaVideoCapability({ protocol: "volcengine-ark", model: "doubao-seedance-2-50", mode: "multimodal2video" });
     const jimeng = resolveDreaminaVideoCapability({ protocol: "jimeng-cli", model: "seedance2.50", mode: "multimodal2video" });

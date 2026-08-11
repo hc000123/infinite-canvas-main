@@ -1,6 +1,6 @@
 import { modelMatchesAiCapability, type AiModelKind } from "./ai-model-kind.ts";
 
-export type AiModelProtocol = "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud";
+export type AiModelProtocol = "openai" | "volcengine-ark" | "jimeng-cli" | "xinglian-cloud" | "minimax";
 export type AiTextEndpointType = "chat_completions" | "responses";
 
 type ModelCapability = { model: string; capabilities: readonly string[] };

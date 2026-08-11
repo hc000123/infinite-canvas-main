@@ -62,3 +62,16 @@ test("resolves video protocol only from the selected model mapping", () => {
     assert.equal(protocolForModel(config, "video-default"), "volcengine-ark");
     assert.equal(protocolForModel(config, "unmapped"), "openai");
 });
+
+test("keeps MiniMax protocol metadata in the model catalog", () => {
+    const minimax = {
+        ...config,
+        models: ["MiniMax-H3"],
+        modelCapabilities: [{ model: "MiniMax-H3", capabilities: ["video"] }],
+        modelProtocols: [{ model: "MiniMax-H3", protocol: "minimax" }],
+        modelSources: [{ model: "MiniMax-H3", channelId: "minimax-video", channelName: "MiniMax H3", protocol: "minimax" }],
+    } as const;
+
+    assert.equal(protocolForModel(minimax, "MiniMax-H3"), "minimax");
+    assert.deepEqual(modelsForCapability(minimax, "video"), ["MiniMax-H3"]);
+});

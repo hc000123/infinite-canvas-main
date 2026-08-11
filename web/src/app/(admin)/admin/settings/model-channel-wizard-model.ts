@@ -59,7 +59,7 @@ export function wizardStepForField(name: readonly (string | number)[] = []) {
 }
 
 export function dedicatedVideoProtocol(protocol: AdminModelChannel["protocol"]) {
-    return protocol === "jimeng-cli" || protocol === "xinglian-cloud";
+    return protocol === "jimeng-cli" || protocol === "xinglian-cloud" || protocol === "minimax";
 }
 
 export function protocolScopedWizardCapabilities(protocol: AdminModelChannel["protocol"], capabilities: readonly string[] = []) {

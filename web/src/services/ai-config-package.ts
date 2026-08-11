@@ -93,7 +93,7 @@ function normalizeConfigPackageValue(key: keyof AiConfig, value: unknown) {
     if (value === undefined || value === null) return undefined;
     if (listKeys.has(key)) return normalizeStringList(value);
     if (key === "channelMode") return value === "remote" || value === "local" ? "remote" : undefined;
-    if (key === "videoProtocol") return value === "volcengine-ark" ? "volcengine-ark" : value === "xinglian-cloud" ? "xinglian-cloud" : value === "openai" ? "openai" : undefined;
+    if (key === "videoProtocol") return value === "volcengine-ark" ? "volcengine-ark" : value === "xinglian-cloud" ? "xinglian-cloud" : value === "minimax" ? "minimax" : value === "openai" ? "openai" : undefined;
     if (key === "videoTaskMode") return value === "edit" || value === "extend" ? value : value === "generate" ? "generate" : undefined;
     if (key === "videoEditType") return value === "add" || value === "remove" || value === "inpaint" ? value : value === "replace" ? "replace" : undefined;
     if (key === "videoExtendDirection") return value === "backward" ? "backward" : value === "forward" ? "forward" : undefined;

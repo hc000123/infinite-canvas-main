@@ -68,7 +68,7 @@ export function CanvasVideoSettingsPopover({ config, onConfigChange, disabled = 
                     onClick={() => setOpen((current) => !current)}
                 >
                     <span className="truncate">
-                        {videoResolutionLabel(config.vquality)} · {videoRatioLabel(config.size)} · {videoSecondsLabel(config.videoSeconds, config)}
+                        {videoResolutionLabel(config.vquality, config)} · {videoRatioLabel(config.size)} · {videoSecondsLabel(config.videoSeconds, config)}
                     </span>
                 </Button>
             </span>
