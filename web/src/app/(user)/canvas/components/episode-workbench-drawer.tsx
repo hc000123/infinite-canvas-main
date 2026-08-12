@@ -345,7 +345,9 @@ export function EpisodeWorkbenchDrawer({
         if (!editingShotGroup) return;
         updateShotGroup(editingShotGroup.id, {
             prompt: values.prompt || "",
+            promptDocument: values.promptDocument,
             effectivePrompt: values.effectivePrompt || "",
+            effectivePromptDocument: values.effectivePromptDocument,
             assetRefs: preserveOrCreateAssetVersionReferences(assetRefs, assets, editingShotGroup.assetRefs),
             audioRefs: preserveOrCreateAssetVersionReferences(audioRefs, assets, editingShotGroup.audioRefs),
             productionBibleRefs,

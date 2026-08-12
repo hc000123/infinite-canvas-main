@@ -340,6 +340,109 @@ test("plans shot group insertion into canvas with shot group metadata", () => {
     );
 });
 
+test("renumbers a Seedance 2.0 shot group reference after an earlier image is removed", () => {
+    const imageRefs = Array.from({ length: 5 }, (_, index) => ({ assetId: `image-${index + 2}`, kind: "image" as const, role: "reference_image" }));
+    const videoRefs = Array.from({ length: 2 }, (_, index) => ({ assetId: `video-${index + 2}`, kind: "video" as const, role: "reference_video" }));
+    const audioRefs = Array.from({ length: 2 }, (_, index) => ({ assetId: `audio-${index + 2}`, kind: "audio" as const, role: "reference_audio" }));
+    const refs = [...imageRefs, ...videoRefs, ...audioRefs];
+    const mediaCounts = { image: 0, video: 0, audio: 0 };
+    const result = planShotGroupCanvasInsert({
+        group: {
+            ...shotGroup("sg-1", ["s-1"]),
+            prompt: "让图片 6中的人物参考视频 3的动作，并跟随音频 3",
+            promptDocument: {
+                version: 1,
+                blocks: [
+                    { type: "text", text: "让" },
+                    { type: "reference", nodeId: "image-6", kind: "image", label: "图片 6" },
+                    { type: "text", text: "中的人物参考" },
+                    { type: "reference", nodeId: "video-3", kind: "video", label: "视频 3" },
+                    { type: "text", text: "的动作，并跟随" },
+                    { type: "reference", nodeId: "audio-3", kind: "audio", label: "音频 3" },
+                ],
+            },
+            assetRefs: [...imageRefs, ...videoRefs],
+            audioRefs,
+        },
+        shots: [tableShot("s-1", 1)],
+        assets: refs.map((ref) => ({ id: ref.assetId, kind: ref.kind, title: ref.assetId, data: { dataUrl: `blob:${ref.assetId}`, url: `blob:${ref.assetId}` }, updatedAt: "now" })),
+        position: { x: 0, y: 0 },
+        config: { model: "seedance-2.0" },
+        idFactory: (prefix) => {
+            const kind = prefix.replace("shot-group-", "") as keyof typeof mediaCounts;
+            return kind in mediaCounts ? `${kind}-node-${++mediaCounts[kind]}` : `${prefix}-id`;
+        },
+        connectionIdFactory: (index) => `conn-${index}`,
+    });
+    const configNode = result.nodes.find((node) => node.type === "config");
+    assert.equal(configNode?.metadata?.prompt, "让图片 5中的人物参考视频 2的动作，并跟随音频 2");
+    assert.equal(configNode?.metadata?.finalPrompt, "让图片 5中的人物参考视频 2的动作，并跟随音频 2");
+});
+
+test("renumbers the thirtieth Seedance 2.5 image and preserves input order when inserted into canvas", () => {
+    const imageRefs = Array.from({ length: 29 }, (_, index) => ({ assetId: `image-${index + 2}`, kind: "image" as const, role: "reference_image" }));
+    const videoRefs = Array.from({ length: 10 }, (_, index) => ({ assetId: `video-${index + 1}`, kind: "video" as const, role: "reference_video" }));
+    const audioRefs = Array.from({ length: 10 }, (_, index) => ({ assetId: `audio-${index + 1}`, kind: "audio" as const, role: "reference_audio" }));
+    const refs = [...imageRefs, ...videoRefs, ...audioRefs];
+    const mediaCounts = { image: 0, video: 0, audio: 0 };
+    const result = planShotGroupCanvasInsert({
+        group: {
+            ...shotGroup("sg-1", ["s-1"]),
+            prompt: "从图片 30开始，参考视频 10并跟随音频 10",
+            promptDocument: {
+                version: 1,
+                blocks: [
+                    { type: "text", text: "从" },
+                    { type: "reference", nodeId: "image-30", kind: "image", label: "图片 30" },
+                    { type: "text", text: "开始，参考" },
+                    { type: "reference", nodeId: "video-10", kind: "video", label: "视频 10" },
+                    { type: "text", text: "并跟随" },
+                    { type: "reference", nodeId: "audio-10", kind: "audio", label: "音频 10" },
+                ],
+            },
+            assetRefs: [...imageRefs, ...videoRefs],
+            audioRefs,
+        },
+        shots: [tableShot("s-1", 1)],
+        assets: refs.map((ref) => ({ id: ref.assetId, kind: ref.kind, title: ref.assetId, data: { dataUrl: `blob:${ref.assetId}`, url: `blob:${ref.assetId}` }, updatedAt: "now" })),
+        position: { x: 0, y: 0 },
+        config: { model: "seedance-2.5" },
+        idFactory: (prefix) => {
+            const kind = prefix.replace("shot-group-", "") as keyof typeof mediaCounts;
+            return kind in mediaCounts ? `${kind}-node-${++mediaCounts[kind]}` : `${prefix}-id`;
+        },
+        connectionIdFactory: (index) => `conn-${index}`,
+    });
+    const configNode = result.nodes.find((node) => node.type === "config");
+    const promptReference = configNode?.metadata?.promptDocument?.blocks.find((block) => block.type === "reference");
+    assert.equal(configNode?.metadata?.prompt, "从图片 29开始，参考视频 10并跟随音频 10");
+    assert.equal(promptReference?.nodeId, "image-node-29");
+    assert.deepEqual(configNode?.metadata?.inputOrder, [
+        ...Array.from({ length: 29 }, (_, index) => `image-node-${index + 1}`),
+        ...Array.from({ length: 10 }, (_, index) => `video-node-${index + 1}`),
+        ...Array.from({ length: 10 }, (_, index) => `audio-node-${index + 1}`),
+    ]);
+});
+
+test("rejects a shot group prompt document that references a removed asset", () => {
+    assert.throws(
+        () =>
+            planShotGroupCanvasInsert({
+                group: {
+                    ...shotGroup("sg-1", ["s-1"]),
+                    promptDocument: { version: 1, blocks: [{ type: "reference", nodeId: "removed-asset", kind: "image", label: "图片 1" }] },
+                },
+                shots: [tableShot("s-1", 1)],
+                assets: [],
+                position: { x: 0, y: 0 },
+                config: { model: "seedance-2.0" },
+                idFactory: (prefix) => `${prefix}-id`,
+                connectionIdFactory: (index) => `conn-${index}`,
+            }),
+        /引用素材已移除/,
+    );
+});
+
 test("plans shot group video config node with agent trace and fixed asset versions", () => {
     const group = shotGroup("sg-1", ["s-1", "s-2"]);
     const result = planShotGroupCanvasInsert({

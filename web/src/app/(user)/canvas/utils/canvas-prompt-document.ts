@@ -55,6 +55,13 @@ export function validatePromptDocument(document: CanvasPromptDocument, options: 
     return document.blocks.flatMap((block) => (block.type === "reference" && !availableIds.has(block.nodeId) ? [block.nodeId] : []));
 }
 
+export function remapPromptReferenceIds(document: CanvasPromptDocument, idMap: ReadonlyMap<string, string>): CanvasPromptDocument {
+    return {
+        ...document,
+        blocks: document.blocks.map((block) => (block.type === "reference" ? { ...block, nodeId: idMap.get(block.nodeId) || block.nodeId } : { ...block })),
+    };
+}
+
 function slicePromptBlocks(blocks: CanvasPromptDocument["blocks"], from: number, to: number) {
     const result: CanvasPromptDocument["blocks"] = [];
     let offset = 0;

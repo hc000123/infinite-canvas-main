@@ -38,8 +38,10 @@ import { filterReferenceMentions, matchCanvasReferenceMention, type CanvasRefere
 type CanvasPromptEditorProps = {
     initialDocument: CanvasPromptDocument;
     options: CanvasReferenceMentionOption[];
+    mentionOptions?: CanvasReferenceMentionOption[];
     placeholder: string;
     onChange: (document: CanvasPromptDocument) => void;
+    onMentionReference?: (nodeId: string) => void;
     onPreviewReference?: (nodeId: string) => void;
     expanded?: boolean;
     onExpand?: () => void;
@@ -122,7 +124,7 @@ class ReferenceMenuOption extends MenuOption {
     }
 }
 
-export function CanvasPromptEditor({ initialDocument, options, placeholder, onChange, onPreviewReference, expanded = false, onExpand }: CanvasPromptEditorProps) {
+export function CanvasPromptEditor({ initialDocument, options, mentionOptions = options, placeholder, onChange, onMentionReference, onPreviewReference, expanded = false, onExpand }: CanvasPromptEditorProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const optionMap = useMemo(() => new Map(options.map((option) => [option.id, option])), [options]);
     const initialConfig = useMemo(
@@ -155,7 +157,7 @@ export function CanvasPromptEditor({ initialDocument, options, placeholder, onCh
                     />
                     <HistoryPlugin />
                     <OnChangePlugin onChange={(editorState) => editorState.read(() => onChange($readPromptDocument()))} />
-                    <ReferenceTypeaheadPlugin options={options} />
+                    <ReferenceTypeaheadPlugin options={mentionOptions} onMentionReference={onMentionReference} />
                     {onExpand ? (
                         <button
                             type="button"
@@ -175,7 +177,7 @@ export function CanvasPromptEditor({ initialDocument, options, placeholder, onCh
     );
 }
 
-function ReferenceTypeaheadPlugin({ options }: { options: CanvasReferenceMentionOption[] }) {
+function ReferenceTypeaheadPlugin({ options, onMentionReference }: { options: CanvasReferenceMentionOption[]; onMentionReference?: (nodeId: string) => void }) {
     const [editor] = useLexicalComposerContext();
     const [query, setQuery] = useState<string | null>(null);
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
@@ -189,6 +191,7 @@ function ReferenceTypeaheadPlugin({ options }: { options: CanvasReferenceMention
             onQueryChange={setQuery}
             onSelectOption={(menuOption, textNodeContainingQuery, closeMenu) => {
                 const option = menuOption.option;
+                onMentionReference?.(option.id);
                 const referenceNode = $createCanvasPromptReferenceNode(option.id, option.previewType || "image", option.label);
                 if (textNodeContainingQuery) textNodeContainingQuery.replace(referenceNode);
                 else $insertNodes([referenceNode]);

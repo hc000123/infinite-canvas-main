@@ -3,6 +3,8 @@ import { buildAssetVersionReference, type AssetVersionReference } from "../../as
 import { canvasAssetReferenceMetadata } from "./canvas-asset-reference.ts";
 import type { ProductionBibleKind } from "./production-bible.ts";
 import type { ScriptEpisode, ScriptScene } from "./script-management.ts";
+import { remapPromptReferenceIds, serializePromptDocument, validatePromptDocument, type CanvasPromptDocument } from "./canvas-prompt-document.ts";
+import type { CanvasReferenceMentionOption } from "./canvas-reference-mentions.ts";
 
 export type StoryboardAssetKind = "image" | "video" | "audio";
 export type StoryboardShotStatus = "draft" | "ready" | "in_canvas" | "generating" | "review" | "done" | "error";
@@ -156,7 +158,9 @@ export type ShotGroup = {
     shotIds: string[];
     totalDuration: number;
     prompt: string;
+    promptDocument?: CanvasPromptDocument;
     effectivePrompt: string;
+    effectivePromptDocument?: CanvasPromptDocument;
     assetRefs: StoryboardAssetRef[];
     audioRefs: StoryboardAssetRef[];
     productionBibleRefs?: StoryboardProductionBibleRef[];
@@ -755,7 +759,16 @@ export function planShotGroupCanvasInsert({
 }) {
     const assetsById = new Map(assets.map((asset) => [asset.id, asset]));
     const shotsById = new Map(shots.map((shot) => [shot.id, shot]));
-    const prompt = group.effectivePrompt || group.prompt || buildShotGroupPrompt(group.shotIds.map((id) => shotsById.get(id)).filter((shot): shot is StoryboardTableShot => Boolean(shot)));
+    const mediaRefs = dedupeAssetRefs([...group.assetRefs, ...group.audioRefs, ...autoAssetRefs]).filter((ref) => {
+        const asset = assetsById.get(ref.assetId);
+        return asset?.kind === "image" || asset?.kind === "video" || asset?.kind === "audio";
+    });
+    const assetPromptOptions = buildShotGroupPromptOptions(mediaRefs, assetsById);
+    const documents = [group.promptDocument, group.effectivePromptDocument].filter((document): document is CanvasPromptDocument => Boolean(document));
+    if (documents.some((document) => validatePromptDocument(document, assetPromptOptions).length)) throw new Error("提示词引用素材已移除，请恢复素材或删除失效引用");
+    const effectiveDocumentText = group.effectivePromptDocument ? serializePromptDocument(group.effectivePromptDocument, assetPromptOptions).trim() : "";
+    const promptDocument = effectiveDocumentText ? group.effectivePromptDocument : group.effectivePrompt ? undefined : group.promptDocument;
+    const prompt = effectiveDocumentText || group.effectivePrompt || (group.promptDocument ? serializePromptDocument(group.promptDocument, assetPromptOptions) : group.prompt) || buildShotGroupPrompt(group.shotIds.map((id) => shotsById.get(id)).filter((shot): shot is StoryboardTableShot => Boolean(shot)));
     const nodes: CanvasNodeData[] = [];
     const connections: CanvasConnection[] = [];
     const groupNodeRefs: StoryboardNodeRef[] = [];
@@ -764,18 +777,6 @@ export function planShotGroupCanvasInsert({
     const promptId = idFactory("shot-group-text");
     const configId = idFactory("shot-group-config");
 
-    nodes.push({
-        id: promptId,
-        type: "text" as CanvasNodeData["type"],
-        title: `${group.sceneName} · 生成提示词`,
-        position,
-        width: NODE_SIZE.text.width,
-        height: NODE_SIZE.text.height,
-        metadata: buildShotGroupCanvasInsertMetadata(group, { content: prompt, prompt, status: "success", fontSize: 14, role: "prompt" } as CanvasNodeMetadata & { role: string }),
-    });
-    groupNodeRefs.push({ nodeId: promptId, role: "prompt" });
-
-    const mediaRefs = dedupeAssetRefs([...group.assetRefs, ...group.audioRefs, ...autoAssetRefs]);
     for (const ref of mediaRefs) {
         const asset = assetsById.get(ref.assetId);
         if (!asset || (asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "audio")) continue;
@@ -784,6 +785,20 @@ export function planShotGroupCanvasInsert({
         mediaNodeRefs.push({ ref, nodeId });
         nodes.push(assetToCanvasNodeForShotGroup(asset, ref, nodeId, { x: position.x + NODE_SIZE.text.width + 80, y: position.y + (mediaNodeRefs.length - 1) * 160 }, group));
     }
+
+    const nodeIdByAssetId = new Map(mediaNodeRefs.map(({ ref, nodeId }) => [ref.assetId, nodeId]));
+    const canvasPromptDocument = promptDocument ? remapPromptReferenceIds(promptDocument, nodeIdByAssetId) : undefined;
+
+    nodes.unshift({
+        id: promptId,
+        type: "text" as CanvasNodeData["type"],
+        title: `${group.sceneName} · 生成提示词`,
+        position,
+        width: NODE_SIZE.text.width,
+        height: NODE_SIZE.text.height,
+        metadata: buildShotGroupCanvasInsertMetadata(group, { content: prompt, prompt, status: "success", fontSize: 14, role: "prompt" } as CanvasNodeMetadata & { role: string }),
+    });
+    groupNodeRefs.unshift({ nodeId: promptId, role: "prompt" });
 
     nodes.push({
         id: configId,
@@ -797,6 +812,7 @@ export function planShotGroupCanvasInsert({
             status: "idle",
             generationMode: "video",
             prompt,
+            promptDocument: canvasPromptDocument,
             finalPrompt: prompt,
             provider: config.provider,
             model: config.model,
@@ -813,6 +829,7 @@ export function planShotGroupCanvasInsert({
             videoReferences: mediaNodeRefs.filter(({ ref }) => ref.kind === "video").map(({ ref }) => `asset:${ref.assetId}`),
             audioReferences: mediaNodeRefs.filter(({ ref }) => ref.kind === "audio").map(({ ref }) => `asset:${ref.assetId}`),
             referenceAssets: buildShotGroupReferenceAssets(mediaNodeRefs, assetsById),
+            inputOrder: mediaNodeRefs.map(({ nodeId }) => nodeId),
             referenceRoles: mediaNodeRefs.map(({ ref, nodeId }, index) => ({ nodeId, kind: ref.kind, role: ref.role || "reference", index: index + 1 })),
             referenceOrder: mediaNodeRefs.map(({ ref, nodeId }, index) => ({ nodeId, kind: ref.kind, index: index + 1 })),
         } as CanvasNodeMetadata & { role: string }),
@@ -822,6 +839,14 @@ export function planShotGroupCanvasInsert({
     connections.push({ id: connectionIdFactory(connectionIndex++), fromNodeId: promptId, toNodeId: configId });
     mediaNodeRefs.forEach(({ nodeId }) => connections.push({ id: connectionIdFactory(connectionIndex++), fromNodeId: nodeId, toNodeId: configId }));
     return { nodes, connections, groupNodeRefs };
+}
+
+function buildShotGroupPromptOptions(refs: StoryboardAssetRef[], assetsById: Map<string, StoryboardAssetLike>): CanvasReferenceMentionOption[] {
+    const counts = { image: 0, video: 0, audio: 0 };
+    return refs.map((ref) => {
+        const index = ++counts[ref.kind];
+        return { id: ref.assetId, label: `${ref.kind === "image" ? "图片" : ref.kind === "video" ? "视频" : "音频"} ${index}`, detail: assetsById.get(ref.assetId)?.title, previewType: ref.kind };
+    });
 }
 
 function buildShotGroupReferenceAssets(refs: Array<{ ref: StoryboardAssetRef; nodeId: string }>, assetsById: Map<string, StoryboardAssetLike>) {
