@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { AudioLines, Ellipsis, FileType2, Image as ImageIcon, MousePointer2, SlidersHorizontal, Upload, Video } from "lucide-react";
+import { Dropdown } from "antd";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -20,6 +21,10 @@ export type CanvasCreateRailActions = {
 export function CanvasCreateRail({ actions }: { actions: CanvasCreateRailActions }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const [moreOpen, setMoreOpen] = useState(false);
+    const moreItems = [
+        { key: "config", label: "配置节点", icon: <SlidersHorizontal className="size-4" />, onClick: () => { actions.onAddConfig(); setMoreOpen(false); } },
+        { key: "upload", label: "上传文件", icon: <Upload className="size-4" />, onClick: () => { actions.onUpload(); setMoreOpen(false); } },
+    ];
 
     return (
         <div className="pointer-events-none absolute bottom-24 left-4 top-16 z-50 flex items-center">
@@ -29,32 +34,21 @@ export function CanvasCreateRail({ actions }: { actions: CanvasCreateRailActions
                 <CanvasToolButton label="图片" icon={<ImageIcon className="size-4.5" />} onClick={actions.onAddImage} />
                 <CanvasToolButton label="视频" icon={<Video className="size-4.5" />} onClick={actions.onAddVideo} />
                 <CanvasToolButton label="音频" icon={<AudioLines className="size-4.5" />} onClick={actions.onAddAudio} />
-                <CanvasToolButton label="更多" icon={<Ellipsis className="size-4.5" />} active={moreOpen} onClick={() => setMoreOpen((open) => !open)} />
-                {moreOpen ? (
-                    <div className="absolute left-full bottom-0 ml-2 min-w-36 rounded-lg border p-1" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border }}>
-                        <MoreAction label="配置节点" icon={<SlidersHorizontal className="size-4" />} onClick={actions.onAddConfig} onDone={() => setMoreOpen(false)} />
-                        <MoreAction label="上传文件" icon={<Upload className="size-4" />} onClick={actions.onUpload} onDone={() => setMoreOpen(false)} />
-                    </div>
-                ) : null}
+                <Dropdown trigger={["click"]} placement="bottomLeft" open={moreOpen} onOpenChange={setMoreOpen} menu={{ items: moreItems }}>
+                    <button
+                        type="button"
+                        className="group relative grid h-8 w-8 place-items-center transition"
+                        style={{ color: moreOpen ? theme.accent : theme.toolbar.item }}
+                        aria-label="更多"
+                        aria-haspopup="menu"
+                        aria-expanded={moreOpen}
+                    >
+                        <span className="grid size-8 place-items-center rounded-lg transition" style={{ background: moreOpen ? theme.toolbar.activeBg : undefined, outline: moreOpen ? `1px solid ${theme.focusRing}` : undefined }}>
+                            <Ellipsis className="size-4.5" />
+                        </span>
+                    </button>
+                </Dropdown>
             </nav>
         </div>
-    );
-}
-
-function MoreAction({ label, icon, onClick, onDone }: { label: string; icon: ReactNode; onClick: () => void; onDone: () => void }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
-    return (
-        <button
-            type="button"
-            className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm transition hover:bg-[var(--studio-hover-bg)]"
-            style={{ color: theme.toolbar.item }}
-            onClick={() => {
-                onClick();
-                onDone();
-            }}
-        >
-            {icon}
-            <span>{label}</span>
-        </button>
     );
 }

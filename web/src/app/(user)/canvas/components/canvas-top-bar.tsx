@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, FolderOpen, Home, Keyboard, Layers3, LayoutGrid, Menu as MenuIcon, Plus, Redo2, Save, Trash2, Undo2, Upload } from "lucide-react";
-import { Button, Menu as AntMenu, Modal, type MenuProps } from "antd";
+import { ArrowLeft, Ellipsis, FolderOpen, Home, Keyboard, Layers3, LayoutGrid, Menu as MenuIcon, Plus, Redo2, Save, Trash2, Undo2, Upload } from "lucide-react";
+import { Button, Dropdown, Menu as AntMenu, Modal, type MenuProps } from "antd";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -67,6 +67,7 @@ export function CanvasTopBar({
     const titleRef = useRef<HTMLDivElement>(null);
     const menuTriggerRef = useRef<HTMLDivElement>(null);
     const [menuOpen, setMenuOpen] = useState(false);
+    const [globalActionsOpen, setGlobalActionsOpen] = useState(false);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const childMenuItems: MenuProps["items"] = childCanvases.length
         ? [{ key: "children", icon: <Layers3 className="size-4" />, label: "切换子画布", children: childCanvases.map((canvas) => ({ key: `child-${canvas.id}`, label: canvas.title, onClick: () => onOpenChildCanvas(canvas.id) })) }]
@@ -180,6 +181,31 @@ export function CanvasTopBar({
 
                 <div className="pointer-events-auto flex shrink-0 items-center gap-1">
                     <CanvasCapacityIndicator capacity={capacity} />
+                    <Dropdown
+                        trigger={["click"]}
+                        placement="bottomRight"
+                        open={globalActionsOpen}
+                        onOpenChange={setGlobalActionsOpen}
+                        menu={{
+                            items: [
+                                { key: "global-import", icon: <Upload className="size-4" />, label: "导入", onClick: onImportImage },
+                                { key: "global-assets", icon: <FolderOpen className="size-4" />, label: "素材", onClick: onOpenAssets },
+                                { key: "global-organize", icon: <LayoutGrid className="size-4" />, label: "整理画布", onClick: onOrganizeCanvas },
+                                { key: "global-save", icon: <Save className="size-4" />, label: "保存", onClick: onSaveProject },
+                            ],
+                        }}
+                    >
+                        <button
+                            type="button"
+                            className="md:hidden grid size-9 place-items-center rounded-lg transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
+                            style={{ color: theme.node.text }}
+                            aria-label="全局操作"
+                            aria-haspopup="menu"
+                            aria-expanded={globalActionsOpen}
+                        >
+                            <Ellipsis className="size-5" />
+                        </button>
+                    </Dropdown>
                     <div className="hidden items-center gap-1 md:flex">
                         <TopAction label="导入" icon={<Upload className="size-4" />} onClick={onImportImage} />
                         <TopAction label="素材" icon={<FolderOpen className="size-4" />} onClick={onOpenAssets} />
