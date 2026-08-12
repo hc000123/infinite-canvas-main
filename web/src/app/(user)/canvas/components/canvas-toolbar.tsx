@@ -30,7 +30,7 @@ export function CanvasToolbar({ actions, state }: { actions: CanvasToolbarAction
     const theme = canvasThemes[colorTheme];
     const [appearanceOpen, setAppearanceOpen] = useState(false);
     const [panelX, setPanelX] = useState(0);
-    const dockStyle = { background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item, boxShadow: "var(--studio-shadow)" };
+    const dockStyle = { background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item };
     const tools = buildToolbarItems({
         actions,
         state,
@@ -43,7 +43,7 @@ export function CanvasToolbar({ actions, state }: { actions: CanvasToolbarAction
 
     return (
         <div className="pointer-events-none absolute inset-x-4 bottom-5 z-50 flex justify-center">
-            <div className="thin-scrollbar pointer-events-auto flex h-14 max-w-full items-center gap-1 overflow-x-auto rounded-lg border px-2 shadow-[var(--studio-shadow)] backdrop-blur [&>*]:shrink-0" style={dockStyle}>
+            <div data-canvas-editorial-surface className="thin-scrollbar pointer-events-auto flex h-14 max-w-full items-center gap-1 overflow-x-auto rounded-md border px-2 [&>*]:shrink-0" style={dockStyle}>
                 {tools.map((tool) =>
                     tool.type === "divider" ? <CanvasToolDivider key={tool.id} /> : <CanvasToolButton key={tool.id} label={tool.label} icon={tool.icon} onClick={tool.onClick} active={tool.active} disabled={tool.disabled} danger={tool.danger} />,
                 )}

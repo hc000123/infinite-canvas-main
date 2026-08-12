@@ -32,7 +32,7 @@ export function CanvasToolButton({
     const dangerColor = token.colorError;
     const textColor = danger ? dangerColor : active ? theme.accent : theme.toolbar.item;
     const buttonSize = size === "md" ? "h-12 w-12 px-1.5" : "h-8 w-8";
-    const iconSize = size === "md" ? "size-9 rounded-lg" : "size-8 rounded-lg";
+    const iconSize = size === "md" ? "size-9 rounded-md" : "size-8 rounded-md";
     const hoverActive = hovered && !disabled && !active;
 
     const tooltipText = title || label;

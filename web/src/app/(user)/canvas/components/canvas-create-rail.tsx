@@ -28,7 +28,7 @@ export function CanvasCreateRail({ actions }: { actions: CanvasCreateRailActions
 
     return (
         <div className="pointer-events-none absolute bottom-24 left-4 top-16 z-50 flex items-center">
-            <nav aria-label="左侧创建栏" className="pointer-events-auto relative flex flex-col gap-0.5 rounded-lg border p-1" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item }}>
+            <nav data-canvas-editorial-surface aria-label="左侧创建栏" className="pointer-events-auto relative flex flex-col gap-0.5 rounded-md border p-1" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item }}>
                 <CanvasToolButton label="选择" icon={<MousePointer2 className="size-4.5" />} onClick={actions.onDeselect} />
                 <CanvasToolButton label="文本" icon={<FileType2 className="size-4.5" />} onClick={actions.onAddText} />
                 <CanvasToolButton label="图片" icon={<ImageIcon className="size-4.5" />} onClick={actions.onAddImage} />
@@ -43,7 +43,7 @@ export function CanvasCreateRail({ actions }: { actions: CanvasCreateRailActions
                         aria-haspopup="menu"
                         aria-expanded={moreOpen}
                     >
-                        <span className="grid size-8 place-items-center rounded-lg transition" style={{ background: moreOpen ? theme.toolbar.activeBg : undefined, outline: moreOpen ? `1px solid ${theme.focusRing}` : undefined }}>
+                        <span className="grid size-8 place-items-center rounded-md transition" style={{ background: moreOpen ? theme.toolbar.activeBg : undefined, outline: moreOpen ? `1px solid ${theme.focusRing}` : undefined }}>
                             <Ellipsis className="size-4.5" />
                         </span>
                     </button>

@@ -99,7 +99,8 @@ export function CanvasNodeHoverToolbar({ node, viewport, onKeep, onLeave, action
 
     return (
         <div
-            className="absolute z-[70] flex h-12 -translate-x-1/2 -translate-y-full items-center overflow-visible rounded-lg border text-[15px] shadow-[var(--studio-shadow)] backdrop-blur"
+            data-canvas-editorial-surface
+            className="absolute z-[70] flex h-12 -translate-x-1/2 -translate-y-full items-center overflow-visible rounded-md border text-[15px]"
             style={{ left, top, background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item }}
             onMouseEnter={() => onKeep(node.id)}
             onMouseLeave={onLeave}

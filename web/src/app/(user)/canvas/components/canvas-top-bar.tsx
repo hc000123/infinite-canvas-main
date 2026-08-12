@@ -101,7 +101,7 @@ export function CanvasTopBar({
                     <div ref={menuTriggerRef} className="relative">
                         <button
                             type="button"
-                            className="grid size-9 place-items-center rounded-full transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
+                            className="grid size-9 place-items-center rounded-md transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
                             style={{ color: theme.node.text }}
                             onClick={() => setMenuOpen((open) => !open)}
                             aria-label="打开画布菜单"
@@ -141,7 +141,7 @@ export function CanvasTopBar({
                     <div ref={titleRef} className="flex min-w-0 items-center gap-1.5 overflow-hidden">
                         <button
                             type="button"
-                            className="grid size-8 shrink-0 place-items-center rounded-lg transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
+                            className="grid size-8 shrink-0 place-items-center rounded-md transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
                             style={{ color: theme.node.muted }}
                             onClick={onReturnParent}
                             aria-label={returnLabel}
@@ -197,7 +197,7 @@ export function CanvasTopBar({
                     >
                         <button
                             type="button"
-                            className="md:hidden grid size-9 place-items-center rounded-lg transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
+                            className="md:hidden grid size-9 place-items-center rounded-md transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
                             style={{ color: theme.node.text }}
                             aria-label="全局操作"
                             aria-haspopup="menu"
@@ -240,7 +240,7 @@ export function CanvasTopBar({
 function TopAction({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     return (
-        <Button type="text" className="!h-8 !rounded-lg !px-2 !text-sm !font-medium opacity-85 hover:!opacity-100 sm:!px-2.5" style={{ color: theme.node.text }} icon={icon} onClick={onClick} aria-label={label} title={label}>
+        <Button type="text" className="!h-8 !rounded-md !px-2 !text-sm !font-medium opacity-85 hover:!opacity-100 sm:!px-2.5" style={{ color: theme.node.text }} icon={icon} onClick={onClick} aria-label={label} title={label}>
             <span className="hidden sm:inline">{label}</span>
         </Button>
     );
