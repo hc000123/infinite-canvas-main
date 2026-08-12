@@ -1,16 +1,16 @@
 "use client";
 
 import type { ReactNode, RefObject } from "react";
-import { AudioLines, ChevronRight, Image as ImageIcon, Maximize2, RefreshCw, Sparkles, Star, Upload } from "lucide-react";
+import { AlertTriangle, AudioLines, ChevronRight, Image as ImageIcon, Maximize2, RefreshCw, Sparkles, Star, Upload } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { formatBytes } from "@/lib/image-utils";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasNodeType, type CanvasNodeData } from "../types";
-import { shouldShowCanvasNodeProgress } from "../utils/canvas-node-status";
+import { deriveCanvasNodePresentation } from "../utils/canvas-node-presentation";
+import { CanvasLogoPlaceholder } from "./canvas-logo-placeholder";
 import { GeneratedPromptToggle, MediaReviewStatusBadge } from "./canvas-media-node-controls";
 import { VideoNodeContent } from "./canvas-video-node-content";
-import { VideoTaskProgressPanel } from "./canvas-video-task-progress-panel";
 import { CanvasMediaVersionControl } from "./canvas-media-version-control";
 
 export type NodeContentRendererProps = {
@@ -43,16 +43,18 @@ export type NodeContentRendererProps = {
 };
 
 export function NodeContent(props: NodeContentRendererProps) {
-    if (props.node.type === CanvasNodeType.Config && props.renderNodeContent) return props.renderNodeContent(props.node);
-    if (shouldShowCanvasNodeProgress(props.node)) return <LoadingContent node={props.node} theme={props.theme} onRefreshVideoTask={props.onRefreshVideoTask} showPanel={props.showPanel} />;
-    if (props.isBatchRoot) return <ImageNodeContent {...props} />;
-    if (props.node.type === CanvasNodeType.Image && props.node.metadata?.content) return <ImageNodeContent {...props} />;
-    if (props.node.type === CanvasNodeType.Video && props.node.metadata?.content) return <VideoNodeContent {...props} />;
-    if (props.node.metadata?.status === "loading") return <LoadingContent node={props.node} theme={props.theme} onRefreshVideoTask={props.onRefreshVideoTask} showPanel={props.showPanel} />;
-    if (props.node.metadata?.status === "error") return <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} onRefreshVideoTask={props.onRefreshVideoTask} showPanel={props.showPanel} />;
-
+    const presentation = deriveCanvasNodePresentation(props.node);
     const Renderer = nodeContentRenderers[props.node.type];
-    return <Renderer {...props} />;
+    const placeholder = props.node.type === CanvasNodeType.Image ? <EmptyImageContent {...props} isBatchRoot={false} /> : <CanvasLogoPlaceholder label={`${props.node.title || "媒体节点"}等待媒体内容`} />;
+    const contentBody = props.node.type === CanvasNodeType.Config && props.renderNodeContent ? props.renderNodeContent(props.node) : <Renderer {...props} />;
+    const body = presentation.body === "media" ? <Renderer {...props} /> : presentation.body === "logo" ? (props.isBatchRoot ? <BatchFrame batchCount={props.batchCount} batchExpanded={props.batchExpanded} batchOpening={props.batchOpening} batchRecovering={props.batchRecovering} onToggleBatch={props.onToggleBatch}>{placeholder}</BatchFrame> : placeholder) : contentBody;
+    return (
+        <>
+            {body}
+            {presentation.overlay === "loading" ? <NodeStatusOverlay node={props.node} theme={props.theme} status="loading" /> : null}
+            {presentation.overlay === "error" ? <NodeStatusOverlay node={props.node} theme={props.theme} status="error" onRetry={props.onRetry} /> : null}
+        </>
+    );
 }
 
 export function ImageInfoBar({ node }: { node: CanvasNodeData }) {
@@ -77,54 +79,29 @@ const nodeContentRenderers = {
     [CanvasNodeType.Audio]: AudioNodeContent,
 } satisfies Record<CanvasNodeType, (props: NodeContentRendererProps) => ReactNode>;
 
-function LoadingContent({ node, theme, onRefreshVideoTask, showPanel }: Pick<NodeContentRendererProps, "node" | "theme" | "onRefreshVideoTask" | "showPanel">) {
-    if (node.type === CanvasNodeType.Video) return <VideoTaskProgressPanel node={node} theme={theme} onRefreshVideoTask={onRefreshVideoTask} showPanel={showPanel} />;
-    const upscale = node.metadata?.imageUpscale;
+function NodeStatusOverlay({ node, theme, status, onRetry }: Pick<NodeContentRendererProps, "node" | "theme" | "onRetry"> & { status: "loading" | "error" }) {
+    const loadingLabel = node.metadata?.imageUpscale ? `云端超分 ${node.metadata.imageUpscale.progress}%` : node.metadata?.pendingMediaVersion ? "新版本生成中" : "生成中";
     return (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-3" style={{ color: theme.node.activeStroke }}>
-            <div className="size-10 animate-spin rounded-full border-2" style={{ borderColor: theme.node.stroke, borderTopColor: theme.node.activeStroke }} />
-            <span className="text-[10px] tracking-[0.2em]">{upscale ? `云端超分 ${upscale.progress}%` : node.metadata?.pendingMediaVersion ? "新版本生成中" : "生成中"}</span>
-            {upscale ? <div className="h-1 w-28 overflow-hidden rounded-full" style={{ background: theme.node.stroke }}><div className="h-full rounded-full transition-[width]" style={{ width: `${upscale.progress}%`, background: theme.node.activeStroke }} /></div> : null}
-        </div>
-    );
-}
-
-function ErrorContent({ node, theme, onRetry, onRefreshVideoTask, showPanel }: Pick<NodeContentRendererProps, "node" | "theme" | "onRetry" | "onRefreshVideoTask" | "showPanel">) {
-    if (node.type === CanvasNodeType.Video) {
-        return (
-            <VideoTaskProgressPanel node={node} theme={theme} onRefreshVideoTask={onRefreshVideoTask} showPanel={showPanel}>
-                <button
-                    type="button"
-                    className="inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition hover:scale-[1.02]"
-                    style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
-                    onClick={(event) => {
-                        event.stopPropagation();
-                        onRetry?.(node);
-                    }}
-                    onMouseDown={(event) => event.stopPropagation()}
-                >
-                    <RefreshCw className="size-3.5" />
-                    重试
-                </button>
-            </VideoTaskProgressPanel>
-        );
-    }
-    return (
-        <div className="flex max-w-[260px] flex-col items-center gap-3 px-5 text-center">
-            <div className="text-xs leading-5 text-[var(--studio-danger)]">{node.metadata?.errorDetails || "生成失败"}</div>
-            <button
-                type="button"
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition hover:scale-[1.02]"
-                style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
-                onClick={(event) => {
-                    event.stopPropagation();
-                    onRetry?.(node);
-                }}
-                onMouseDown={(event) => event.stopPropagation()}
-            >
-                <RefreshCw className="size-3.5" />
-                重试
-            </button>
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-end justify-center p-3">
+            <div className="pointer-events-auto inline-flex max-w-full items-center gap-2 rounded-[4px] border px-2.5 py-2 text-xs backdrop-blur-md" style={{ background: theme.surfaceOverlay, borderColor: status === "error" ? "var(--studio-danger)" : theme.focusRing, color: status === "error" ? "var(--studio-danger)" : theme.node.text }}>
+                {status === "loading" ? <span className="size-3.5 shrink-0 animate-spin rounded-full border" style={{ borderColor: theme.node.stroke, borderTopColor: theme.accent }} /> : <AlertTriangle className="size-3.5 shrink-0" />}
+                <span className="truncate">{status === "loading" ? loadingLabel : node.metadata?.errorDetails || "生成失败"}</span>
+                {status === "error" ? (
+                    <button
+                        type="button"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-[3px] px-1.5 py-1 font-medium"
+                        style={{ color: theme.accent }}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onRetry?.(node);
+                        }}
+                        onMouseDown={(event) => event.stopPropagation()}
+                    >
+                        <RefreshCw className="size-3" />
+                        重试
+                    </button>
+                ) : null}
+            </div>
         </div>
     );
 }
@@ -194,21 +171,6 @@ function TextContent({ node, theme, isEditingContent, textareaRef, onContentChan
 }
 
 function ImageNodeContent(props: NodeContentRendererProps) {
-    if (!props.node.metadata?.content && props.isBatchRoot) {
-        const content =
-            props.node.metadata?.status === "loading" ? (
-                <LoadingContent node={props.node} theme={props.theme} onRefreshVideoTask={props.onRefreshVideoTask} showPanel={props.showPanel} />
-            ) : props.node.metadata?.status === "error" ? (
-                <ErrorContent node={props.node} theme={props.theme} onRetry={props.onRetry} onRefreshVideoTask={props.onRefreshVideoTask} showPanel={props.showPanel} />
-            ) : (
-                <EmptyImageContent {...props} isBatchRoot={false} />
-            );
-        return (
-            <BatchFrame batchCount={props.batchCount} batchExpanded={props.batchExpanded} batchOpening={props.batchOpening} batchRecovering={props.batchRecovering} onToggleBatch={props.onToggleBatch}>
-                {content}
-            </BatchFrame>
-        );
-    }
     if (!props.node.metadata?.content) return <EmptyImageContent {...props} />;
 
     return (
@@ -230,14 +192,11 @@ function ImageNodeContent(props: NodeContentRendererProps) {
 
 function EmptyImageContent({ node, theme, isBatchRoot, batchCount, batchExpanded, batchOpening, batchRecovering, onToggleBatch, onImageQuickAction }: NodeContentRendererProps) {
     const content = (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-5 px-8" style={{ color: theme.node.placeholder }}>
-            <ImageIcon className="size-16 opacity-35" />
-            <div className="w-full max-w-[220px] space-y-2 self-start">
-                <div className="text-xs font-medium" style={{ color: theme.node.muted }}>
-                    尝试：
-                </div>
-                <EmptyImageAction icon={<Upload className="size-4" />} label="图生图" theme={theme} onClick={() => onImageQuickAction?.(node, "image-to-image")} />
-                <EmptyImageAction icon={<Sparkles className="size-4" />} label="图片高清" theme={theme} onClick={() => onImageQuickAction?.(node, "upscale")} />
+        <div className="relative h-full w-full">
+            <CanvasLogoPlaceholder label={`${node.title || "图片节点"}等待图片内容`} />
+            <div className="absolute inset-x-3 bottom-3 z-10 flex justify-center gap-2">
+                <EmptyImageAction icon={<Upload className="size-3.5" />} label="图生图" theme={theme} onClick={() => onImageQuickAction?.(node, "image-to-image")} />
+                <EmptyImageAction icon={<Sparkles className="size-3.5" />} label="图片高清" theme={theme} onClick={() => onImageQuickAction?.(node, "upscale")} />
             </div>
         </div>
     );
@@ -254,8 +213,8 @@ function EmptyImageAction({ icon, label, theme, onClick }: { icon: ReactNode; la
     return (
         <button
             type="button"
-            className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm font-medium transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
-            style={{ color: theme.node.text }}
+            className="inline-flex h-8 items-center gap-1.5 rounded-[4px] border px-2 text-xs font-medium backdrop-blur-md transition hover:opacity-80 focus-visible:outline-none"
+            style={{ background: theme.surfaceOverlay, borderColor: theme.node.stroke, color: theme.node.text }}
             onClick={(event) => {
                 event.stopPropagation();
                 onClick();
@@ -264,7 +223,7 @@ function EmptyImageAction({ icon, label, theme, onClick }: { icon: ReactNode; la
             onPointerDown={(event) => event.stopPropagation()}
         >
             {icon}
-            <span>{label}</span>
+            {label}
         </button>
     );
 }
@@ -330,11 +289,6 @@ function ImageContent({
                 <GeneratedPromptToggle node={node} theme={theme} />
             </div>
             <CanvasMediaVersionControl node={node} disabled={node.metadata?.status === "loading"} className="absolute left-1/2 top-2.5 z-30 -translate-x-1/2" onSwitch={onSwitchMediaVersion} />
-            {node.metadata?.status === "loading" ? (
-                <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-black/20 backdrop-blur-[1px]">
-                    <div className="size-8 animate-spin rounded-full border-2 border-white/35 border-t-white" />
-                </div>
-            ) : null}
             <MediaReviewStatusBadge node={node} theme={theme} submitting={reviewSubmitting} className="absolute bottom-2.5 left-2.5 z-30" />
             {isBatchRoot ? (
                 <button

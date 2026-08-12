@@ -31,11 +31,11 @@ export function ConnectionPath({ connection, from, to, active, selected, onSelec
             />
             <path
                 d={pathD}
-                stroke={active ? theme.node.activeStroke : theme.node.muted}
-                strokeWidth={active ? 3 : 2}
+                stroke={active ? theme.accent : theme.node.muted}
+                strokeWidth={active ? 2.5 : 2}
                 strokeOpacity={active ? 1 : 0.82}
                 fill="none"
-                style={{ filter: active ? `drop-shadow(0 0 8px ${theme.node.activeStroke}66)` : undefined, pointerEvents: "none" }}
+                style={{ pointerEvents: "none" }}
             />
             {selected ? (
                 <foreignObject x={(startX + endX) / 2 - 14} y={(startY + endY) / 2 - 14} width="28" height="28" style={{ overflow: "visible", pointerEvents: "auto" }}>
@@ -71,7 +71,7 @@ export function ActiveConnectionPath({ node, handle, mouseWorld }: { node?: Canv
     const distance = Math.abs(endX - startX);
     const pathD = `M ${startX} ${startY} C ${startX + distance * 0.5} ${startY}, ${endX - distance * 0.5} ${endY}, ${endX} ${endY}`;
 
-    return <path d={pathD} stroke={theme.node.activeStroke} strokeWidth="2" fill="none" strokeDasharray="5,5" />;
+    return <path d={pathD} stroke={theme.accent} strokeWidth="2" fill="none" strokeDasharray="5,5" />;
 }
 
 function connectionPoint(node: CanvasNodeData, handleType: "source" | "target", handleId?: string): Position {

@@ -30,7 +30,7 @@ export function CanvasToolButton({
     const { token } = antdTheme.useToken();
     const [hovered, setHovered] = useState(false);
     const dangerColor = token.colorError;
-    const textColor = danger ? dangerColor : theme.toolbar.item;
+    const textColor = danger ? dangerColor : active ? theme.accent : theme.toolbar.item;
     const buttonSize = size === "md" ? "h-12 w-12 px-1.5" : "h-8 w-8";
     const iconSize = size === "md" ? "size-9 rounded-lg" : "size-8 rounded-lg";
     const hoverActive = hovered && !disabled && !active;
@@ -53,7 +53,8 @@ export function CanvasToolButton({
                     className={`grid ${iconSize} place-items-center transition`}
                     style={{
                         background: active ? theme.toolbar.activeBg : hoverActive ? theme.toolbar.itemHover : undefined,
-                        color: active ? theme.toolbar.activeText : danger ? dangerColor : hoverActive ? theme.toolbar.activeText : undefined,
+                        color: active ? theme.accent : danger ? dangerColor : hoverActive ? theme.node.text : undefined,
+                        outline: active ? `1px solid ${theme.focusRing}` : undefined,
                     }}
                 >
                     {icon}

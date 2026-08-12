@@ -21,13 +21,52 @@ test("node hover toolbar always stays above the node content", () => {
     assert.doesNotMatch(toolbar, /shouldOverlayMedia/);
 });
 
-test("node content checks pending generation progress before rendering stored media", () => {
+test("node content renders real media before adding status overlays", () => {
     const content = readCanvasFile("../components/canvas-node-content.tsx");
-    const progressCheck = content.indexOf("if (shouldShowCanvasNodeProgress(props.node))");
-    const imageContentCheck = content.indexOf("if (props.node.type === CanvasNodeType.Image && props.node.metadata?.content)");
-    const videoContentCheck = content.indexOf("if (props.node.type === CanvasNodeType.Video && props.node.metadata?.content)");
+    const bodyCheck = content.indexOf('presentation.body === "media"');
+    const overlayCheck = content.indexOf('presentation.overlay === "loading"');
 
-    assert.ok(progressCheck >= 0);
-    assert.ok(progressCheck < imageContentCheck);
-    assert.ok(progressCheck < videoContentCheck);
+    assert.ok(bodyCheck >= 0);
+    assert.ok(overlayCheck > bodyCheck);
+    assert.match(content, /deriveCanvasNodePresentation/);
+    assert.match(content, /CanvasLogoPlaceholder/);
+    assert.doesNotMatch(content, /Clapperboard|clapper|场记板/i);
+});
+
+test("logo-based empty images retain their existing quick action callbacks", () => {
+    const content = readCanvasFile("../components/canvas-node-content.tsx");
+
+    assert.match(content, /onImageQuickAction\?\.\(node, "image-to-image"\)/);
+    assert.match(content, /onImageQuickAction\?\.\(node, "upscale"\)/);
+});
+
+test("canvas logo placeholder is accessible and owns the only canvas logo reference", () => {
+    const logo = readCanvasFile("../components/canvas-logo-placeholder.tsx");
+
+    assert.equal((logo.match(/\/logo\.svg/g) || []).length, 1);
+    assert.match(logo, /aria-label=/);
+    assert.match(logo, /alt=""/);
+    assert.doesNotMatch(logo, /Clapperboard|clapper|场记板/i);
+});
+
+test("editorial canvas theme exposes warm surface, accent, and focus tokens", () => {
+    const theme = readCanvasFile("../../../../lib/canvas-theme.ts");
+
+    for (const token of ["accent", "surfaceRaised", "surfaceOverlay", "focusRing"]) assert.equal((theme.match(new RegExp(`${token}:`, "g")) || []).length, 2);
+    assert.match(theme, /background: "#171512"/);
+    assert.match(theme, /fill: "#24211B"/);
+    assert.match(theme, /panel: "#2A261F"/);
+    assert.match(theme, /accent: "#DF593B"/);
+    assert.match(theme, /accent: "#C94D34"/);
+});
+
+test("node and connection styling uses thin editorial accents without glow", () => {
+    const node = readCanvasFile("../components/canvas-node.tsx");
+    const connections = readCanvasFile("../components/canvas-connections.tsx");
+
+    assert.match(node, /rounded-\[4px\] border/);
+    assert.doesNotMatch(node, /isRelated && !isBatchChild \? theme\.node\.muted : "transparent"/);
+    assert.doesNotMatch(node, /0 0 0 1px/);
+    assert.match(connections, /theme\.accent/);
+    assert.doesNotMatch(connections, /drop-shadow/);
 });
