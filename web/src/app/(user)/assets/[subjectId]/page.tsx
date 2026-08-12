@@ -172,7 +172,7 @@ function AssetSubjectWorkbench({ subject }: { subject: AssetSubject }) {
             <header className="studio-toolbar m-3 mb-0 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
                 <div className="flex min-w-0 items-center gap-3">
                     <Link href={backHref} className="flex size-8 shrink-0 items-center justify-center rounded-lg text-[var(--studio-text-muted)] transition hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]"><ArrowLeft className="size-4" /></Link>
-                    <div className="min-w-0"><div className="flex items-center gap-2 text-xs text-[var(--studio-text-muted)]"><span>{project?.title || "项目已移除"}</span><span>/</span><span>{assetCategoryLabel(subject.category)}</span><Tag bordered={false} className="!m-0">{subject.code}</Tag></div><h1 className="mt-0.5 truncate text-lg font-semibold">{subject.name}</h1></div>
+                    <div className="min-w-0"><div className="flex items-center gap-2 text-xs text-[var(--studio-text-muted)]"><span>{project?.title || "项目已移除"}</span><span>/</span><span>{assetCategoryLabel(subject.category)}</span><Tag variant="filled" className="!m-0">{subject.code}</Tag></div><h1 className="mt-0.5 truncate text-lg font-semibold">{subject.name}</h1></div>
                 </div>
                 <div className="text-xs text-[var(--studio-text-muted)]">所有修改已保存在本机</div>
             </header>

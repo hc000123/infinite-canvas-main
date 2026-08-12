@@ -33,7 +33,7 @@ export function AssetReferencePicker({ assets, currentProjectId, open, projectTi
                         return (
                             <button key={asset.id} type="button" className="group overflow-hidden rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] text-left transition hover:border-[var(--studio-accent)]" onClick={() => onSelect(asset)}>
                                 <div className="aspect-square overflow-hidden bg-[var(--studio-elevated-bg)]"><img src={asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "")} alt={asset.title} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]" /></div>
-                                <div className="p-2.5"><div className="truncate text-sm font-medium">{asset.title}</div><div className="mt-1 flex items-center gap-1 text-[11px] text-[var(--studio-text-muted)]"><span>来源项目</span><Tag bordered={false} className="!m-0 !max-w-28 !truncate">{projectTitles[projectId] || projectId || "未归属"}</Tag></div></div>
+                                <div className="p-2.5"><div className="truncate text-sm font-medium">{asset.title}</div><div className="mt-1 flex items-center gap-1 text-[11px] text-[var(--studio-text-muted)]"><span>来源项目</span><Tag variant="filled" className="!m-0 !max-w-28 !truncate">{projectTitles[projectId] || projectId || "未归属"}</Tag></div></div>
                             </button>
                         );
                     })}

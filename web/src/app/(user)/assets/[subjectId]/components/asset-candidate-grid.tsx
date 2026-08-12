@@ -42,7 +42,7 @@ export function AssetCandidateGrid({ candidates, running, slots = [], onCopy, on
                             <article key={image.id} className="group overflow-hidden rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]">
                                 <div className="relative aspect-square overflow-hidden bg-[var(--studio-elevated-bg)]">
                                     <img src={image.dataUrl} alt={image.title} className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]" />
-                                    <div className="absolute left-2 top-2"><Tag bordered={false} color={image.source === "generated" ? "blue" : "default"}>{image.source === "generated" ? "生成" : "上传"}</Tag></div>
+                                    <div className="absolute left-2 top-2"><Tag variant="filled" color={image.source === "generated" ? "blue" : "default"}>{image.source === "generated" ? "生成" : "上传"}</Tag></div>
                                     <Dropdown menu={menu} trigger={["click"]}><Button type="text" className="!absolute !right-2 !top-2 !h-8 !w-8 !min-w-8 !bg-[var(--studio-media-overlay)] !p-0 !text-[var(--studio-on-media)]" icon={<MoreHorizontal className="size-4" />} /></Dropdown>
                                 </div>
                                 <div className="flex items-center justify-between gap-2 p-2.5">

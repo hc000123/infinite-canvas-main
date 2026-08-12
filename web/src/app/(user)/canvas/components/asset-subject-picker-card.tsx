@@ -43,7 +43,7 @@ export function AssetSubjectPickerCard({ item, selectedKeys, disabled, onSelect 
         <article className={cn("group overflow-hidden rounded-lg border bg-[var(--studio-panel-bg)] transition", selected ? "border-[var(--studio-accent)] ring-2 ring-[var(--studio-focus-ring)]" : "border-[var(--studio-border-subtle)] hover:border-[var(--studio-border-strong)]")}>
             <button type="button" disabled={disabled} className="relative block aspect-[4/3] w-full overflow-hidden bg-[var(--studio-panel-muted-bg)] text-left" onClick={openOrSelect}>
                 {current ? <img src={current.coverUrl || current.data.dataUrl} alt={item.subject.name} className="size-full object-cover transition group-hover:scale-[1.02]" /> : <span className="flex size-full flex-col items-center justify-center gap-2 text-[var(--studio-text-muted)]"><ImageOff className="size-7" /><span className="text-xs">尚无当前版本</span></span>}
-                <Tag bordered={false} className="!absolute !left-2 !top-2 !m-0">{assetCategoryLabel(item.subject.category)}</Tag>
+                <Tag variant="filled" className="!absolute !left-2 !top-2 !m-0">{assetCategoryLabel(item.subject.category)}</Tag>
                 {selected ? <Check className="absolute right-2 top-2 size-5 rounded-full bg-[var(--studio-accent)] p-1 text-[var(--primary-foreground)]" /> : null}
             </button>
             <div className="p-2.5">
