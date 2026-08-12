@@ -45,15 +45,26 @@ export type NodeContentRendererProps = {
 export function NodeContent(props: NodeContentRendererProps) {
     const presentation = deriveCanvasNodePresentation(props.node);
     const Renderer = nodeContentRenderers[props.node.type];
-    const placeholder = props.node.type === CanvasNodeType.Image ? <EmptyImageContent {...props} isBatchRoot={false} /> : <CanvasLogoPlaceholder label={`${props.node.title || "媒体节点"}等待媒体内容`} />;
+    const hasVideoFramePreview = props.node.type === CanvasNodeType.Video && Boolean(props.frameReferenceNodes?.first || props.frameReferenceNodes?.last);
     const contentBody = props.node.type === CanvasNodeType.Config && props.renderNodeContent ? props.renderNodeContent(props.node) : <Renderer {...props} />;
-    const body = presentation.body === "media" ? <Renderer {...props} /> : presentation.body === "logo" ? (props.isBatchRoot ? <BatchFrame batchCount={props.batchCount} batchExpanded={props.batchExpanded} batchOpening={props.batchOpening} batchRecovering={props.batchRecovering} onToggleBatch={props.onToggleBatch}>{placeholder}</BatchFrame> : placeholder) : contentBody;
+    const body = presentation.body === "media" || hasVideoFramePreview ? <Renderer {...props} /> : presentation.body === "logo" ? <LogoBody {...props} /> : contentBody;
     return (
         <>
             {body}
-            {presentation.overlay === "loading" ? <NodeStatusOverlay node={props.node} theme={props.theme} status="loading" /> : null}
-            {presentation.overlay === "error" ? <NodeStatusOverlay node={props.node} theme={props.theme} status="error" onRetry={props.onRetry} /> : null}
+            {presentation.overlay === "loading" ? <NodeStatusOverlay node={props.node} theme={props.theme} status="loading" onRefreshVideoTask={props.onRefreshVideoTask} /> : null}
+            {presentation.overlay === "error" ? <NodeStatusOverlay node={props.node} theme={props.theme} status="error" onRetry={props.onRetry} onRefreshVideoTask={props.onRefreshVideoTask} /> : null}
         </>
+    );
+}
+
+function LogoBody(props: NodeContentRendererProps) {
+    const placeholder = props.node.type === CanvasNodeType.Image ? <EmptyImageContent {...props} isBatchRoot={false} /> : <CanvasLogoPlaceholder label={`${props.node.title || "媒体节点"}等待媒体内容`} />;
+    return props.isBatchRoot ? (
+        <BatchFrame batchCount={props.batchCount} batchExpanded={props.batchExpanded} batchOpening={props.batchOpening} batchRecovering={props.batchRecovering} onToggleBatch={props.onToggleBatch}>
+            {placeholder}
+        </BatchFrame>
+    ) : (
+        placeholder
     );
 }
 
@@ -74,18 +85,33 @@ export function ImageInfoBar({ node }: { node: CanvasNodeData }) {
 const nodeContentRenderers = {
     [CanvasNodeType.Text]: TextContent,
     [CanvasNodeType.Image]: ImageNodeContent,
-    [CanvasNodeType.Config]: EmptyImageContent,
+    [CanvasNodeType.Config]: ConfigContent,
     [CanvasNodeType.Video]: VideoNodeContent,
     [CanvasNodeType.Audio]: AudioNodeContent,
 } satisfies Record<CanvasNodeType, (props: NodeContentRendererProps) => ReactNode>;
 
-function NodeStatusOverlay({ node, theme, status, onRetry }: Pick<NodeContentRendererProps, "node" | "theme" | "onRetry"> & { status: "loading" | "error" }) {
+function NodeStatusOverlay({ node, theme, status, onRetry, onRefreshVideoTask }: Pick<NodeContentRendererProps, "node" | "theme" | "onRetry" | "onRefreshVideoTask"> & { status: "loading" | "error" }) {
     const loadingLabel = node.metadata?.imageUpscale ? `云端超分 ${node.metadata.imageUpscale.progress}%` : node.metadata?.pendingMediaVersion ? "新版本生成中" : "生成中";
     return (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-end justify-center p-3">
             <div className="pointer-events-auto inline-flex max-w-full items-center gap-2 rounded-[4px] border px-2.5 py-2 text-xs backdrop-blur-md" style={{ background: theme.surfaceOverlay, borderColor: status === "error" ? "var(--studio-danger)" : theme.focusRing, color: status === "error" ? "var(--studio-danger)" : theme.node.text }}>
                 {status === "loading" ? <span className="size-3.5 shrink-0 animate-spin rounded-full border" style={{ borderColor: theme.node.stroke, borderTopColor: theme.accent }} /> : <AlertTriangle className="size-3.5 shrink-0" />}
                 <span className="truncate">{status === "loading" ? loadingLabel : node.metadata?.errorDetails || "生成失败"}</span>
+                {node.type === CanvasNodeType.Video && (node.metadata?.taskId || node.metadata?.aiTaskId) ? (
+                    <button
+                        type="button"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-[3px] px-1.5 py-1 font-medium"
+                        style={{ color: theme.accent }}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onRefreshVideoTask?.(node);
+                        }}
+                        onMouseDown={(event) => event.stopPropagation()}
+                    >
+                        <RefreshCw className="size-3" />
+                        刷新状态
+                    </button>
+                ) : null}
                 {status === "error" ? (
                     <button
                         type="button"
@@ -102,6 +128,14 @@ function NodeStatusOverlay({ node, theme, status, onRetry }: Pick<NodeContentRen
                     </button>
                 ) : null}
             </div>
+        </div>
+    );
+}
+
+function ConfigContent({ theme }: NodeContentRendererProps) {
+    return (
+        <div className="flex h-full w-full items-center justify-center px-6 text-center text-sm" style={{ color: theme.node.placeholder }}>
+            配置生成参数
         </div>
     );
 }

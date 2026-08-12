@@ -40,6 +40,24 @@ test("logo-based empty images retain their existing quick action callbacks", () 
     assert.match(content, /onImageQuickAction\?\.\(node, "upscale"\)/);
 });
 
+test("empty videos preserve frame reference previews and task refresh actions", () => {
+    const content = readCanvasFile("../components/canvas-node-content.tsx");
+
+    assert.match(content, /props\.node\.type === CanvasNodeType\.Video && Boolean\(props\.frameReferenceNodes\?\.first \|\| props\.frameReferenceNodes\?\.last\)/);
+    assert.match(content, /hasVideoFramePreview \? <Renderer \{\.\.\.props\} \/>/);
+    assert.match(content, /<NodeStatusOverlay[\s\S]*onRefreshVideoTask=\{props\.onRefreshVideoTask\}/);
+    assert.match(content, /onRefreshVideoTask\?\.\(node\)/);
+    assert.match(content, /刷新状态/);
+});
+
+test("config fallback uses non-logo content", () => {
+    const content = readCanvasFile("../components/canvas-node-content.tsx");
+
+    assert.match(content, /\[CanvasNodeType\.Config\]: ConfigContent/);
+    assert.match(content, /function ConfigContent/);
+    assert.doesNotMatch(content, /\[CanvasNodeType\.Config\]: EmptyImageContent/);
+});
+
 test("canvas logo placeholder is accessible and owns the only canvas logo reference", () => {
     const logo = readCanvasFile("../components/canvas-logo-placeholder.tsx");
 
@@ -67,6 +85,7 @@ test("node and connection styling uses thin editorial accents without glow", () 
     assert.match(node, /rounded-\[4px\] border/);
     assert.doesNotMatch(node, /isRelated && !isBatchChild \? theme\.node\.muted : "transparent"/);
     assert.doesNotMatch(node, /0 0 0 1px/);
+    assert.doesNotMatch(node, /0 2px 8px/);
     assert.match(connections, /theme\.accent/);
     assert.doesNotMatch(connections, /drop-shadow/);
 });

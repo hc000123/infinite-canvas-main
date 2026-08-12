@@ -108,7 +108,6 @@ export const CanvasNode = React.memo(function CanvasNode({
     const isActive = isConnectionTarget || isSelected || isFocusRelated;
     const showFrameReferenceHandles = data.type === CanvasNodeType.Video && data.metadata?.videoReferenceImageMode === "first_last_frame";
     const packageAccent = theme.accent;
-    const packageAccentSoft = theme.toolbar.activeBg;
     const imageBorderColor = isActive ? theme.accent : isProductionPackageActive ? packageAccent : isRelated && !isBatchChild ? theme.node.muted : theme.node.stroke;
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const resizeRef = useRef({
@@ -259,7 +258,6 @@ export const CanvasNode = React.memo(function CanvasNode({
                 style={{
                     background: hasImageContent || hasVideoContent || hasAudioContent ? "transparent" : theme.node.fill,
                     borderColor: hasImageContent ? imageBorderColor : isActive ? theme.accent : isProductionPackageActive ? packageAccent : isRelated ? theme.node.muted : theme.node.stroke,
-                    boxShadow: isProductionPackageActive || (isRelated && !isBatchChild) ? `0 2px 8px ${packageAccentSoft}` : undefined,
                 }}
                 onMouseDown={(event) => onMouseDown(event, data.id)}
                 onDoubleClick={(event) => {
