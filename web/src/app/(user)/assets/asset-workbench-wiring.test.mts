@@ -18,7 +18,7 @@ test("adds a dedicated dynamic route for a subject production workbench", () => 
 test("provides a safe missing-subject state and responsive production layout", () => {
     const source = readFileSync(routeUrl, "utf8");
     assert.match(source, /没有找到这个资产主体/);
-    assert.match(source, /lg:grid-cols-\[320px_minmax\(0,1fr\)\]/);
+    assert.match(source, /lg:grid-cols-\[minmax\(0,3fr\)_minmax\(0,7fr\)\]/);
     assert.match(source, /href="\/assets"/);
 });
 

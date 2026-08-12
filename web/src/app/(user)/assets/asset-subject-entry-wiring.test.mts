@@ -21,5 +21,5 @@ test("keeps ordinary material creation on the existing editor flow", () => {
 test("renders subject cards as direct workbench entries even before formal images exist", () => {
     assert.match(cardSource, /href=\{`\/assets\/\$\{subject\.id\}`\}/);
     assert.match(cardSource, /待生产/);
-    assert.match(cardSource, /去生图/);
+    assert.match(cardSource, />生成<\/Link>/);
 });

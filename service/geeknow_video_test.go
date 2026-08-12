@@ -39,8 +39,8 @@ func TestUploadGeekNowMaterialSendsContentLength(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"success": true,
 				"data": map[string]any{
-					"upload_url":  server.URL + "/upload",
-					"public_url":  "https://cdn.example/reference.png",
+					"upload_url":   server.URL + "/upload",
+					"public_url":   "https://cdn.example/reference.png",
 					"content_type": "image/png",
 				},
 			})
