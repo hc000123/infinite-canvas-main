@@ -3,13 +3,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { App, Button, Empty, Input, Modal, Select, Spin, Tag } from "antd";
-import { Archive, Copy, Database, RefreshCw, Trash2 } from "lucide-react";
+import { Archive, Copy, Database, Download, RefreshCw, Trash2 } from "lucide-react";
 import copy from "copy-to-clipboard";
+import { saveAs } from "file-saver";
 
 import {
     deleteProjectCache,
     deleteProjectCacheFile,
     downloadProjectCachePackage,
+    downloadProjectCacheSelection,
+    fetchProjectCacheFileBlob,
     getProjectCache,
     listProjectCaches,
     moveProjectCacheFile,
@@ -30,7 +33,7 @@ import { useCreativeProjectStore } from "../projects/use-creative-project-store"
 import { CacheFileGrid } from "./components/cache-file-grid";
 import { CacheFilePreviewModal } from "./components/cache-file-preview-modal";
 import { CacheProjectList } from "./components/cache-project-list";
-import { filterProjectCacheFiles, mergeProjectCacheState } from "./cache-view-model";
+import { filterProjectCacheFiles, mergeProjectCacheState, pruneCacheSelection, toggleVisibleCacheSelection } from "./cache-view-model";
 
 export default function CacheManagementPage() {
     const searchParams = useSearchParams();
@@ -62,6 +65,8 @@ export default function CacheManagementPage() {
     const [moveEpisodeId, setMoveEpisodeId] = useState("");
     const [moveCategory, setMoveCategory] = useState<ProjectCacheFile["category"]>("other");
     const [moving, setMoving] = useState(false);
+    const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(() => new Set());
+    const [selectionDownloading, setSelectionDownloading] = useState(false);
 
     const loadList = useCallback(async () => {
         if (!token) return;
@@ -97,6 +102,13 @@ export default function CacheManagementPage() {
 
     useEffect(() => void loadList(), [loadList]);
     useEffect(() => void loadDetail(), [loadDetail]);
+    useEffect(() => {
+        const readyIds = (manifest?.files || []).filter((item) => item.status === "ready").map((item) => item.id);
+        setSelectedFileIds((current) => {
+            const next = pruneCacheSelection(current, readyIds);
+            return next.size === current.size ? current : next;
+        });
+    }, [manifest?.files]);
 
     const projectRows = useMemo(() => mergeProjectCacheState(cacheList?.projects || [], projects), [cacheList?.projects, projects]);
     const episodeOptions = useMemo(
@@ -104,6 +116,9 @@ export default function CacheManagementPage() {
         [manifest?.files],
     );
     const filteredFiles = useMemo(() => filterProjectCacheFiles(manifest?.files || [], { category, episodeId, keyword, kind }), [category, episodeId, keyword, kind, manifest?.files]);
+    const readyFilteredIds = filteredFiles.filter((item) => item.status === "ready").map((item) => item.id);
+    const selectedFiles = (manifest?.files || []).filter((item) => item.status === "ready" && selectedFileIds.has(item.id));
+    const allVisibleSelected = readyFilteredIds.length > 0 && readyFilteredIds.every((id) => selectedFileIds.has(id));
     const currentProjectId = manifest?.projectId || "";
     const currentPending = pendingItems.filter((item) => item.context.projectId === currentProjectId || (!currentProjectId && !item.context.projectId));
     const moveProject = projects.find((item) => item.id === moveProjectId);
@@ -136,6 +151,24 @@ export default function CacheManagementPage() {
         modal.confirm({ title: "缓存中存在缺失文件", content: `有 ${preflight.missing.length} 个文件缺失。继续打包会在清单中记录缺失项。`, okText: "继续打包", cancelText: "取消", onOk: () => proceed(true) });
     };
 
+    const downloadSelection = async () => {
+        if (!token || !manifest || !selectedId || !selectedFiles.length) return;
+        setSelectionDownloading(true);
+        try {
+            if (selectedFiles.length === 1) {
+                const result = await fetchProjectCacheFileBlob(selectedFiles[0].id, token);
+                saveAs(result.blob, result.filename || selectedFiles[0].originalName || selectedFiles[0].id);
+            } else {
+                await downloadProjectCacheSelection(selectedId, selectedFiles.map((item) => item.id), token, `${manifest.projectName || "未归属缓存"}__所选缓存.zip`);
+            }
+            message.success(`已开始下载 ${selectedFiles.length} 个所选文件`);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "所选缓存下载失败");
+        } finally {
+            setSelectionDownloading(false);
+        }
+    };
+
     const removeFile = (file: ProjectCacheFile) => {
         if (!token) return;
         modal.confirm({
@@ -146,6 +179,11 @@ export default function CacheManagementPage() {
             cancelText: "取消",
             onOk: async () => {
                 await deleteProjectCacheFile(file.id, token);
+                setSelectedFileIds((current) => {
+                    const next = new Set(current);
+                    next.delete(file.id);
+                    return next;
+                });
                 await Promise.all([loadDetail(), loadList()]);
                 message.success("缓存文件已删除");
             },
@@ -164,6 +202,7 @@ export default function CacheManagementPage() {
                 await deleteProjectCache(manifest.projectId, token);
                 setSelectedId("");
                 setManifest(undefined);
+                setSelectedFileIds(new Set());
                 await loadList();
                 message.success("项目缓存已清理");
             },
@@ -225,6 +264,7 @@ export default function CacheManagementPage() {
                             selectedId={selectedId}
                             onSelect={(id) => {
                                 setSelectedId(id);
+                                setSelectedFileIds(new Set());
                                 setCategory("");
                                 setKind("");
                                 setEpisodeId("");
@@ -296,8 +336,14 @@ export default function CacheManagementPage() {
                                             ]}
                                         />
                                     </div>
+                                    <div className="mt-3 flex flex-wrap items-center gap-2 border-b border-[var(--studio-border-subtle)] pb-3">
+                                        <span className="mr-auto text-sm text-[var(--studio-text-secondary)]">已选 <strong className="text-[var(--studio-text-primary)]">{selectedFiles.length}</strong> 项</span>
+                                        <Button size="small" disabled={!readyFilteredIds.length} onClick={() => setSelectedFileIds((current) => toggleVisibleCacheSelection(current, readyFilteredIds))}>{allVisibleSelected ? "取消当前全选" : "全选当前结果"}</Button>
+                                        <Button size="small" disabled={!selectedFiles.length} onClick={() => setSelectedFileIds(new Set())}>清空</Button>
+                                        <Button size="small" type="primary" icon={<Download className="size-3.5" />} loading={selectionDownloading} disabled={!selectedFiles.length} onClick={() => void downloadSelection()}>下载所选{selectedFiles.length ? ` (${selectedFiles.length})` : ""}</Button>
+                                    </div>
                                     <div className="mt-4">
-                                        <CacheFileGrid files={filteredFiles} onDelete={removeFile} onMove={!manifest.projectId ? openMoveFile : undefined} onPreview={setPreviewFile} />
+                                        <CacheFileGrid files={filteredFiles} selectedIds={selectedFileIds} onToggleSelect={(file) => setSelectedFileIds((current) => { const next = new Set(current); next.has(file.id) ? next.delete(file.id) : next.add(file.id); return next; })} onDelete={removeFile} onMove={!manifest.projectId ? openMoveFile : undefined} onPreview={setPreviewFile} />
                                     </div>
                                 </>
                             ) : (

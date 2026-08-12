@@ -75,21 +75,3 @@ func VolcengineAssetStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	OK(w, result)
 }
-
-func AdminSubmitAssetVolcengineReview(w http.ResponseWriter, r *http.Request, id string) {
-	result, err := service.SubmitAdminAssetVolcengineReview(r.Context(), id)
-	if err != nil {
-		FailError(w, err)
-		return
-	}
-	OK(w, result)
-}
-
-func AdminRefreshAssetVolcengineReview(w http.ResponseWriter, r *http.Request, id string) {
-	result, err := service.RefreshAdminAssetVolcengineReview(r.Context(), id)
-	if err != nil {
-		FailError(w, err)
-		return
-	}
-	OK(w, result)
-}

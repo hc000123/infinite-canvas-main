@@ -85,11 +85,18 @@ export function buildCanvasVideoModePatch(config: AiConfig): Partial<CanvasNodeM
 export function buildCanvasVideoModelPatch(config: AiConfig, model: string): Partial<CanvasNodeMetadata> {
     const provider = protocolForModel(config, model);
     const mode = normalizeVideoReferenceMode(config.videoReferenceMode);
+    const capabilityMode = mode === "auto" ? "text2video" : mode;
+    const currentModel = resolveGenerationModel({ config, capability: "video" });
+    const currentCapability = resolveDreaminaVideoCapability({ protocol: protocolForModel(config, currentModel), model: currentModel, mode: capabilityMode });
+    const nextCapability = resolveDreaminaVideoCapability({ protocol: provider, model, mode: capabilityMode });
+    const seconds = currentCapability && nextCapability && Number(config.videoSeconds) === currentCapability.duration.max && nextCapability.duration.max > currentCapability.duration.max
+        ? String(nextCapability.duration.max)
+        : config.videoSeconds;
     const normalized = normalizeDreaminaVideoSettings({
         protocol: provider,
         model,
-        mode: mode === "auto" ? "text2video" : mode,
-        seconds: config.videoSeconds,
+        mode: capabilityMode,
+        seconds,
         resolution: config.vquality,
     });
     return {

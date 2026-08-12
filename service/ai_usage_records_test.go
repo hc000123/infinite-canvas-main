@@ -104,6 +104,28 @@ func TestGetUserAIUsageSummaryIsScopedAndKindsMatchNetTotal(t *testing.T) {
 	}
 }
 
+func TestListAIUsageRecordsOnlyCountsSuccessfulVideoSeconds(t *testing.T) {
+	setupAITaskTestDB(t)
+	seedUsageUser(t, "usage-video-user", "video-user", 100)
+	stamp := "2026-08-07T01:00:00Z"
+	for _, task := range []model.AITask{
+		{ID: "video-success", UserID: "usage-video-user", Kind: "video", Model: "video-model", Status: model.AITaskStatusSucceeded, GeneratedSeconds: 12, CreatedAt: stamp},
+		{ID: "video-failed", UserID: "usage-video-user", Kind: "video", Model: "video-model", Status: model.AITaskStatusFailed, GeneratedSeconds: 8, CreatedAt: stamp},
+		{ID: "video-missing", UserID: "usage-video-user", Kind: "video", Model: "video-model", Status: model.AITaskStatusSucceeded, CreatedAt: stamp},
+	} {
+		seedUsageTask(t, task)
+		seedUsageLog(t, model.CreditLog{ID: "consume-" + task.ID, UserID: task.UserID, Type: model.CreditLogTypeAIConsume, Amount: -2, RelatedID: task.ID, CreatedAt: stamp})
+	}
+	result, err := ListAIUsageRecords(model.AIUsageRecordQuery{ExactUserID: "usage-video-user", StartAt: "2026-08-07T00:00:00Z", EndAt: "2026-08-08T00:00:00Z", Page: 1, PageSize: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := usageRecordsByRelatedID(result.Items)
+	if byID["video-success"].GeneratedSeconds != 12 || byID["video-failed"].GeneratedSeconds != 0 || byID["video-missing"].DurationIssue != "missing_duration" {
+		t.Fatalf("records = %#v", byID)
+	}
+}
+
 func seedUsageUser(t *testing.T, id, username string, credits int) {
 	t.Helper()
 	stamp := "2026-08-07T00:00:00Z"

@@ -9,60 +9,55 @@ import type { useWorkflowStageActions } from "../use-workflow-stage-actions";
 
 type StageActions = ReturnType<typeof useWorkflowStageActions>;
 
-export function WorkflowScriptExtractionPanel(props: { agentRuns: RemoteWorkflowRunDetail["agentRuns"]; asset: StageActions; projectId: string; shot: StageActions; workerReady: boolean }) {
-    const [assetOptions, setAssetOptions] = useState<WorkflowSkillOption[]>([]);
-    const [shotOptions, setShotOptions] = useState<WorkflowSkillOption[]>([]);
-    const [assetSkill, setAssetSkill] = useState("");
-    const [shotSkill, setShotSkill] = useState("");
+const copy = {
+    "asset-extraction": { action: "开始资产解析", description: "从本集确认稿识别角色、场景、道具和站位槽位；启动前可选择提取 Skill。", title: "资产提取" },
+    "shot-breakdown": { action: "生成结构化分镜", description: "从本集确认稿编排镜头、节奏与连续性；启动前可选择提取 Skill。", title: "分镜提取" },
+} as const;
+
+export function WorkflowStageExtractionPanel(props: { agentRuns: RemoteWorkflowRunDetail["agentRuns"]; projectId: string; stageId: keyof typeof copy; state: StageActions; workerReady: boolean }) {
+    const [options, setOptions] = useState<WorkflowSkillOption[]>([]);
+    const [skill, setSkill] = useState("");
     const [error, setError] = useState("");
+    const content = copy[props.stageId];
 
     useEffect(() => {
         let cancelled = false;
-        Promise.all([listWorkflowSkillOptions("asset-extraction", props.projectId), listWorkflowSkillOptions("shot-breakdown", props.projectId)])
-            .then(([assets, shots]) => {
+        listWorkflowSkillOptions(props.stageId, props.projectId)
+            .then((items) => {
                 if (cancelled) return;
-                setAssetOptions(assets);
-                setShotOptions(shots);
-                const assetDefault = assets.find((item) => item.isDefault);
-                const shotDefault = shots.find((item) => item.isDefault);
-                setAssetSkill(assetDefault ? assetDefault.skillVersionId : assets[0]?.skillVersionId || "");
-                setShotSkill(shotDefault ? shotDefault.skillVersionId : shots[0]?.skillVersionId || "");
+                setOptions(items);
+                const defaultOption = items.find((item) => item.isDefault);
+                setSkill(defaultOption ? defaultOption.skillVersionId : items[0]?.skillVersionId || "");
             })
             .catch((reason) => !cancelled && setError(reason instanceof Error ? reason.message : "Skill 列表读取失败"));
         return () => { cancelled = true; };
-    }, [props.projectId]);
+    }, [props.projectId, props.stageId]);
 
-    const canStart = props.workerReady && (props.asset.actions.canStart || props.shot.actions.canStart);
-    const busy = Boolean(props.asset.busyAction || props.shot.busyAction);
+    const canStart = props.workerReady && props.state.actions.canStart;
+    const busy = Boolean(props.state.busyAction);
     const start = async () => {
         setError("");
-        const tasks: Array<Promise<unknown>> = [];
-        if (props.asset.actions.canStart) tasks.push(Promise.resolve(props.asset.start({ skillVersionId: assetSkill })));
-        if (props.shot.actions.canStart) tasks.push(Promise.resolve(props.shot.start({ skillVersionId: shotSkill })));
-        const results = await Promise.allSettled(tasks);
-        if (results.some((item) => item.status === "rejected")) setError("部分信息提取未能启动，可单独重试失败项");
+        const started = await props.state.start({ skillVersionId: skill });
+        if (!started) setError(`${content.title}未能启动，请检查执行器状态后重试`);
     };
 
     return <section className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-5 shadow-[var(--studio-shadow)]">
         <div className="flex flex-wrap items-start justify-between gap-4">
-            <div><div className="flex items-center gap-2 text-sm font-semibold"><Braces className="size-4 text-[var(--studio-accent)]" />信息提取</div><p className="mt-1 text-xs leading-5 text-[var(--studio-text-muted)]">资产清单与结构化分镜并行读取本集原剧本；可按剧情类型选择不同 Skill。</p></div>
-            <Button type="primary" icon={<Play className="size-4" />} disabled={!canStart} loading={busy} onClick={() => void start()}>开始信息提取</Button>
+            <div><div className="flex items-center gap-2 text-sm font-semibold"><Braces className="size-4 text-[var(--studio-accent)]" />{content.title}</div><p className="mt-1 text-xs leading-5 text-[var(--studio-text-muted)]">{content.description}</p></div>
+            <Button type="primary" icon={<Play className="size-4" />} disabled={!canStart} loading={busy} onClick={() => void start()}>{content.action}</Button>
         </div>
         {error ? <Alert className="mt-4" showIcon type="warning" title={error} /> : null}
-        <div className="mt-4 grid gap-3 lg:grid-cols-2">
-            <ExtractionRow label="资产提取" options={assetOptions} state={props.asset} value={assetSkill} frozenVersion={frozenVersion(props.agentRuns, props.asset.stage?.agentRunId)} onChange={setAssetSkill} />
-            <ExtractionRow label="分镜提取" options={shotOptions} state={props.shot} value={shotSkill} frozenVersion={frozenVersion(props.agentRuns, props.shot.stage?.agentRunId)} onChange={setShotSkill} />
-        </div>
+        <ExtractionRow options={options} state={props.state} value={skill} frozenVersion={frozenVersion(props.agentRuns, props.state.stage?.agentRunId)} onChange={setSkill} />
     </section>;
 }
 
-function ExtractionRow(props: { frozenVersion: string; label: string; onChange: (value: string) => void; options: WorkflowSkillOption[]; state: StageActions; value: string }) {
+function ExtractionRow(props: { frozenVersion: string; onChange: (value: string) => void; options: WorkflowSkillOption[]; state: StageActions; value: string }) {
     const active = ["queued", "running", "cancel_requested"].includes(props.state.stage?.status || "");
     const done = ["needs_review", "approved", "applied"].includes(props.state.stage?.status || "");
     const options = useMemo(() => props.options.map((item) => ({ label: `${item.skillName} · ${item.version}${item.isDefault ? "（推荐）" : ""}`, value: item.skillVersionId })), [props.options]);
-    return <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4">
-        <div className="flex items-center justify-between gap-3"><span className="text-sm font-semibold">{props.label}</span><span className={`flex items-center gap-1 text-xs ${done ? "text-[var(--studio-success)]" : "text-[var(--studio-text-muted)]"}`}>{active ? <RefreshCw className="size-3 animate-spin" /> : done ? <CheckCircle2 className="size-3" /> : null}{stageLabel(props.state.stage?.status)}</span></div>
-        <Select className="mt-3 w-full" value={props.value || undefined} options={options} disabled={active || done} placeholder="选择提取 Skill" onChange={props.onChange} />
+    return <div className="mt-4 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4">
+        <div className="flex items-center justify-between gap-3"><span className="text-xs text-[var(--studio-text-muted)]">提取 Skill</span><span className={`flex items-center gap-1 text-xs ${done ? "text-[var(--studio-success)]" : "text-[var(--studio-text-muted)]"}`}>{active ? <RefreshCw className="size-3 animate-spin" /> : done ? <CheckCircle2 className="size-3" /> : null}{stageLabel(props.state.stage?.status)}</span></div>
+        <Select className="mt-2 w-full" value={props.value || undefined} options={options} disabled={active || done} placeholder="选择提取 Skill" onChange={props.onChange} />
         <div className="mt-2 flex items-center justify-between gap-2 text-xs text-[var(--studio-text-muted)]"><span>{props.frozenVersion ? `本次冻结 ${props.frozenVersion}` : "启动时冻结所选版本"}</span>{props.state.actions.canRetry ? <Button size="small" icon={<RefreshCw className="size-3" />} onClick={props.state.retry}>重新提取</Button> : null}</div>
     </div>;
 }

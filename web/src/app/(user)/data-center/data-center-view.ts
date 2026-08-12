@@ -12,6 +12,23 @@ export function dataCenterDefaultScope(role: UserRole): AIUsageScope {
     return role === "admin" || role === "superadmin" ? "all" : "mine";
 }
 
+export function dataCenterCanExport(role: UserRole, scope: AIUsageScope) {
+    return (role === "admin" || role === "superadmin") && scope === "all";
+}
+
+export function dataCenterExportRange(current: Dayjs = dayjs()) {
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" })
+        .formatToParts(current.toDate())
+        .reduce<Record<string, string>>((result, part) => ({ ...result, [part.type]: part.value }), {});
+    const year = Number(parts.year);
+    const month = Number(parts.month);
+    const next = month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
+    return {
+        startAt: `${year}-${String(month).padStart(2, "0")}-01T00:00:00+08:00`,
+        endAt: `${next.year}-${String(next.month).padStart(2, "0")}-01T00:00:00+08:00`,
+    };
+}
+
 export function dataCenterScopeOptions(role: UserRole) {
     if (role !== "admin" && role !== "superadmin") return [];
     return [

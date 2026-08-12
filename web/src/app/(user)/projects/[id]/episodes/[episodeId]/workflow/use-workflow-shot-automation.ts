@@ -5,10 +5,10 @@ import { App } from "antd";
 
 import { buildImportedVideoPackage } from "@/app/(user)/video/video-package-builders";
 import { useVideoPackageStore } from "@/app/(user)/video/use-video-package-store";
-import { applyWorkflowStage, type RemoteWorkflowArtifact, type RemoteWorkflowQualityGate, type RemoteWorkflowStageRun } from "@/services/api/workflow-runs";
+import { applyWorkflowStage, reviewWorkflowStage, type RemoteWorkflowArtifact, type RemoteWorkflowQualityGate, type RemoteWorkflowStageRun } from "@/services/api/workflow-runs";
 
-import { parseShotBreakdown, requireWorkflowShotReview } from "./workflow-shot-draft";
-import { shouldAutoLoadStoryboard } from "./workflow-shot-automation";
+import { parseShotBreakdown, prepareWorkflowShotPackage } from "./workflow-shot-draft";
+import { nextWorkflowShotAction } from "./workflow-shot-automation";
 
 export function useWorkflowShotAutomation(input: { artifact: RemoteWorkflowArtifact | null; episodeId: string; gate: RemoteWorkflowQualityGate | null; onApplied: () => void | Promise<void>; projectId: string; stage: RemoteWorkflowStageRun | null }) {
     const { message } = App.useApp();
@@ -20,14 +20,20 @@ export function useWorkflowShotAutomation(input: { artifact: RemoteWorkflowArtif
     useEffect(() => {
         const { artifact, gate, stage } = input;
         const shots = parseShotBreakdown(artifact?.contentJson || "");
-        const key = artifact?.contentHash || "";
-        if (!artifact || !stage || handled.current.has(key) || !shouldAutoLoadStoryboard({ stageStatus: stage.status, gatePassed: gate?.passed, shotCount: shots.length })) return;
+        const action = nextWorkflowShotAction({ stageStatus: stage?.status, gatePassed: gate?.passed, shotCount: shots.length });
+        const key = `${action.type}:${artifact?.contentHash || ""}`;
+        if (!artifact || !stage || action.type === "idle" || handled.current.has(key)) return;
         handled.current.add(key);
         setLoading(true);
         setError("");
         void (async () => {
             try {
-                const packages = shots.map((shot, index) => requireWorkflowShotReview(buildImportedVideoPackage({
+                if (action.type === "approve") {
+                    await reviewWorkflowStage(stage.id, { artifactHash: artifact.contentHash, decision: "approved" });
+                    await input.onApplied();
+                    return;
+                }
+                const packages = shots.map((shot, index) => prepareWorkflowShotPackage(buildImportedVideoPackage({
                     duration: `${shot.shotDraft.durationSeconds}秒`, episode: input.episodeId, episodeId: input.episodeId, id: shot.shotId, order: index + 1, projectId: input.projectId,
                     prompt: "", sceneKey: shot.sceneKey, segment: shot.shotDraft.action || `分镜 ${index + 1}`, sourcePath: `cloud-workflow/${artifact.id}`, sourceScript: shot.sourceScript, shotDraft: shot.shotDraft,
                 })));

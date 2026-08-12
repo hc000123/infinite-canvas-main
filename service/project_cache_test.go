@@ -430,3 +430,67 @@ func TestWriteProjectCachePackageRejectsMissingMediaWithoutContinueFlag(t *testi
 		t.Fatalf("err=%v bytes=%d", err, output.Len())
 	}
 }
+
+func TestWriteProjectCacheSelectionPackageIncludesOnlySelectedMedia(t *testing.T) {
+	root := t.TempDir()
+	first, err := ArchiveProjectCacheFile(root, "u1", ProjectCacheArchiveInput{Context: ProjectCacheContext{ProjectID: "p1", ProjectName: "项目 A", NodeID: "n1"}, Filename: "a.png", MIMEType: "image/png", Reader: strings.NewReader("a")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := ArchiveProjectCacheFile(root, "u1", ProjectCacheArchiveInput{Context: ProjectCacheContext{ProjectID: "p1", ProjectName: "项目 A", NodeID: "n2"}, Filename: "b.png", MIMEType: "image/png", Reader: strings.NewReader("b")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	result, err := WriteProjectCacheSelectionPackage(&output, root, "u1", ProjectCacheSelectionInput{ProjectID: "p1", FileIDs: []string{second.File.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(output.Bytes()), int64(output.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := map[string]bool{}
+	for _, item := range zr.File {
+		names[item.Name] = true
+	}
+	if !names["selection-manifest.json"] || !names[second.File.RelativePath] || names[first.File.RelativePath] {
+		t.Fatalf("zip entries=%#v", names)
+	}
+	if result.Manifest.FileCount != 1 || !strings.Contains(result.Filename, "所选缓存") {
+		t.Fatalf("result=%#v", result)
+	}
+}
+
+func TestWriteProjectCacheSelectionPackageRejectsInvalidSelection(t *testing.T) {
+	root := t.TempDir()
+	first, err := ArchiveProjectCacheFile(root, "u1", ProjectCacheArchiveInput{Context: ProjectCacheContext{ProjectID: "p1", ProjectName: "项目 A"}, Filename: "a.png", MIMEType: "image/png", Reader: strings.NewReader("a")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := ArchiveProjectCacheFile(root, "u1", ProjectCacheArchiveInput{Context: ProjectCacheContext{ProjectID: "p2", ProjectName: "项目 B"}, Filename: "b.png", MIMEType: "image/png", Reader: strings.NewReader("b")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	missing, err := ArchiveProjectCacheFile(root, "u1", ProjectCacheArchiveInput{Context: ProjectCacheContext{ProjectID: "p1", ProjectName: "项目 A", NodeID: "missing"}, Filename: "missing.png", MIMEType: "image/png", Reader: strings.NewReader("missing")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(missing.ProjectPath, missing.File.RelativePath)); err != nil {
+		t.Fatal(err)
+	}
+	for name, fileIDs := range map[string][]string{
+		"empty":         {},
+		"duplicate":     {first.File.ID, first.File.ID},
+		"unknown":       {"does-not-exist"},
+		"other-project": {other.File.ID},
+		"missing":       {missing.File.ID},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var output bytes.Buffer
+			if _, err := WriteProjectCacheSelectionPackage(&output, root, "u1", ProjectCacheSelectionInput{ProjectID: "p1", FileIDs: fileIDs}); err == nil || output.Len() != 0 {
+				t.Fatalf("err=%v bytes=%d", err, output.Len())
+			}
+		})
+	}
+}

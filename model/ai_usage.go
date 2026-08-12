@@ -87,22 +87,56 @@ func (q AIUsageRecordQuery) Offset() int {
 }
 
 type AIUsageRecord struct {
-	ID              string              `json:"id"`
-	RelatedID       string              `json:"relatedId"`
-	UserID          string              `json:"userId"`
-	User            UserSummary         `json:"user"`
-	SourceType      AIUsageSource       `json:"sourceType"`
-	Kind            string              `json:"kind"`
-	Model           string              `json:"model"`
-	Status          string              `json:"status"`
-	Credits         int                 `json:"credits"`
-	CreditsRefunded int                 `json:"creditsRefunded"`
-	NetCredits      int                 `json:"netCredits"`
-	Provider        string              `json:"provider"`
-	UpstreamTaskID  string              `json:"upstreamTaskId"`
-	ErrorMessage    string              `json:"errorMessage"`
-	CreatedAt       string              `json:"createdAt"`
-	FrontendTrace   AITaskFrontendTrace `json:"frontendTrace"`
+	ID               string              `json:"id"`
+	RelatedID        string              `json:"relatedId"`
+	UserID           string              `json:"userId"`
+	User             UserSummary         `json:"user"`
+	SourceType       AIUsageSource       `json:"sourceType"`
+	Kind             string              `json:"kind"`
+	Model            string              `json:"model"`
+	Status           string              `json:"status"`
+	Credits          int                 `json:"credits"`
+	CreditsRefunded  int                 `json:"creditsRefunded"`
+	NetCredits       int                 `json:"netCredits"`
+	GeneratedSeconds int                 `json:"generatedSeconds"`
+	DurationIssue    string              `json:"durationIssue"`
+	Provider         string              `json:"provider"`
+	UpstreamTaskID   string              `json:"upstreamTaskId"`
+	ErrorMessage     string              `json:"errorMessage"`
+	CreatedAt        string              `json:"createdAt"`
+	FrontendTrace    AITaskFrontendTrace `json:"frontendTrace"`
+}
+
+type AIUsageExportQuery struct {
+	User    string
+	Model   string
+	StartAt string
+	EndAt   string
+}
+
+type AIUsageExportSummaryRow struct {
+	PeriodStart          string
+	PeriodEnd            string
+	UserID               string
+	User                 UserSummary
+	Kind                 string
+	Model                string
+	NetCredits           int
+	SuccessfulVideoCount int
+	GeneratedSeconds     int
+}
+
+type AIUsageExportData struct {
+	ExportedAt  string
+	StartAt     string
+	EndAt       string
+	UserFilter  string
+	ModelFilter string
+	Overview    []AIUsageExportSummaryRow
+	Daily       []AIUsageExportSummaryRow
+	Weekly      []AIUsageExportSummaryRow
+	Monthly     []AIUsageExportSummaryRow
+	Records     []AIUsageRecord
 }
 
 type AIUsageRecordList struct {

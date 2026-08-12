@@ -213,6 +213,38 @@ func DownloadProjectCachePackage(w http.ResponseWriter, r *http.Request, project
 	http.ServeContent(w, r, result.Filename, time.Now(), temporary)
 }
 
+func DownloadProjectCacheSelection(w http.ResponseWriter, r *http.Request, projectID string) {
+	user, ok := service.UserFromContext(r.Context())
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	var input service.ProjectCacheSelectionInput
+	if !decodeProjectCacheJSON(w, r, &input) {
+		return
+	}
+	input.ProjectID = projectID
+	temporary, err := os.CreateTemp("", "infinite-canvas-project-cache-selection-*.zip")
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	defer os.Remove(temporary.Name())
+	defer temporary.Close()
+	result, err := service.WriteProjectCacheSelectionPackage(temporary, config.Cfg.ProjectCacheDir, user.ID, input)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	if _, err := temporary.Seek(0, 0); err != nil {
+		FailError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": result.Filename}))
+	http.ServeContent(w, r, result.Filename, time.Now(), temporary)
+}
+
 func decodeProjectCacheJSON(w http.ResponseWriter, r *http.Request, value any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
 	if err := json.NewDecoder(r.Body).Decode(value); err != nil {

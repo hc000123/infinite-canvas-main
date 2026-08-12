@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { filterProjectCacheFiles, mergeProjectCacheState } from "./cache-view-model.ts";
+import { filterProjectCacheFiles, mergeProjectCacheState, pruneCacheSelection, toggleVisibleCacheSelection } from "./cache-view-model.ts";
 
 test("marks disk cache orphaned when the local project is absent", () => {
     const rows = mergeProjectCacheState([{ projectId: "p1", projectName: "A", status: "active", path: "/a", updatedAt: "", bytes: 10, fileCount: 1, missingCount: 0 }], []);
@@ -18,4 +18,14 @@ test("filters by episode, category, media kind and keyword", () => {
         result.map((item) => item.id),
         ["file-1"],
     );
+});
+
+test("toggles only the visible cache selection while preserving hidden items", () => {
+    const selected = toggleVisibleCacheSelection(new Set(["hidden"]), ["a", "b"]);
+    assert.deepEqual([...selected].sort(), ["a", "b", "hidden"]);
+    assert.deepEqual([...toggleVisibleCacheSelection(selected, ["a", "b"])], ["hidden"]);
+});
+
+test("prunes cache selection against the current manifest", () => {
+    assert.deepEqual([...pruneCacheSelection(new Set(["a", "gone"]), ["a", "b"])], ["a"]);
 });

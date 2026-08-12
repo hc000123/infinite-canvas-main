@@ -3,6 +3,12 @@ export function normalizeVideoSeconds(value: string) {
     return String(Math.max(1, Math.min(20, seconds)));
 }
 
+export function normalizeOpenAIVideoSeconds(value: string, model?: string) {
+    const seconds = Math.floor(Number(value) || 6);
+    const maxSeconds = (model || "").trim().toLowerCase() === "manxue-2.5" ? 29 : 20;
+    return String(Math.max(1, Math.min(maxSeconds, seconds)));
+}
+
 export function normalizeVideoSize(value: string) {
     if (value === "auto" || value === "adaptive") return null;
     const size = value || "1280x720";

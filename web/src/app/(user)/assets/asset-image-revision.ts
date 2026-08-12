@@ -11,18 +11,14 @@ export type AssetImageGenerationSnapshot = {
 };
 
 export function buildAssetImageRevisionHref(asset: ImageAsset, returnTo?: string) {
-    const snapshot = assetImageGenerationSnapshot(asset);
-    const params = new URLSearchParams({ source: "asset-revision", libraryAssetId: asset.id, assetId: asset.id, title: asset.title });
+    const params = new URLSearchParams();
+    const subjectId = asset.assetBinding?.subjectId;
+    const variantId = asset.assetBinding?.variantId;
     const projectId = asset.assetBinding?.projectId || readString(asset.metadata?.projectId);
-    const episodeId = asset.assetBinding?.episodeIds[0] || readString(asset.metadata?.episodeId);
-    if (projectId) params.set("projectId", projectId);
-    if (episodeId) params.set("episodeId", episodeId);
-    if (snapshot.prompt) params.set("prompt", snapshot.prompt);
-    if (returnTo) {
-        params.set("returnTo", returnTo);
-        params.set("returnLabel", "返回资产");
-    }
-    return `/image?${params.toString()}`;
+    if (variantId) params.set("variantId", variantId);
+    if (returnTo) params.set("returnTo", returnTo);
+    if (subjectId) return `/assets/${encodeURIComponent(subjectId)}${params.size ? `?${params.toString()}` : ""}`;
+    return projectId ? `/assets?projectId=${encodeURIComponent(projectId)}` : "/assets";
 }
 
 export function assetImageGenerationSnapshot(asset: ImageAsset): Partial<AssetImageGenerationSnapshot> {

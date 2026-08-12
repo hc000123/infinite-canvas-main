@@ -128,7 +128,7 @@ export default function AdminSettingsPage() {
     const publicVideoModelOptions = useMemo(() => buildCapabilityModelOptions(publicModels, channels, "video"), [channels, publicModels]);
     const publicTextModels = useMemo(() => filterModelsByCapability(publicModels, channels, "text"), [channels, publicModels]);
     const modelTextEndpoints = useMemo(() => normalizeModelTextEndpoints(watchedModelTextEndpoints || [], publicTextModels), [watchedModelTextEndpoints, publicTextModels]);
-    const publicTextModelOptions = useMemo(() => publicTextModels.map((item) => ({ label: item, value: item })), [publicTextModels]);
+    const publicTextModelOptions = useMemo(() => buildCapabilityModelOptions(publicTextModels, channels, "text"), [channels, publicTextModels]);
     const channelModelSourceGroups = useMemo(() => buildChannelModelSourceGroups(channels), [channels]);
     const channelTableData = useMemo(() => channels.map((channel, index) => ({ ...channel, _index: index, _rowKey: `${index}-${channel.name}-${channel.baseUrl}` })), [channels]);
     const activeMode = editorMode[activeTab];
@@ -1176,7 +1176,8 @@ function filterModelsByCapability(models: string[], channels: AdminModelChannel[
 }
 
 function buildCapabilityModelOptions(models: string[], channels: AdminModelChannel[], capability: AiModelKind) {
-    return filterModelsByCapability(models, channels, capability).map((item) => ({ label: item, value: item }));
+    const sourceOptions = new Map(buildChannelModelSourceGroups(channels).flatMap((group) => group.options).map((option) => [option.value, option]));
+    return filterModelsByCapability(models, channels, capability).map((item) => ({ label: sourceOptions.get(item)?.displayLabel || `${item} · 来源待确认`, value: item }));
 }
 
 function modelCapabilitiesByChannel(channels: AdminModelChannel[]) {

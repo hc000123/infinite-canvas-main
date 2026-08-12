@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { UserStatusActions } from "@/components/layout/user-status-actions";
 import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
 import { useCanvasStore } from "../canvas/stores/use-canvas-store";
+import { contextualToolHref, workspaceProjectId } from "@/components/layout/workspace-project-context";
 
 export function ProjectWorkspaceShell({ children }: { children: ReactNode }) {
     return (
@@ -23,14 +24,16 @@ function ProjectWorkspaceTopBar() {
     const returnTarget = buildWorkspaceReturnTarget(searchParams);
     const slug = pathname.split("/").filter(Boolean)[0];
     const activeToolSlug = navigationTools.some((tool) => tool.slug === slug) ? (slug as NavigationToolSlug) : undefined;
+    const projectId = workspaceProjectId(pathname, searchParams);
     const getToolHref = (toolSlug: NavigationToolSlug) => {
-        if (toolSlug === "assets") return buildWorkspaceAssetsHref(pathname, searchParams);
+        const contextualHref = contextualToolHref(toolSlug, projectId);
+        if (toolSlug === "assets") return buildWorkspaceAssetsHref(pathname, searchParams, contextualHref);
         if (toolSlug === "canvas") {
             const currentCanvasId = pathname.match(/^\/canvas\/([^/]+)/)?.[1];
-            const projectId = searchParams.get("projectId") || canvasProjects.find((canvas) => canvas.id === currentCanvasId)?.projectId || "";
-            return projectId ? `/canvas?projectId=${encodeURIComponent(projectId)}` : "/canvas";
+            const canvasProjectId = projectId || canvasProjects.find((canvas) => canvas.id === currentCanvasId)?.projectId || "";
+            return canvasProjectId ? `/canvas?projectId=${encodeURIComponent(canvasProjectId)}` : "/canvas";
         }
-        return `/${toolSlug}`;
+        return contextualHref;
     };
     const barStyle = { background: "color-mix(in srgb, var(--studio-app-bg) 92%, transparent)", color: "var(--studio-text-primary)" };
 
@@ -81,14 +84,16 @@ type SearchParamReader = {
     toString: () => string;
 };
 
-function buildWorkspaceAssetsHref(pathname: string, searchParams: SearchParamReader) {
-    if (pathname === "/assets" || pathname.startsWith("/assets/")) return "/assets";
+function buildWorkspaceAssetsHref(pathname: string, searchParams: SearchParamReader, contextualHref: string) {
+    if (pathname === "/assets" || pathname.startsWith("/assets/")) return contextualHref;
 
     const currentQuery = searchParams.toString();
     const currentHref = currentQuery ? `${pathname}?${currentQuery}` : pathname;
     const params = new URLSearchParams();
     params.set("returnTo", currentHref);
     params.set("returnLabel", "返回上一页");
+    const projectId = new URLSearchParams(contextualHref.split("?")[1] || "").get("projectId");
+    if (projectId) params.set("projectId", projectId);
     return `/assets?${params.toString()}`;
 }
 

@@ -97,7 +97,7 @@ export function WorkflowAssetSlotEditor({ projectId, state }: { projectId: strin
                 ["已识别", summary.total], ["已绑定", summary.bound], ["候选", summary.candidate], ["占位", summary.placeholder], ["已忽略", summary.ignored],
             ].map(([label, value]) => <div key={label} className="rounded-md bg-[var(--studio-workspace-bg)] px-3 py-2"><div className="text-[var(--studio-text-muted)]">{label}</div><div className="mt-1 text-base font-semibold">{value}</div></div>)}</div> : null}
 
-            {!readable ? <Alert className="mt-4" showIcon type="info" title="等待资产解析结果" description="进入资产阶段后，Agent 会先生成可人工修订的槽位清单。" /> : loading ? <div className="grid min-h-36 place-items-center"><Spin description="正在读取资产槽位" /></div> : (
+            {!readable ? <Alert className="mt-4" showIcon type="info" title="等待资产解析结果" description="手动启动资产解析后，Agent 会生成可人工修订的槽位清单。" /> : loading ? <div className="grid min-h-36 place-items-center"><Spin description="正在读取资产槽位" /></div> : (
                 <div className="mt-4 space-y-2">
                     {draft.map((slot) => (
                         <div key={slot.slotId} className={`grid gap-2 rounded-md border p-3 md:grid-cols-[112px_minmax(150px,0.8fr)_minmax(220px,1.4fr)_minmax(180px,1fr)_auto] ${slot.status === "ignored" ? "border-dashed border-[var(--studio-border-subtle)] opacity-60" : "border-[var(--studio-border-subtle)]"}`}>

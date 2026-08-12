@@ -12,6 +12,7 @@ import { useConfigStore } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { useCanvasStore } from "@/app/(user)/canvas/stores/use-canvas-store";
+import { contextualToolHref, workspaceProjectId } from "./workspace-project-context";
 
 export function AppTopNav() {
     const pathname = usePathname();
@@ -25,16 +26,18 @@ export function AppTopNav() {
     const hideHeader = /^\/canvas\/[^/]+/.test(pathname) || pathname.startsWith("/login");
     const slug = pathname.split("/").filter(Boolean)[0];
     const activeToolSlug = navigationTools.some((tool) => tool.slug === slug) ? (slug as NavigationToolSlug) : undefined;
+    const projectId = workspaceProjectId(pathname, searchParams);
     const returnTarget = buildReturnTarget(searchParams);
     const themeToggleLabel = theme === "dark" ? "切换到全局浅色主题" : "切换到全局深色主题";
     const getToolHref = (toolSlug: NavigationToolSlug) => {
-        if (toolSlug === "assets") return buildAssetsReturnHref(pathname, searchParams);
+        const contextualHref = contextualToolHref(toolSlug, projectId);
+        if (toolSlug === "assets") return buildAssetsReturnHref(pathname, searchParams, contextualHref);
         if (toolSlug === "canvas") {
             const currentCanvasId = pathname.match(/^\/canvas\/([^/]+)/)?.[1];
-            const projectId = searchParams.get("projectId") || canvasProjects.find((canvas) => canvas.id === currentCanvasId)?.projectId || "";
-            return projectId ? `/canvas?projectId=${encodeURIComponent(projectId)}` : "/canvas";
+            const canvasProjectId = projectId || canvasProjects.find((canvas) => canvas.id === currentCanvasId)?.projectId || "";
+            return canvasProjectId ? `/canvas?projectId=${encodeURIComponent(canvasProjectId)}` : "/canvas";
         }
-        return `/${toolSlug}`;
+        return contextualHref;
     };
 
     return (
@@ -104,13 +107,15 @@ type SearchParamReader = {
     toString: () => string;
 };
 
-function buildAssetsReturnHref(pathname: string, searchParams: SearchParamReader) {
-    if (pathname === "/assets" || pathname.startsWith("/assets/")) return "/assets";
+function buildAssetsReturnHref(pathname: string, searchParams: SearchParamReader, contextualHref: string) {
+    if (pathname === "/assets" || pathname.startsWith("/assets/")) return contextualHref;
 
     const currentQuery = searchParams.toString();
     const currentHref = currentQuery ? `${pathname}?${currentQuery}` : pathname;
     const params = new URLSearchParams();
     params.set("returnTo", currentHref);
     params.set("returnLabel", "返回上一页");
+    const projectId = new URLSearchParams(contextualHref.split("?")[1] || "").get("projectId");
+    if (projectId) params.set("projectId", projectId);
     return `/assets?${params.toString()}`;
 }

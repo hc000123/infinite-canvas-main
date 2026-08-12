@@ -8,7 +8,7 @@ export function promptInputHash(item: ProductionPackage) {
 }
 
 export function updateShotDraft(item: ProductionPackage, patch: Partial<WorkflowShotDraft>): ProductionPackage {
-    return stalePrompt({ ...item, shotDraft: { ...defaultShotDraft(item), ...patch }, shotStatus: "draft" });
+    return stalePrompt({ ...item, shotDraft: { ...defaultShotDraft(item), ...patch }, shotStatus: "confirmed" });
 }
 
 export function confirmShotDraft(item: ProductionPackage): ProductionPackage {

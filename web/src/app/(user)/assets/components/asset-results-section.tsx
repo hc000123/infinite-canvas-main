@@ -17,6 +17,8 @@ type Props = {
     onClearOutdatedSelection: () => void;
     onUpdateOutdatedUsage: (usage: OutdatedAssetVersionUsage) => void;
     onOpenBulkOutdated: () => void;
+    onUpload: (summary: AssetCenterSubjectSummary) => void;
+    onMatchVoice: (summary: AssetCenterSubjectSummary) => void;
 };
 
 export function AssetResultsSection(props: Props) {
@@ -26,7 +28,7 @@ export function AssetResultsSection(props: Props) {
                 <OutdatedReferencesPanel usages={props.usages} selectedIds={props.selectedOutdatedUsageIds} onToggle={props.onToggleOutdatedUsage} onSelectAll={props.onSelectOutdatedUsages} onClear={props.onClearOutdatedSelection} onUpdateOne={props.onUpdateOutdatedUsage} onOpenBatch={props.onOpenBulkOutdated} />
             ) : props.summaries.length ? (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-                    {props.summaries.map((summary) => <AssetSubjectCard key={summary.subject.id} summary={summary} />)}
+                    {props.summaries.map((summary) => <AssetSubjectCard key={summary.subject.id} summary={summary} onUpload={props.onUpload} onMatchVoice={props.onMatchVoice} />)}
                 </div>
             ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到资产主体" className="py-20" />}
         </div>

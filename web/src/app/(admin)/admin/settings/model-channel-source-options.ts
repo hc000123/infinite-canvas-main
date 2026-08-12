@@ -2,6 +2,7 @@ import type { AdminModelChannel } from "../../../../services/api/admin.ts";
 
 export type ChannelModelSourceOption = {
     label: string;
+    displayLabel: string;
     value: string;
     sources: string[];
     searchText: string;
@@ -15,7 +16,7 @@ export type ChannelModelSourceGroup = {
 export function isChannelModelSourceOption(value: unknown): value is ChannelModelSourceOption {
     if (!value || typeof value !== "object") return false;
     const option = value as Partial<ChannelModelSourceOption>;
-    return typeof option.label === "string" && typeof option.value === "string" && Array.isArray(option.sources) && option.sources.every((source) => typeof source === "string") && typeof option.searchText === "string";
+    return typeof option.label === "string" && typeof option.displayLabel === "string" && typeof option.value === "string" && Array.isArray(option.sources) && option.sources.every((source) => typeof source === "string") && typeof option.searchText === "string";
 }
 
 export function buildChannelModelSourceGroups(channels: AdminModelChannel[]): ChannelModelSourceGroup[] {
@@ -36,7 +37,7 @@ export function buildChannelModelSourceGroups(channels: AdminModelChannel[]): Ch
         });
     });
 
-    const options = Array.from(sourcesByModel, ([model, sources]) => ({ label: model, value: model, sources, searchText: [model, ...sources].join(" ").toLowerCase() }));
+    const options = Array.from(sourcesByModel, ([model, sources]) => ({ label: model, displayLabel: `${model} · 来源：${sources.join(" / ")}`, value: model, sources, searchText: [model, ...sources].join(" ").toLowerCase() }));
     const groups: ChannelModelSourceGroup[] = [];
     const shared = options.filter((option) => option.sources.length > 1);
     if (shared.length) groups.push({ label: "多渠道共享", options: shared });

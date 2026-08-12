@@ -142,6 +142,13 @@ test("admin registry renders production-stage collapse groups", () => {
     assert.equal(page.includes("visibleItems.map((item) => <SkillCard"), false);
 });
 
+test("admin skill registry cards only show the skill name", () => {
+    const page = fs.readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
+    const skillCard = page.slice(page.indexOf("function SkillCard"), page.indexOf("function VersionButton"));
+    assert.match(skillCard, /item\.skill\.name/);
+    for (const detail of ["item.skill.summary", "manifest?.capabilities", "inputArtifactTypes", "outputArtifactTypes"]) assert.equal(skillCard.includes(detail), false);
+});
+
 test("admin independent trial receives the selected Skill executor", () => {
     const page = fs.readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
     assert.match(page, /executorKind=\{detailQuery\.data\?\.package\.manifest\.executorKind\}/);

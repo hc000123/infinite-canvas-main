@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Button, Empty, Spin, Tag } from "antd";
+import { Button, Checkbox, Empty, Spin, Tag } from "antd";
 import { AudioLines, ExternalLink, FileQuestion, FolderInput, ImageIcon, Trash2, Video } from "lucide-react";
 
 import type { ProjectCacheFile } from "@/services/api/project-cache";
@@ -10,19 +10,22 @@ import { useCacheFileObjectUrl } from "../use-cache-file-object-url";
 const categoryLabels: Record<ProjectCacheFile["category"], string> = { character: "角色", scene: "场景", prop: "道具", storyboard: "分镜", other: "其他" };
 const kindLabels: Record<ProjectCacheFile["kind"], string> = { image: "图片", video: "视频", audio: "音频" };
 
-export function CacheFileGrid({ files, onDelete, onMove, onPreview }: { files: ProjectCacheFile[]; onDelete: (file: ProjectCacheFile) => void; onMove?: (file: ProjectCacheFile) => void; onPreview: (file: ProjectCacheFile) => void }) {
+export function CacheFileGrid({ files, onDelete, onMove, onPreview, onToggleSelect, selectedIds }: { files: ProjectCacheFile[]; onDelete: (file: ProjectCacheFile) => void; onMove?: (file: ProjectCacheFile) => void; onPreview: (file: ProjectCacheFile) => void; onToggleSelect: (file: ProjectCacheFile) => void; selectedIds: ReadonlySet<string> }) {
     if (!files.length) return <Empty className="py-16" description="当前分类没有缓存文件" />;
     return (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,240px),1fr))] gap-4">
-            {files.map((file) => <CacheFileCard key={file.id} file={file} onDelete={onDelete} onMove={onMove} onPreview={onPreview} />)}
+            {files.map((file) => <CacheFileCard key={file.id} file={file} selected={selectedIds.has(file.id)} onDelete={onDelete} onMove={onMove} onPreview={onPreview} onToggleSelect={onToggleSelect} />)}
         </div>
     );
 }
 
-function CacheFileCard({ file, onDelete, onMove, onPreview }: { file: ProjectCacheFile; onDelete: (file: ProjectCacheFile) => void; onMove?: (file: ProjectCacheFile) => void; onPreview: (file: ProjectCacheFile) => void }) {
+function CacheFileCard({ file, onDelete, onMove, onPreview, onToggleSelect, selected }: { file: ProjectCacheFile; onDelete: (file: ProjectCacheFile) => void; onMove?: (file: ProjectCacheFile) => void; onPreview: (file: ProjectCacheFile) => void; onToggleSelect: (file: ProjectCacheFile) => void; selected: boolean }) {
     const missing = file.status === "missing";
     return (
-        <article className="group min-w-0 overflow-hidden rounded-xl border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] transition [content-visibility:auto] [contain-intrinsic-size:340px] hover:border-[var(--studio-border-strong)]">
+        <article className={`group relative min-w-0 overflow-hidden rounded-xl border bg-[var(--studio-panel-bg)] transition [content-visibility:auto] [contain-intrinsic-size:340px] ${selected ? "border-[var(--studio-accent)] ring-1 ring-[var(--studio-accent)]" : "border-[var(--studio-border-subtle)] hover:border-[var(--studio-border-strong)]"}`}>
+            <span className="absolute left-2 top-2 z-10 grid size-8 place-items-center rounded-md bg-[color-mix(in_srgb,var(--studio-panel-bg)_88%,transparent)] backdrop-blur" onClick={(event) => event.stopPropagation()}>
+                <Checkbox checked={selected} disabled={missing} aria-label={`选择 ${file.originalName || file.id}`} onChange={() => onToggleSelect(file)} />
+            </span>
             <button
                 type="button"
                 disabled={missing}

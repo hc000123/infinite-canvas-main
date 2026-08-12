@@ -3,14 +3,14 @@ import test from "node:test";
 
 import { nextWorkflowAssetAction } from "./workflow-asset-automation.ts";
 
-test("stops at human review gates while continuing approved work", () => {
-    assert.deepEqual(nextWorkflowAssetAction({ enabled: true, workerReady: true, extraction: { status: "needs_review", gatePassed: true }, prompts: null }), { type: "idle", reason: "请确认资产槽位后批准" });
+test("continues valid text preparation without extra review clicks", () => {
+    assert.deepEqual(nextWorkflowAssetAction({ enabled: true, workerReady: true, extraction: { status: "needs_review", gatePassed: true }, prompts: null }), { type: "approve-extraction" });
     assert.deepEqual(nextWorkflowAssetAction({ enabled: true, workerReady: true, extraction: { status: "approved", gatePassed: true }, prompts: { status: "ready" } }), { type: "start-prompts" });
-    assert.deepEqual(nextWorkflowAssetAction({ enabled: true, workerReady: true, extraction: { status: "approved", gatePassed: true }, prompts: { status: "needs_review", gatePassed: true } }), { type: "idle", reason: "请确认资产提示词后批准" });
+    assert.deepEqual(nextWorkflowAssetAction({ enabled: true, workerReady: true, extraction: { status: "approved", gatePassed: true }, prompts: { status: "needs_review", gatePassed: true } }), { type: "approve-prompts" });
 });
 
-test("starts extraction only when the asset route and worker are ready", () => {
-    assert.deepEqual(nextWorkflowAssetAction({ enabled: true, workerReady: true, extraction: { status: "ready" }, prompts: null }), { type: "start-extraction" });
+test("keeps asset extraction manual when the asset route and worker are ready", () => {
+    assert.deepEqual(nextWorkflowAssetAction({ enabled: true, workerReady: true, extraction: { status: "ready" }, prompts: null }), { type: "idle", reason: "请手动启动资产解析" });
     assert.equal(nextWorkflowAssetAction({ enabled: false, workerReady: true, extraction: { status: "ready" }, prompts: null }).type, "idle");
     assert.equal(nextWorkflowAssetAction({ enabled: true, workerReady: false, extraction: { status: "ready" }, prompts: null }).type, "idle");
 });

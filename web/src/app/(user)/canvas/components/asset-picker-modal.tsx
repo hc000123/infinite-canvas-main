@@ -1,23 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { App, Button, Empty, Input, Modal, Pagination, Select, Spin, Tabs, Tag } from "antd";
-import { Check, Layers3, RotateCcw, Search } from "lucide-react";
-import axios from "axios";
+import { App, Button, Empty, Input, Modal, Tabs, Tag } from "antd";
+import { Layers3, Search } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { uploadMediaFile } from "@/services/file-storage";
-import { fetchAssetLibrary, type AssetLibraryItem } from "@/services/api/assets";
-import { useAssetStore, type Asset, type AssetCategory, type VolcengineAssetMetadata } from "@/stores/use-asset-store";
+import { useAssetStore, type Asset, type AssetCategory } from "@/stores/use-asset-store";
 import { assetCategoryLabel } from "../../assets/asset-subjects";
 import { buildInsertAssetPayload, type InsertAssetPayload } from "../utils/asset-insert-payload";
 import { buildAssetSubjectPickerItems } from "../utils/asset-subject-picker";
 import { AssetSubjectPickerCard } from "./asset-subject-picker-card";
 
-export type AssetPickerTab = "episode-assets" | "my-assets" | "library";
+export type AssetPickerTab = "episode-assets" | "my-assets";
 type AssetPickerKind = InsertAssetPayload["kind"];
-type AssetKindOption<T extends string = AssetPickerKind | "all"> = { label: string; value: T };
 type PickerSelection = { key: string; kind: AssetPickerKind; title: string; resolve: () => Promise<InsertAssetPayload> };
 type SelectionControls = {
     disabled: boolean;
@@ -31,7 +26,6 @@ type Props = {
     open: boolean;
     title?: string;
     defaultTab?: AssetPickerTab;
-    defaultKind?: AssetPickerKind | "all";
     allowedKinds?: AssetPickerKind[];
     projectId?: string;
     episodeId?: string;
@@ -39,7 +33,7 @@ type Props = {
     onClose: () => void;
 };
 
-export function AssetPickerModal({ open, title = "选择素材", defaultTab = "my-assets", defaultKind = "all", allowedKinds, projectId, episodeId, onInsert, onClose }: Props) {
+export function AssetPickerModal({ open, title = "选择素材", defaultTab = "my-assets", allowedKinds, projectId, episodeId, onInsert, onClose }: Props) {
     const { message } = App.useApp();
     const contextualTab = projectId && episodeId && defaultTab === "my-assets" ? "episode-assets" : defaultTab;
     const [activeTab, setActiveTab] = useState<AssetPickerTab>(contextualTab);
@@ -117,8 +111,7 @@ export function AssetPickerModal({ open, title = "选择素材", defaultTab = "m
                 onChange={(key) => setActiveTab(key as AssetPickerTab)}
                 items={[
                     ...(projectId && episodeId ? [{ key: "episode-assets", label: "本集资产", children: <SubjectAssetsTab projectId={projectId} episodeId={episodeId} allowedKinds={allowedKinds} selection={selection} /> }] : []),
-                    { key: "my-assets", label: "全部资产", children: <SubjectAssetsTab projectId={projectId} allowedKinds={allowedKinds} selection={selection} /> },
-                    { key: "library", label: "外部素材库", children: <LibraryTab allowedKinds={allowedKinds} defaultKind={defaultKind} selection={selection} /> },
+                    { key: "my-assets", label: "全部本地资产", children: <SubjectAssetsTab projectId={projectId} allowedKinds={allowedKinds} selection={selection} /> },
                 ]}
             />
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--studio-border-subtle)] pt-4">
@@ -171,262 +164,12 @@ function SubjectAssetsTab({ projectId, episodeId, allowedKinds, selection }: { p
     );
 }
 
-const PAGE_SIZE = 12;
-
-const kindOptions: AssetKindOption[] = [
-    { label: "全部类型", value: "all" },
-    { label: "文本", value: "text" },
-    { label: "图片", value: "image" },
-    { label: "视频", value: "video" },
-    { label: "音频", value: "audio" },
-];
-
-const sortOptions = [
-    { label: "最近更新", value: "updated_desc" },
-    { label: "最近创建", value: "created_desc" },
-    { label: "名称排序", value: "title_asc" },
-];
-
-function LibraryTab({ allowedKinds, defaultKind = "all", selection }: { allowedKinds?: AssetPickerKind[]; defaultKind?: AssetPickerKind | "all"; selection: SelectionControls }) {
-    const [keyword, setKeyword] = useState("");
-    const [kindFilter, setKindFilter] = useState(defaultKind === "all" ? "" : defaultKind);
-    const [tags, setTags] = useState<string[]>([]);
-    const [page, setPage] = useState(1);
-    const options = remoteAssetKindOptions(allowedKinds);
-    const query = useQuery({
-        queryKey: ["asset-picker-library", keyword, kindFilter, tags, page],
-        queryFn: () => fetchAssetLibrary({ keyword, type: kindFilter, tag: tags, page, pageSize: PAGE_SIZE }),
-        retry: false,
-    });
-    const items = useMemo(() => query.data?.items || [], [query.data?.items]);
-    const total = query.data?.total || 0;
-    const pageSelections = useMemo(() => items.map(libraryAssetSelection), [items]);
-    const allPageSelected = pageSelections.length > 0 && pageSelections.every((item) => selection.selectedKeys.has(item.key));
-    const reset = () => {
-        setKeyword("");
-        setKindFilter(defaultKind === "all" ? "" : defaultKind);
-        setTags([]);
-        setPage(1);
-    };
-
-    return (
-        <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-                <Input
-                    className="min-w-56 flex-1"
-                    size="small"
-                    prefix={<Search className="size-3.5 text-[var(--studio-text-muted)]" />}
-                    placeholder="搜索素材标题、说明或内容"
-                    value={keyword}
-                    allowClear
-                    onChange={(event) => {
-                        setPage(1);
-                        setKeyword(event.target.value);
-                    }}
-                />
-                <div className="flex flex-wrap gap-1.5">
-                    {options.map((option) => (
-                        <Tag.CheckableTag
-                            key={option.value || "all"}
-                            checked={kindFilter === option.value}
-                            className={cn("prompt-filter-tag", kindFilter === option.value && "is-active")}
-                            onChange={() => {
-                                setPage(1);
-                                setKindFilter(option.value);
-                            }}
-                        >
-                            {option.label}
-                        </Tag.CheckableTag>
-                    ))}
-                </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-2">
-                <Select
-                    mode="multiple"
-                    size="small"
-                    className="min-w-64 flex-1"
-                    maxTagCount="responsive"
-                    allowClear
-                    placeholder="按标签筛选，可多选"
-                    value={tags}
-                    options={(query.data?.tags || []).map((tag) => ({ label: tag, value: tag }))}
-                    onChange={(value) => {
-                        setPage(1);
-                        setTags(value);
-                    }}
-                />
-                <span className="text-xs text-[var(--studio-text-muted)]">共 {total} 个结果</span>
-                <Button size="small" icon={<RotateCcw className="size-3.5" />} onClick={reset}>
-                    重置
-                </Button>
-                <Button size="small" disabled={!pageSelections.length || selection.disabled} onClick={() => selection.onSetMany(pageSelections, !allPageSelected)}>
-                    {allPageSelected ? "取消全选本页" : "全选当前页"}
-                </Button>
-            </div>
-            {query.isLoading ? (
-                <div className="flex justify-center py-16">
-                    <Spin />
-                </div>
-            ) : query.isError ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="素材库加载失败" className="py-12" />
-            ) : items.length ? (
-                <div className="grid max-h-[350px] grid-cols-3 gap-3 overflow-y-auto pr-1 sm:grid-cols-4">
-                    {items.map((asset) => (
-                        <PickerCard
-                            key={asset.id}
-                            title={asset.title}
-                            kind={asset.type}
-                            cover={asset.coverUrl}
-                            previewUrl={asset.type === "video" ? asset.url : ""}
-                            selected={selection.selectedKeys.has(`library:${asset.id}`)}
-                            disabled={selection.disabled}
-                            onClick={() => selection.onToggle(libraryAssetSelection(asset))}
-                        />
-                    ))}
-                </div>
-            ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合筛选条件的素材" className="py-12" />
-            )}
-            {total > PAGE_SIZE ? (
-                <div className="flex justify-center">
-                    <Pagination size="small" current={page} pageSize={PAGE_SIZE} total={total} onChange={setPage} showSizeChanger={false} />
-                </div>
-            ) : null}
-        </div>
-    );
-}
-
-function LocalPickerCard({ asset, subtitle, selection }: { asset: Asset; subtitle?: string; selection: SelectionControls }) {
-    const item = localAssetSelection(asset);
-    return (
-        <PickerCard
-            title={asset.title}
-            subtitle={subtitle}
-            kind={asset.kind}
-            cover={asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "")}
-            previewUrl={asset.kind === "video" ? asset.data.url : ""}
-            selected={selection.selectedKeys.has(item.key)}
-            disabled={selection.disabled}
-            onClick={() => selection.onToggle(item)}
-        />
-    );
-}
-
-function PickerCard({ title, subtitle, kind, cover, previewUrl, selected, disabled, onClick }: { title: string; subtitle?: string; kind: string; cover: string; previewUrl?: string; selected: boolean; disabled?: boolean; onClick: () => void }) {
-    const videoPreviewUrl = kind === "video" ? videoCoverUrl(previewUrl || cover) : "";
-    return (
-        <button
-            type="button"
-            aria-pressed={selected}
-            className={cn(
-                "group relative cursor-pointer overflow-hidden rounded-md border bg-[var(--studio-panel-bg)] text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]",
-                selected ? "border-[var(--studio-accent)] ring-2 ring-[var(--studio-focus-ring)]" : "border-[var(--studio-border-subtle)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)]",
-            )}
-            onClick={onClick}
-            disabled={disabled}
-        >
-            <span
-                aria-hidden="true"
-                className={cn(
-                    "pointer-events-none absolute left-2 top-2 z-10 grid size-5 place-items-center rounded border bg-[var(--studio-panel-bg)]",
-                    selected ? "border-[var(--studio-accent)] text-[var(--studio-accent)]" : "border-[var(--studio-border-strong)] text-transparent",
-                )}
-            >
-                <Check className="size-3.5" />
-            </span>
-            {cover ? (
-                <img src={cover} alt={title} className="aspect-[4/3] w-full object-cover" />
-            ) : videoPreviewUrl ? (
-                <video src={videoPreviewUrl} muted playsInline preload="metadata" className="aspect-[4/3] w-full bg-[var(--studio-panel-muted-bg)] object-cover" />
-            ) : (
-                <div className="flex aspect-[4/3] items-center justify-center bg-[var(--studio-panel-muted-bg)] p-3 text-center text-xs leading-5 text-[var(--studio-text-muted)]">{title}</div>
-            )}
-            <div className="p-2.5">
-                <div className="flex items-center justify-between gap-2">
-                    <span className="line-clamp-1 text-xs font-medium text-[var(--studio-text-primary)]">{title}</span>
-                    <Tag className="m-0 shrink-0 text-[10px]">{assetTypeLabel(kind)}</Tag>
-                </div>
-                {subtitle ? <div className="mt-1 truncate text-[11px] text-[var(--studio-text-muted)]">{subtitle}</div> : null}
-            </div>
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[var(--studio-media-overlay-soft)] text-sm font-medium text-[var(--studio-on-media)] opacity-0 transition group-hover:bg-[var(--studio-media-overlay)] group-hover:opacity-100">
-                {selected ? "取消选择" : "选择"}
-            </div>
-        </button>
-    );
-}
-
 function localAssetSelection(asset: Asset): PickerSelection {
     return { key: `local:${asset.id}`, kind: asset.kind, title: asset.title, resolve: async () => buildInsertAssetPayload(asset) };
-}
-
-function libraryAssetSelection(asset: AssetLibraryItem): PickerSelection {
-    return { key: `library:${asset.id}`, kind: asset.type, title: asset.title, resolve: () => buildLibraryInsertPayload(asset) };
-}
-
-async function buildLibraryInsertPayload(asset: AssetLibraryItem): Promise<InsertAssetPayload> {
-    if (asset.type === "text") return { kind: "text", content: asset.content, title: asset.title };
-    if (asset.type === "image") return { kind: "image", dataUrl: await remoteImageToDataUrl(asset.url), title: asset.title, volcengineAsset: assetLibraryVolcengineMetadata(asset) };
-    if (asset.type === "video") {
-        const media = await uploadMediaFile(await remoteAssetBlob(asset.url), "video");
-        return { kind: "video", url: media.url, storageKey: media.storageKey, title: asset.title, width: media.width, height: media.height, volcengineAsset: assetLibraryVolcengineMetadata(asset) };
-    }
-    const media = await uploadMediaFile(await remoteAssetBlob(asset.url), "audio");
-    return { kind: "audio", url: media.url, storageKey: media.storageKey, title: asset.title, bytes: media.bytes, mimeType: media.mimeType };
 }
 
 function matchesTerms(values: Array<string | undefined>, terms: string[]) {
     if (!terms.length) return true;
     const text = values.filter(Boolean).join(" ").toLowerCase();
     return terms.every((term) => text.includes(term));
-}
-
-function assetKindOptions(allowedKinds?: AssetPickerKind[]): AssetKindOption[] {
-    const allowed = new Set(allowedKinds || ["text", "image", "video", "audio"]);
-    return kindOptions.filter((item) => item.value !== "all" || allowed.size > 1).filter((item) => item.value === "all" || allowed.has(item.value));
-}
-
-function remoteAssetKindOptions(allowedKinds?: AssetPickerKind[]): AssetKindOption<string>[] {
-    return assetKindOptions(allowedKinds).map((item) => ({ ...item, value: item.value === "all" ? "" : item.value }));
-}
-
-function assetLibraryVolcengineMetadata(asset: AssetLibraryItem): VolcengineAssetMetadata | undefined {
-    if (!asset.volcengineAssetId) return undefined;
-    return {
-        assetId: asset.volcengineAssetId,
-        groupId: asset.volcengineGroupId || "",
-        projectName: asset.volcengineProjectName || "default",
-        status: asset.volcengineStatus || "Processing",
-        error: asset.volcengineError || "",
-        publicUrl: asset.volcenginePublicUrl || asset.url,
-        submittedAt: asset.volcengineSubmittedAt || "",
-        updatedAt: asset.volcengineUpdatedAt || "",
-    };
-}
-
-function videoCoverUrl(url: string) {
-    if (!url || url.includes("#")) return url;
-    return `${url}#t=0.1`;
-}
-
-async function remoteImageToDataUrl(url: string) {
-    const response = await axios.get(url, { responseType: "blob" });
-    const blob = response.data as Blob;
-    return new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result || ""));
-        reader.onerror = () => reject(new Error("读取图片失败"));
-        reader.readAsDataURL(blob);
-    });
-}
-
-async function remoteAssetBlob(url: string) {
-    const response = await axios.get(url, { responseType: "blob" });
-    return response.data as Blob;
-}
-
-function assetTypeLabel(type: string) {
-    if (type === "image") return "图片";
-    if (type === "video") return "视频";
-    if (type === "audio") return "音频";
-    return "文本";
 }

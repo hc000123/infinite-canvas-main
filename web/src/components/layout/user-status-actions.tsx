@@ -64,8 +64,12 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
             icon: <LogOut className="size-4" />,
             label: "退出登录",
             onClick: () => {
-                reportActivity("account.logout", { summary: "退出登录" });
-                logout();
+                try {
+                    reportActivity("account.logout", { summary: "退出登录" });
+                } finally {
+                    logout();
+                    window.location.replace("/login");
+                }
             },
         },
     ];

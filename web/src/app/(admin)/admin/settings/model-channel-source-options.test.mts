@@ -34,14 +34,14 @@ test("系统可用模型按单一渠道和多渠道共享分组", () => {
     ]);
 
     assert.deepEqual(groups, [
-        { label: "多渠道共享", options: [{ label: "shared-model", value: "shared-model", sources: ["主渠道", "备用渠道"], searchText: "shared-model 主渠道 备用渠道" }] },
-        { label: "主渠道", options: [{ label: "alpha", value: "alpha", sources: ["主渠道"], searchText: "alpha 主渠道" }] },
-        { label: "备用渠道", options: [{ label: "beta", value: "beta", sources: ["备用渠道"], searchText: "beta 备用渠道" }] },
+        { label: "多渠道共享", options: [{ label: "shared-model", displayLabel: "shared-model · 来源：主渠道 / 备用渠道", value: "shared-model", sources: ["主渠道", "备用渠道"], searchText: "shared-model 主渠道 备用渠道" }] },
+        { label: "主渠道", options: [{ label: "alpha", displayLabel: "alpha · 来源：主渠道", value: "alpha", sources: ["主渠道"], searchText: "alpha 主渠道" }] },
+        { label: "备用渠道", options: [{ label: "beta", displayLabel: "beta · 来源：备用渠道", value: "beta", sources: ["备用渠道"], searchText: "beta 备用渠道" }] },
     ]);
 });
 
 test("模型来源选项守卫排除分组标题并接受真实选项", () => {
     assert.equal(isChannelModelSourceOption({ label: "主渠道", options: [] }), false);
-    assert.equal(isChannelModelSourceOption({ label: "model", value: "model", sources: ["主渠道"], searchText: "model 主渠道" }), true);
-    assert.equal(isChannelModelSourceOption({ label: "model", value: "model", sources: "主渠道", searchText: "model 主渠道" }), false);
+    assert.equal(isChannelModelSourceOption({ label: "model", displayLabel: "model · 来源：主渠道", value: "model", sources: ["主渠道"], searchText: "model 主渠道" }), true);
+    assert.equal(isChannelModelSourceOption({ label: "model", displayLabel: "model · 来源：主渠道", value: "model", sources: "主渠道", searchText: "model 主渠道" }), false);
 });

@@ -1,11 +1,15 @@
 package service
 
 import (
+	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"mime/multipart"
+	"net/http"
 	"net/url"
 	"path/filepath"
 	"strconv"
@@ -39,7 +43,17 @@ func IsGeekNowVideoChannel(channel model.ModelChannel) bool {
 }
 
 func BuildGeekNowVideoCreateRequest(body []byte, contentType string) ([]byte, string, error) {
-	fields, err := readGeekNowVideoCreateFields(body, contentType)
+	return buildGeekNowVideoCreateRequest(body, contentType, nil)
+}
+
+func BuildGeekNowVideoCreateRequestForChannel(ctx context.Context, channel model.ModelChannel, body []byte, contentType string) ([]byte, string, error) {
+	return buildGeekNowVideoCreateRequest(body, contentType, func(header *multipart.FileHeader) (string, error) {
+		return uploadGeekNowMaterial(ctx, channel, header)
+	})
+}
+
+func buildGeekNowVideoCreateRequest(body []byte, contentType string, upload func(*multipart.FileHeader) (string, error)) ([]byte, string, error) {
+	fields, err := readGeekNowVideoCreateFields(body, contentType, upload)
 	if err != nil {
 		return nil, "", err
 	}
@@ -49,7 +63,13 @@ func BuildGeekNowVideoCreateRequest(body []byte, contentType string) ([]byte, st
 	if fields.Prompt == "" {
 		return nil, "", errors.New("缺少视频提示词")
 	}
-	payload := map[string]any{"model": fields.Model, "prompt": fields.Prompt}
+	prompt := fields.Prompt
+	if strings.EqualFold(fields.Model, "manxue-2.5") {
+		if runes := []rune(prompt); len(runes) > 5000 {
+			prompt = string(runes[:5000])
+		}
+	}
+	payload := map[string]any{"model": fields.Model, "prompt": prompt}
 	if err := appendGeekNowVideoInput(payload, fields); err != nil {
 		return nil, "", err
 	}
@@ -61,7 +81,7 @@ func BuildGeekNowVideoCreateRequest(body []byte, contentType string) ([]byte, st
 	return normalized, "application/json", err
 }
 
-func readGeekNowVideoCreateFields(body []byte, contentType string) (geekNowVideoCreateFields, error) {
+func readGeekNowVideoCreateFields(body []byte, contentType string, upload func(*multipart.FileHeader) (string, error)) (geekNowVideoCreateFields, error) {
 	if strings.HasPrefix(contentType, "multipart/form-data") {
 		form, err := readArkMultipartForm(body, contentType)
 		if err != nil {
@@ -80,7 +100,13 @@ func readGeekNowVideoCreateFields(body []byte, contentType string) (geekNowVideo
 		}
 		roles := form.Value["input_reference_role[]"]
 		for index, header := range form.File["input_reference[]"] {
-			dataURL, err := multipartArkFileDataURL(header)
+			var value string
+			var err error
+			if strings.EqualFold(fields.Model, "manxue-2.5") && upload != nil {
+				value, err = upload(header)
+			} else {
+				value, err = multipartArkFileDataURL(header)
+			}
 			if err != nil {
 				return geekNowVideoCreateFields{}, err
 			}
@@ -88,7 +114,7 @@ func readGeekNowVideoCreateFields(body []byte, contentType string) (geekNowVideo
 			if index < len(roles) && strings.TrimSpace(roles[index]) != "" {
 				role = strings.TrimSpace(roles[index])
 			}
-			fields.Images = append(fields.Images, geekNowImageReference{URL: dataURL, Role: role})
+			fields.Images = append(fields.Images, geekNowImageReference{URL: value, Role: role})
 		}
 		fields.Video = firstArkFormAliasValue(form.Value, "video", "video_url", "input_video", "input_video_url[]")
 		videos := form.File["input_video[]"]
@@ -206,7 +232,7 @@ func appendGeekNowVideoControls(payload map[string]any, fields geekNowVideoCreat
 		payload["ratio"] = fields.Ratio
 		payload["resolution"] = geekNowMiniMaxResolution(modelName, resolutionUpper)
 	case modelName == "manxue-2.5":
-		payload["duration"] = fields.Duration
+		payload["duration"] = max(4, min(29, fields.Duration))
 		payload["ratio"] = fields.Ratio
 		payload["resolution"] = resolutionLower
 	case strings.HasPrefix(modelName, "omni-fast"):
@@ -218,6 +244,80 @@ func appendGeekNowVideoControls(payload map[string]any, fields geekNowVideoCreat
 		payload["ratio"] = fields.Ratio
 		payload["resolution"] = resolutionLower
 	}
+}
+
+func uploadGeekNowMaterial(ctx context.Context, channel model.ModelChannel, header *multipart.FileHeader) (string, error) {
+	contentType := strings.TrimSpace(header.Header.Get("Content-Type"))
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	presignBody, _ := json.Marshal(map[string]any{"file_name": header.Filename, "content_type": contentType, "expires_in": 900})
+	presignRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, geekNowPresignURL(channel.BaseURL), bytes.NewReader(presignBody))
+	if err != nil {
+		return "", err
+	}
+	presignRequest.Header.Set("Authorization", "Bearer "+channel.APIKey)
+	presignRequest.Header.Set("Content-Type", "application/json")
+	presignResponse, err := DoAIHTTPRequest(presignRequest)
+	if err != nil {
+		return "", errors.New("GeekNow 参考素材上传地址获取失败")
+	}
+	defer presignResponse.Body.Close()
+	presignPayload, _ := io.ReadAll(presignResponse.Body)
+	var result struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+		Data    struct {
+			Method      string `json:"method"`
+			UploadURL   string `json:"upload_url"`
+			PublicURL   string `json:"public_url"`
+			ContentType string `json:"content_type"`
+		} `json:"data"`
+	}
+	if presignResponse.StatusCode >= http.StatusBadRequest || json.Unmarshal(presignPayload, &result) != nil || !result.Success || strings.TrimSpace(result.Data.UploadURL) == "" || strings.TrimSpace(result.Data.PublicURL) == "" {
+		if strings.TrimSpace(result.Message) != "" {
+			return "", fmt.Errorf("GeekNow 参考素材上传失败：%s", strings.TrimSpace(result.Message))
+		}
+		return "", errors.New("GeekNow 参考素材上传地址无效")
+	}
+	file, err := header.Open()
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	uploadRequest, err := http.NewRequestWithContext(ctx, http.MethodPut, result.Data.UploadURL, file)
+	if err != nil {
+		return "", err
+	}
+	uploadRequest.ContentLength = header.Size
+	uploadRequest.Header.Set("Content-Type", contentType)
+	uploadResponse, err := DoAIHTTPRequest(uploadRequest)
+	if err != nil {
+		return "", errors.New("GeekNow 参考素材上传失败")
+	}
+	defer uploadResponse.Body.Close()
+	if uploadResponse.StatusCode >= http.StatusBadRequest {
+		return "", fmt.Errorf("GeekNow 参考素材上传失败：HTTP %d", uploadResponse.StatusCode)
+	}
+	publicURL, err := url.Parse(strings.TrimSpace(result.Data.PublicURL))
+	if err != nil || (publicURL.Scheme != "http" && publicURL.Scheme != "https") || publicURL.Host == "" {
+		return "", errors.New("GeekNow 参考素材公网地址无效")
+	}
+	return publicURL.String(), nil
+}
+
+func geekNowPresignURL(baseURL string) string {
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil {
+		return strings.TrimRight(baseURL, "/") + "/api/upload/presign"
+	}
+	if host := strings.ToLower(parsed.Hostname()); host == "geeknow.ai" || host == "www.geeknow.ai" {
+		return "https://www.geeknow.top/api/upload/presign"
+	}
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	parsed.Path = strings.TrimSuffix(strings.TrimRight(parsed.Path, "/"), "/v1") + "/api/upload/presign"
+	return parsed.String()
 }
 
 func appendGeekNowImageReferences(payload map[string]any, fields geekNowVideoCreateFields) error {
@@ -279,9 +379,9 @@ func NormalizeGeekNowVideoTaskResponse(body []byte) ([]byte, error) {
 		return nil, err
 	}
 	task := unwrapGeekNowTask(root)
-	id := aiTaskStringValue(task, "id", "task_id")
+	id := aiTaskStringValue(task, "task_id", "id")
 	if id == "" {
-		id = aiTaskStringValue(root, "id", "task_id")
+		id = aiTaskStringValue(root, "task_id", "id")
 	}
 	if id == "" {
 		return nil, errors.New("GeekNow 视频任务没有返回任务 ID")

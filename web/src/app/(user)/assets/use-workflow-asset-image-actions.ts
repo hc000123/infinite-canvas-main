@@ -23,34 +23,22 @@ export function useWorkflowAssetImageActions({ message }: Props) {
             message.warning("这张卡片没有可用的生图提示词");
             return;
         }
-        router.push(buildImageWorkbenchHref(asset, prompt, info));
+        router.push(buildAssetWorkbenchHref(asset, info));
     };
 
     return { generateWorkflowAssetImage, generatingWorkflowAssetId: null };
 }
 
-export function buildImageWorkbenchHref(asset: Asset, prompt: string, info: ReturnType<typeof workflowAssetInfo>, returnTo?: string) {
+export function buildAssetWorkbenchHref(asset: Asset, info: ReturnType<typeof workflowAssetInfo>, returnTo?: string) {
     const params = new URLSearchParams();
-    params.set("source", "original-workflow");
-    params.set("prompt", prompt);
-    params.set("title", asset.title);
-    params.set("libraryAssetId", asset.id);
-    params.set("assetId", info?.assetId || asset.id);
+    const subjectId = asset.assetBinding?.subjectId;
+    const variantId = asset.assetBinding?.variantId;
     const projectId = info?.sourceProjectId || info?.projectSlug;
-    if (projectId) {
-        params.set("projectId", projectId);
-        params.set("projectTitle", info?.projectSlug || projectId);
-    }
-    const episode = normalizeWorkflowEpisode(info?.episode) || normalizeWorkflowEpisode(info?.assetId);
-    if (episode) params.set("episodeId", episode);
+    if (variantId) params.set("variantId", variantId);
     if (returnTo || typeof window !== "undefined") {
         params.set("returnTo", returnTo || `${window.location.pathname}${window.location.search}`);
         params.set("returnLabel", "返回资产");
     }
-    return `/image?${params.toString()}`;
-}
-
-function normalizeWorkflowEpisode(value?: string) {
-    const match = value?.match(/^ep\d+/i);
-    return match?.[0].toLowerCase() || "";
+    if (subjectId) return `/assets/${encodeURIComponent(subjectId)}${params.size ? `?${params.toString()}` : ""}`;
+    return projectId ? `/assets?projectId=${encodeURIComponent(projectId)}` : "/assets";
 }

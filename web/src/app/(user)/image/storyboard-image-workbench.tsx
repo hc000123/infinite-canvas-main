@@ -92,7 +92,7 @@ export function StoryboardImageWorkbench() {
         if (episodeId) params.set("episodeId", episodeId);
         else params.delete("episodeId");
         const nextQuery = params.toString();
-        if (nextQuery !== searchParams.toString()) router.replace(`/image?${nextQuery}`, { scroll: false });
+        if (nextQuery !== searchParams.toString()) router.replace(`/storyboard?${nextQuery}`, { scroll: false });
         void selectionStore.setItem("last", { projectId, episodeId } satisfies SavedSelection);
     }, [episodeId, projectId, router, searchParams]);
 
@@ -224,7 +224,7 @@ export function StoryboardImageWorkbench() {
                 <StoryboardShotRail shots={shots} activeId={activeShot?.id || ""} candidatesById={candidatesById} onAdd={addShots} onDelete={deleteShot} onReorder={reorderTableShot} onSelect={setActiveShotId} />
                 {activeShot ? <main className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[minmax(360px,420px)_minmax(0,1fr)] lg:overflow-hidden"><StoryboardShotEditor shot={activeShot} references={activeReferences} running={generation.running} hasPrevious={shots.findIndex((shot) => shot.id === activeShot.id) > 0} onAddClipboard={() => void addClipboardReferences()} onGenerate={() => { if (!activeShot.imagePrompt) updateTableShot(activeShot.id, { imagePrompt: defaultShotImagePrompt(activeShot) }); void generation.generate(); }} onOpenAssets={() => setAssetPickerOpen(true)} onRemoveReference={removeReference} onReusePrevious={() => void reusePrevious()} onUpdate={(patch) => updateTableShot(activeShot.id, patch)} onUpload={(files) => void uploadReferences(files)} /><StoryboardCandidateGrid candidates={activeCandidates} selectedId={activeShot.selectedCandidateId} slots={generation.slots} onAddReference={(candidate) => void addCandidateAsReference(candidate)} onDelete={deleteCandidate} onDownload={(candidate) => saveAs(candidate.dataUrl, `${activeShot.title || "storyboard"}-${candidate.id}.png`)} onRetry={(slotId) => void generation.retry(slotId)} onSaveAsset={(candidate) => void saveCandidateAsset(candidate)} onSelect={(candidate) => selectCandidate(activeShot.id, activeShot.selectedCandidateId === candidate.id ? undefined : candidate.id)} /></main> : <EmptyState title="当前集还没有分镜槽位" description="新增一个镜头，或一次创建 5 个空槽位开始制作。" action={<div className="flex gap-2"><Button onClick={() => addShots(5)}>新增 5 镜</Button><Button type="primary" icon={<FolderPlus className="size-4" />} onClick={() => addShots(1)}>新增镜头</Button></div>} />}
             </>}
-            <AssetPickerModal open={assetPickerOpen} title="选择分镜参考图" defaultTab="my-assets" defaultKind="image" allowedKinds={["image"]} projectId={projectId} episodeId={episodeId} onInsert={(payload) => void insertAssetReference(payload)} onClose={() => setAssetPickerOpen(false)} />
+            <AssetPickerModal open={assetPickerOpen} title="选择分镜参考图" defaultTab="my-assets" allowedKinds={["image"]} projectId={projectId} episodeId={episodeId} onInsert={(payload) => void insertAssetReference(payload)} onClose={() => setAssetPickerOpen(false)} />
         </div>
     );
 }

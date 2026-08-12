@@ -172,59 +172,6 @@ func GetVolcengineAssetStatus(ctx context.Context, assetID string, projectName s
 	return status, nil
 }
 
-func SubmitAdminAssetVolcengineReview(ctx context.Context, assetID string) (model.Asset, error) {
-	asset, err := repository.GetAsset(strings.TrimSpace(assetID))
-	if err != nil {
-		return model.Asset{}, err
-	}
-	if asset.Type != model.AssetTypeImage && asset.Type != model.AssetTypeVideo && asset.Type != model.AssetTypeAudio {
-		return model.Asset{}, safeMessageError{message: "只有图片、视频或音频素材可以提交加白"}
-	}
-	submission, err := SubmitVolcengineMediaAssetURL(ctx, firstNonEmpty(asset.URL, asset.CoverURL), asset.Title, asset.VolcengineGroupID, asset.Title, asset.Type)
-	if err != nil {
-		return model.Asset{}, err
-	}
-	return repository.SaveAsset(assetWithVolcengineSubmission(asset, submission))
-}
-
-func RefreshAdminAssetVolcengineReview(ctx context.Context, assetID string) (model.Asset, error) {
-	asset, err := repository.GetAsset(strings.TrimSpace(assetID))
-	if err != nil {
-		return model.Asset{}, err
-	}
-	if asset.VolcengineAssetID == "" {
-		return model.Asset{}, safeMessageError{message: "素材尚未提交火山加白"}
-	}
-	status, err := GetVolcengineAssetStatus(ctx, asset.VolcengineAssetID, asset.VolcengineProjectName)
-	if err != nil {
-		return model.Asset{}, err
-	}
-	return repository.SaveAsset(assetWithVolcengineStatus(asset, status))
-}
-
-func assetWithVolcengineSubmission(asset model.Asset, submission VolcengineAssetSubmission) model.Asset {
-	asset.VolcengineAssetID = submission.AssetID
-	asset.VolcengineGroupID = submission.GroupID
-	asset.VolcengineProjectName = submission.ProjectName
-	asset.VolcengineStatus = submission.Status
-	asset.VolcengineError = ""
-	asset.VolcenginePublicURL = submission.PublicURL
-	asset.VolcengineSubmittedAt = submission.SubmittedAt
-	asset.VolcengineUpdatedAt = submission.UpdatedAt
-	return asset
-}
-
-func assetWithVolcengineStatus(asset model.Asset, status VolcengineAssetStatus) model.Asset {
-	asset.VolcengineAssetID = firstNonEmpty(status.AssetID, asset.VolcengineAssetID)
-	asset.VolcengineGroupID = firstNonEmpty(status.GroupID, asset.VolcengineGroupID)
-	asset.VolcengineProjectName = firstNonEmpty(status.ProjectName, asset.VolcengineProjectName)
-	asset.VolcengineStatus = firstNonEmpty(status.Status, asset.VolcengineStatus)
-	asset.VolcengineError = status.Error
-	asset.VolcenginePublicURL = firstNonEmpty(status.PublicURL, asset.VolcenginePublicURL)
-	asset.VolcengineUpdatedAt = firstNonEmpty(status.UpdatedAt, now())
-	return asset
-}
-
 func currentVolcengineAssetSetting() (model.VolcengineAssetSetting, error) {
 	settings, err := repository.GetSettings()
 	if err != nil {

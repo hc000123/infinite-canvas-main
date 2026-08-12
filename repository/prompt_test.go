@@ -64,6 +64,9 @@ func TestSeedSystemPromptsAddsMissingWithoutOverwriting(t *testing.T) {
 	if saved.Title != edited.Title || saved.Prompt != edited.Prompt {
 		t.Fatalf("edited prompt = %#v, want original user edit", saved)
 	}
+	if saved.Category != "prop" {
+		t.Fatalf("edited prompt category = %q, want prop", saved.Category)
+	}
 	var count int64
 	if err := db.Model(&model.Prompt{}).Where("id = ?", "system-scene-multi-angle-general").Count(&count).Error; err != nil {
 		t.Fatalf("Count seeded prompt returned error: %v", err)
@@ -73,13 +76,39 @@ func TestSeedSystemPromptsAddsMissingWithoutOverwriting(t *testing.T) {
 	}
 }
 
-func TestPromptCategoriesOnlyExposeManualSystemCategory(t *testing.T) {
+func TestPromptCategoriesExposeBusinessTaxonomy(t *testing.T) {
 	categories := PromptCategories()
-	if len(categories) != 1 {
-		t.Fatalf("categories length = %d, want 1", len(categories))
+	want := []model.PromptCategory{
+		{Category: "scene", Name: "场景", Description: "场景与空间环境提示词"},
+		{Category: "prop", Name: "道具", Description: "道具与通用图片资产提示词"},
+		{Category: "character", Name: "角色", Description: "角色设定与人物修复提示词"},
+		{Category: "video", Name: "视频", Description: "视频镜头与动态生成提示词"},
+		{Category: "text", Name: "文本", Description: "文本创作与分析提示词"},
 	}
-	if categories[0].Category != "system" || categories[0].Remote {
-		t.Fatalf("category = %#v, want non-remote system category", categories[0])
+	if len(categories) != len(want) {
+		t.Fatalf("categories length = %d, want %d", len(categories), len(want))
+	}
+	for i := range want {
+		if categories[i].Category != want[i].Category || categories[i].Name != want[i].Name || categories[i].Description != want[i].Description || categories[i].Remote {
+			t.Fatalf("category[%d] = %#v, want %#v", i, categories[i], want[i])
+		}
+	}
+}
+
+func TestSystemPromptSeedsUseBusinessTaxonomy(t *testing.T) {
+	seeds := systemPromptSeeds("now")
+	byID := map[string]model.Prompt{}
+	for _, item := range seeds {
+		byID[item.ID] = item
+	}
+	for id, category := range map[string]string{
+		"system-scene-multi-angle-general":     "scene",
+		"system-image-grid-character-variants": "character",
+		"system-image-grid-general":            "prop",
+	} {
+		if byID[id].Category != category {
+			t.Fatalf("seed %s category = %q, want %q", id, byID[id].Category, category)
+		}
 	}
 }
 

@@ -448,7 +448,6 @@ export default function CreativeProjectDetailPage() {
                         rules={[
                             { required: true, message: "请输入分集编号" },
                             { pattern: /^EP\d{2,}$/, message: "请输入 EP01 这类标准集号" },
-                            { validator: (_, value) => (projectEpisodes.some((episode) => episode.code === value) ? Promise.reject(new Error(`${value} 已存在`)) : Promise.resolve()) },
                         ]}
                     >
                         <Input placeholder="例如：EP01" maxLength={12} />

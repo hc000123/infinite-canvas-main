@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { App, Button, Checkbox, Dropdown, Image, Input, Modal } from "antd";
+import { App, Button, Checkbox, Dropdown, Image, Input, Modal, Select } from "antd";
 import { Check, Download, ExternalLink, History, ImageIcon, Pencil, Upload, WandSparkles } from "lucide-react";
 import { saveAs } from "file-saver";
 
 import { buildRestoreAssetVersionPatch } from "@/app/(user)/assets/asset-version-history";
 import { resolveRestoredAssetPatch } from "@/app/(user)/assets/asset-version-files";
-import { buildImageWorkbenchHref } from "@/app/(user)/assets/use-workflow-asset-image-actions";
+import { buildAssetWorkbenchHref } from "@/app/(user)/assets/use-workflow-asset-image-actions";
 import { workflowAssetInfo, workflowAssetPrompt } from "@/app/(user)/assets/workflow-asset-image";
 import { getImageBlob, resolveImageUrl } from "@/services/image-storage";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
@@ -15,10 +15,12 @@ import { useAssetStore, type Asset } from "@/stores/use-asset-store";
 import { workflowAssetVersionChoices, type WorkflowAssetCard as WorkflowAssetCardModel, type WorkflowAssetVariant } from "../workflow-asset-card-model";
 
 export function WorkflowAssetCard(props: {
+    bindingAssets: Asset[];
     card: WorkflowAssetCardModel;
     failed: Record<string, string>;
     generatingIds: string[];
     onGenerate: (asset: Asset) => void;
+    onBind: (variant: WorkflowAssetVariant, assetId: string) => void;
     onImport: (asset: Asset, logicalAssetId: string, source: "local" | "library") => void;
     onSave: (asset: Asset, input: { description: string; imagePrompt: string }) => void;
     onSelectionChange: (logicalAssetId: string, checked: boolean) => void;
@@ -38,11 +40,13 @@ export function WorkflowAssetCard(props: {
         if (!props.card.variants.some((item) => item.logicalAssetId === activeId)) setActiveId(props.card.variants[0]?.logicalAssetId || "");
     }, [activeId, props.card.variants]);
     const active = props.card.variants.find((item) => item.logicalAssetId === activeId) || props.card.variants[0];
+    const activeKind = active?.row.kind || "";
     const asset = active?.asset;
     const values = variantValues(active);
     const isImage = asset?.kind === "image";
     const generating = Boolean(asset && props.generatingIds.includes(asset.id));
     const versions = useMemo(() => (asset ? workflowAssetVersionChoices(asset) : []), [asset]);
+    const bindingOptions = useMemo(() => props.bindingAssets.filter((item) => item.id === asset?.id || item.assetBinding?.category === bindingCategory(activeKind)).map((item) => ({ label: `${item.title} · ${item.assetBinding?.variantName || item.kind}`, value: item.id })), [activeKind, asset?.id, props.bindingAssets]);
     const selectedVersion = versions.find((version) => version.id === selectedVersionId);
 
     useEffect(() => {
@@ -107,7 +111,7 @@ export function WorkflowAssetCard(props: {
     if (!active) return null;
     return (
         <article className="overflow-hidden rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] shadow-[var(--studio-shadow)]">
-            <div className="relative aspect-video overflow-hidden border-b border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]">
+            <div className="relative aspect-[5/2] overflow-hidden border-b border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)]">
                 {isImage ? (
                     <Image
                         alt={`${props.card.name} · ${values.variantName}`}
@@ -126,7 +130,7 @@ export function WorkflowAssetCard(props: {
                 {isImage && versions.length ? <button type="button" className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded bg-black/70 px-2 py-1 text-[10px] text-white transition hover:bg-black/90" onClick={openVersionPicker} aria-label={`选择 ${versions.length} 个资产版本`}><History className="size-3" />{versions.length} 个版本</button> : null}
             </div>
 
-            <div className="p-4">
+            <div className="p-3">
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                         <h3 className="truncate text-sm font-semibold">{props.card.name}</h3>
@@ -134,6 +138,8 @@ export function WorkflowAssetCard(props: {
                     </div>
                     <Checkbox checked={props.selectedIds.includes(active.logicalAssetId)} disabled={!asset || active.missingParent} onChange={(event) => props.onSelectionChange(active.logicalAssetId, event.target.checked)}>选择生成</Checkbox>
                 </div>
+
+                <div className="mt-2 flex items-center gap-2"><span className="shrink-0 text-[10px] text-[var(--studio-text-muted)]">绑定</span><Select className="min-w-0 flex-1" size="small" showSearch optionFilterProp="label" value={asset?.id} options={bindingOptions} placeholder="选择已有资产卡片" onChange={(assetId) => props.onBind(active, assetId)} /></div>
 
                 {props.card.variants.length > 1 ? (
                     <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1">
@@ -146,14 +152,13 @@ export function WorkflowAssetCard(props: {
                 ) : null}
 
                 {active.missingParent ? <div className="mt-3 rounded-md border border-[var(--studio-warning)]/40 bg-[var(--studio-panel-muted-bg)] px-3 py-2 text-xs text-[var(--studio-warning)]">该马甲尚未关联有效角色，暂不能生成。</div> : null}
-                <div className="mt-3 rounded-md bg-[var(--studio-panel-muted-bg)] px-3 py-2 text-[11px] leading-5 text-[var(--studio-text-secondary)]"><span className="text-[var(--studio-text-muted)]">剧本证据：</span>{active.row.scriptEvidence || "待补充"}</div>
+                <div className="mt-2 line-clamp-2 rounded-md bg-[var(--studio-panel-muted-bg)] px-2.5 py-1.5 text-[11px] leading-5 text-[var(--studio-text-secondary)]"><span className="text-[var(--studio-text-muted)]">剧本证据：</span>{active.row.scriptEvidence || "待补充"}</div>
                 <TextBlock label="资产描述" value={values.description || "暂无描述"} />
-                <TextBlock label="生图提示词" value={values.imagePrompt || "暂无提示词"} muted />
                 {props.failed[active.logicalAssetId] ? <div className="mt-3 text-xs text-[var(--studio-danger)]">{props.failed[active.logicalAssetId]}</div> : null}
 
                 <div className="mt-4 flex flex-wrap gap-2">
                     <Button size="small" icon={<Pencil className="size-3.5" />} disabled={!asset} onClick={openEdit}>编辑</Button>
-                    {asset ? <Button size="small" icon={<ExternalLink className="size-3.5" />} href={buildImageWorkbenchHref(asset, workflowAssetPrompt(asset), workflowAssetInfo(asset))}>图片工作台</Button> : null}
+                    {asset ? <Button size="small" icon={<ExternalLink className="size-3.5" />} href={buildAssetWorkbenchHref(asset, workflowAssetInfo(asset))}>资产生图</Button> : null}
                     {asset ? <Dropdown trigger={["click"]} menu={{ items: [{ key: "local", label: "从本地导入" }, { key: "library", label: "从素材库导入" }], onClick: ({ key }) => props.onImport(asset, active.logicalAssetId, key as "local" | "library") }}><Button size="small" icon={<Upload className="size-3.5" />}>导入资产</Button></Dropdown> : null}
                     {isImage ? <Button size="small" icon={<Download className="size-3.5" />} onClick={() => void download()}>下载原图</Button> : null}
                     <Button className="ml-auto" size="small" type="primary" icon={<WandSparkles className="size-3.5" />} disabled={!asset || !values.imagePrompt || active.missingParent} loading={generating} onClick={() => asset && props.onGenerate(asset)}>{isImage ? "重新生成草图" : "生成草图"}</Button>
@@ -203,8 +208,8 @@ export function WorkflowAssetCard(props: {
     );
 }
 
-function TextBlock({ label, muted, value }: { label: string; muted?: boolean; value: string }) {
-    return <div className="mt-3"><div className="text-[10px] text-[var(--studio-text-muted)]">{label}</div><p className={`mt-1 line-clamp-4 whitespace-pre-wrap text-xs leading-5 ${muted ? "text-[var(--studio-text-muted)]" : "text-[var(--studio-text-secondary)]"}`}>{value}</p></div>;
+function TextBlock({ label, value }: { label: string; value: string }) {
+    return <div className="mt-2"><div className="text-[10px] text-[var(--studio-text-muted)]">{label}</div><p className="mt-0.5 line-clamp-2 whitespace-pre-wrap text-xs leading-5 text-[var(--studio-text-secondary)]">{value}</p></div>;
 }
 
 function variantValues(variant?: WorkflowAssetVariant) {
@@ -218,6 +223,10 @@ function variantValues(variant?: WorkflowAssetVariant) {
 
 function categoryLabel(category: WorkflowAssetCardModel["category"]) {
     return { character: "角色", scene: "场景", prop: "道具" }[category];
+}
+
+function bindingCategory(kind: string) {
+    return kind === "character" || kind === "costume" ? "character" : kind === "scene" ? "scene" : "prop";
 }
 
 function readRecord(value: unknown) {

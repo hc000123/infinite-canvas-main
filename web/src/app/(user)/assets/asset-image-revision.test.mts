@@ -24,11 +24,11 @@ const sourceImage: ImageAsset = {
 
 test("builds image revision context and reference", () => {
     const href = buildAssetImageRevisionHref(sourceImage, "/assets?projectId=project-a");
-    const params = new URL(href, "http://local").searchParams;
-    assert.equal(params.get("source"), "asset-revision");
-    assert.equal(params.get("libraryAssetId"), sourceImage.id);
-    assert.equal(params.get("projectId"), "project-a");
-    assert.equal(params.get("prompt"), "正面站立");
+    const url = new URL(href, "http://local");
+    assert.equal(url.pathname, "/assets/subject-a");
+    assert.equal(url.searchParams.get("variantId"), "variant-a");
+    assert.equal(url.searchParams.get("returnTo"), "/assets?projectId=project-a");
+    assert.equal(url.searchParams.get("prompt"), null);
     assert.equal(assetImageReference(sourceImage).storageKey, "image:old");
     assert.deepEqual(assetImageGenerationSnapshot(sourceImage), { prompt: "正面站立", model: "image-model", quality: "high", size: "1024x1024", capabilityTrace: undefined });
 });
@@ -50,16 +50,12 @@ test("resolves stable and legacy bound variants", () => {
     assert.equal(boundVariantId({ ...sourceImage, assetBinding: undefined }, variants), undefined);
 });
 
-test("wires image revision into the workbench and asset cards", () => {
+test("keeps image revision inside the asset workbench", () => {
     const imagePage = readFileSync(new URL("../image/page.tsx", import.meta.url), "utf8");
     const assetPage = readFileSync(new URL("./page.tsx", import.meta.url), "utf8");
     const mediaCard = readFileSync(new URL("./components/compact-media-asset-card.tsx", import.meta.url), "utf8");
     const versionPanel = readFileSync(new URL("./[subjectId]/components/asset-version-panel.tsx", import.meta.url), "utf8");
-    assert.match(imagePage, /assetImageReference/);
-    assert.match(imagePage, /revisedImageAssetInput/);
-    assert.match(imagePage, /setVariantCurrentAsset/);
-    assert.match(imagePage, /await autoSaveAssetRevisionResults\(logImages\)/);
-    assert.match(imagePage, /buildWorkflowGeneratedImagePatch/);
+    assert.doesNotMatch(imagePage, /assetImageReference|revisedImageAssetInput|requestGeneration/);
     assert.match(assetPage, /buildAssetImageRevisionHref/);
     assert.match(mediaCard, /进入生图修改/);
     assert.match(versionPanel, /继续修改/);

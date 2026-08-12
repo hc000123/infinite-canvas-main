@@ -15,9 +15,11 @@ import { WorkflowAssetPanel } from "./components/workflow-asset-panel";
 import { WorkflowAssetSlotEditor } from "./components/workflow-asset-slot-editor";
 import { WorkflowDeliveryPanel } from "./components/workflow-delivery-panel";
 import { WorkflowReferenceImagePanel } from "./components/workflow-reference-image-panel";
-import { WorkflowScriptExtractionPanel } from "./components/workflow-script-extraction-panel";
+import { WorkflowStageExtractionPanel } from "./components/workflow-script-extraction-panel";
 import { WorkflowRunConsole } from "./components/workflow-run-console";
 import { WorkflowShotEditor } from "./components/workflow-shot-editor";
+import { WorkflowStoryboardScroll } from "./components/workflow-storyboard-scroll";
+import { WorkflowProductionPackages } from "./components/workflow-production-package";
 import { WorkflowShotPromptReview } from "./components/workflow-shot-prompt-review";
 import { WorkflowShotQueue } from "./components/workflow-shot-queue";
 import { WorkflowStageRail } from "./components/workflow-stage-rail";
@@ -45,7 +47,7 @@ export function EpisodeWorkflowWorkbench({ episodeId, projectId }: { episodeId: 
     const shotPrompt = useWorkflowStageActions({ detail: workbench.detail, refresh: workbench.refreshRemote, stageId: "shot-prompt" });
     const videoActions = useWorkflowVideoActions(workbench.packages);
     const assetAutomation = useWorkflowAssetAutomation({
-        enabled: ["asset-extraction", "asset-production"].includes(workbench.routeState.stage),
+        enabled: Boolean(workbench.detail?.run.id),
         extraction,
         prompts: assetPrompt,
         refresh: workbench.refreshRemote,
@@ -62,8 +64,8 @@ export function EpisodeWorkflowWorkbench({ episodeId, projectId }: { episodeId: 
     const activeRemote = ({ "asset-extraction": extraction, "asset-production": assetPrompt, storyboard: breakdown, prompt: shotPrompt } as const)[workbench.routeState.stage as "asset-extraction" | "asset-production" | "storyboard" | "prompt"] || null;
     const currentAgentRun = workbench.detail?.agentRuns.find((item) => item.id === activeRemote?.stage?.agentRunId) || null;
     const executorLabel = workbench.health?.executorLabel || "工作流执行器";
-    const showsQueue = ["storyboard", "prompt", "video"].includes(workbench.routeState.stage);
-    const showsRunConsole = !["asset-extraction", "asset-production"].includes(workbench.routeState.stage);
+    const showsQueue = workbench.routeState.stage === "video";
+    const showsRunConsole = ["script", "storyboard", "prompt"].includes(workbench.routeState.stage);
 
     const startStage = (label: string, stageId: string, state: ReturnType<typeof useWorkflowStageActions>, options: { references?: WorkflowReferenceImage[]; context?: unknown; beforeStart?: () => void } = {}) => {
         const refs = options.references || [];
@@ -99,7 +101,7 @@ export function EpisodeWorkflowWorkbench({ episodeId, projectId }: { episodeId: 
 
     const generateShotPrompt = () => {
         const item = workbench.selectedPackage;
-        if (!item?.shotDraft || item.shotStatus !== "confirmed") return;
+        if (!item?.shotDraft) return;
         const limited = limitShotReferences(item.referenceBindings || [], item.continuityReference);
         if (item.continuityReference && (item.referenceBindings?.length || 0) > 8) message.info("已为上一镜尾帧保留第 9 个参考位，本镜使用前 8 张资产图。");
         const resolved = limited.assetReferences.flatMap((binding) => {
@@ -123,24 +125,25 @@ export function EpisodeWorkflowWorkbench({ episodeId, projectId }: { episodeId: 
     return <main className="studio-shell flex h-full min-w-0 flex-col overflow-hidden text-[var(--studio-text-primary)]">
         <WorkflowHeader blockerCount={workbench.blockerCount} episodeTitle={`第 ${String(workbench.episode.order).padStart(2, "0")} 集 · ${workbench.episode.title}`} loading={workbench.remoteLoading} modelSummary={`${executorLabel} · ${workbench.modelSummary}`} onContinue={workbench.continueNext} onRefresh={workbench.refreshRemote} progress={workbench.progress} projectId={workbench.project.id} projectTitle={workbench.project.title} workerReady={Boolean(workbench.health?.ready)} />
         {workbench.remoteError ? <Alert className="mx-5 mt-3 shrink-0 xl:mx-7" showIcon closable type="warning" title="运行状态暂不可用" description={`${workbench.remoteError}。本地剧本、资产和视频生产包仍可继续查看。`} /> : null}
-        <div className={cn("grid min-h-0 flex-1 grid-cols-1", showsQueue ? "xl:grid-cols-[168px_252px_minmax(460px,1fr)_320px]" : showsRunConsole ? "xl:grid-cols-[168px_minmax(560px,1fr)_320px]" : "xl:grid-cols-[168px_minmax(0,1fr)]") }>
+        <div className={cn("grid min-h-0 flex-1 grid-cols-1", showsQueue ? "xl:grid-cols-[168px_252px_minmax(460px,1fr)_320px]" : "xl:grid-cols-[168px_minmax(0,1fr)]") }>
             <WorkflowStageRail active={workbench.routeState.stage} onSelect={workbench.selectRoute} stages={workbench.stageViews} />
             {showsQueue ? <WorkflowShotQueue packages={workbench.packages} selectedId={workbench.selectedPackage?.id || ""} onSelect={(shot) => workbench.selectRoute(workbench.routeState.stage, shot)} /> : null}
             <section className="thin-scrollbar min-h-0 overflow-y-auto bg-[var(--studio-workspace-bg)] px-4 py-4 xl:px-6">
                 <div className={cn("mx-auto", ["asset-extraction", "asset-production"].includes(workbench.routeState.stage) ? "max-w-7xl" : "max-w-5xl")}>
                     <div className="mb-3 flex gap-2 overflow-x-auto pb-1 xl:hidden">{workbench.stageViews.map((stage) => <button key={stage.key} type="button" className={cn("h-9 shrink-0 rounded-md border px-3 text-xs", stage.key === workbench.routeState.stage ? "border-[var(--studio-accent)] bg-[var(--studio-active-bg)]" : "border-[var(--studio-border-subtle)] text-[var(--studio-text-secondary)]")} onClick={() => workbench.selectRoute(stage.key)}>{stage.label}</button>)}</div>
-                    {showsQueue ? <div className="mb-3 flex gap-2 xl:hidden"><Button className="min-h-11 flex-1" icon={<List className="size-4" />} onClick={() => setQueueOpen(true)}>分镜队列</Button><Button className="min-h-11 flex-1" icon={<PanelRight className="size-4" />} onClick={() => setConsoleOpen(true)}>{workbench.routeState.stage === "video" ? "视频控制台" : "运行详情"}</Button></div> : null}
+                    {showsQueue || showsRunConsole ? <div className="mb-3 flex gap-2 xl:hidden">{showsQueue ? <Button className="min-h-11 flex-1" icon={<List className="size-4" />} onClick={() => setQueueOpen(true)}>分镜队列</Button> : null}<Button className="min-h-11 flex-1" icon={<PanelRight className="size-4" />} onClick={() => setConsoleOpen(true)}>{workbench.routeState.stage === "video" ? "视频控制台" : "运行详情"}</Button></div> : null}
                     <div className="mb-5 border-b border-[var(--studio-border-subtle)] pb-4"><div className="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--studio-accent)]">Episode production desk</div><h2 className="mt-1 text-xl font-semibold">{activeStage.label}</h2><p className="mt-1 text-sm text-[var(--studio-text-secondary)]">{activeStage.description}</p></div>
-                    {workbench.routeState.stage === "script" ? <div className="space-y-4"><Panel icon={<FileText className="size-4" />} title="本集确认稿" description="后续资产与镜头都引用这份不可变快照。"><pre className="thin-scrollbar max-h-[48vh] overflow-auto whitespace-pre-wrap text-sm leading-7 text-[var(--studio-text-secondary)]">{workbench.scriptSnapshot}</pre></Panel><WorkflowScriptExtractionPanel agentRuns={workbench.detail?.agentRuns || []} asset={extraction} projectId={workbench.project.id} shot={breakdown} workerReady={Boolean(workbench.health?.ready)} /></div> : null}
-                    {workbench.routeState.stage === "asset-extraction" ? <WorkflowAssetSlotEditor projectId={workbench.project.id} state={extraction} /> : null}
-                    {workbench.routeState.stage === "asset-production" ? <WorkflowAssetPanel artifact={assetPrompt.artifact} automation={assetAutomation} canApprove={assetPrompt.actions.canApprove} episodeId={workbench.episode.id} onApprove={assetPrompt.approve} onApplied={workbench.refreshRemote} projectId={workbench.project.id} projectTitle={workbench.project.title} stage={assetPrompt.stage} /> : null}
-                    {workbench.routeState.stage === "storyboard" ? (!workbench.packages.length ? <Panel icon={<RefreshCw className={`size-4 ${["queued", "running"].includes(breakdown.stage?.status || "") || shotAutomation.loading ? "animate-spin" : ""}`} />} title="结构化分镜闸门" description="Agent 先生成可编辑分镜；质量检查通过后仍需你批准，批准后才会载入镜头队列。"><div className="flex flex-wrap items-center justify-between gap-3"><span className="text-sm text-[var(--studio-text-secondary)]">{shotAutomation.error || breakdown.stage?.errorMessage || storyboardStatusText(breakdown.stage?.status)}</span><div className="flex gap-2">{breakdown.stage?.status === "needs_review" ? <><Button onClick={() => void breakdown.reject()}>退回</Button><Button type="primary" disabled={!breakdown.actions.canApprove} onClick={() => void breakdown.approve()}>批准结构化分镜</Button></> : <Button icon={<RefreshCw className="size-4" />} disabled={!breakdown.actions.canStart && !breakdown.actions.canRetry} loading={Boolean(breakdown.busyAction)} onClick={() => void (breakdown.actions.canRetry ? breakdown.retry() : breakdown.start())}>{breakdown.actions.canRetry ? "重新生成分镜" : "生成结构化分镜"}</Button>}</div></div></Panel> : workbench.selectedPackage ? <WorkflowShotEditor mode="storyboard" item={workbench.selectedPackage} packages={workbench.packages} /> : <Empty className="py-20" description="请先载入分镜" />) : null}
-                    {workbench.routeState.stage === "prompt" ? (workbench.selectedPackage ? <WorkflowShotEditor mode="prompt" canGeneratePrompt={shotPrompt.actions.canStart} item={workbench.selectedPackage} packages={workbench.packages} referencePanel={<WorkflowReferenceImagePanel images={referenceImages} item={workbench.selectedPackage} />} generatingPrompt={preparing === "shot-prompt" || shotPrompt.busyAction === "start"} onGeneratePrompt={generateShotPrompt} promptReview={<WorkflowShotPromptReview item={workbench.selectedPackage} state={shotPrompt} onApplied={workbench.refreshRemote} />} /> : <Empty className="py-20" description="请先批准结构化分镜" />) : null}
+                    {workbench.routeState.stage === "script" ? <Panel icon={<FileText className="size-4" />} title="本集确认稿" description="后续资产与镜头都引用这份不可变快照。"><pre className="thin-scrollbar max-h-[48vh] overflow-auto whitespace-pre-wrap text-sm leading-7 text-[var(--studio-text-secondary)]">{workbench.scriptSnapshot}</pre></Panel> : null}
+                    {workbench.routeState.stage === "asset-extraction" ? <div className="space-y-4"><WorkflowStageExtractionPanel agentRuns={workbench.detail?.agentRuns || []} projectId={workbench.project.id} stageId="asset-extraction" state={extraction} workerReady={Boolean(workbench.health?.ready)} /><WorkflowAssetSlotEditor projectId={workbench.project.id} state={extraction} /></div> : null}
+                    {workbench.routeState.stage === "asset-production" ? <WorkflowAssetPanel artifact={assetPrompt.artifact} automation={assetAutomation} episodeId={workbench.episode.id} onApplied={workbench.refreshRemote} projectId={workbench.project.id} projectTitle={workbench.project.title} stage={assetPrompt.stage} /> : null}
+                    {workbench.routeState.stage === "storyboard" ? <div className="space-y-4"><WorkflowStageExtractionPanel agentRuns={workbench.detail?.agentRuns || []} projectId={workbench.project.id} stageId="shot-breakdown" state={breakdown} workerReady={Boolean(workbench.health?.ready)} />{!workbench.packages.length ? <Panel icon={<RefreshCw className={`size-4 ${["queued", "running"].includes(breakdown.stage?.status || "") || shotAutomation.loading ? "animate-spin" : ""}`} />} title="正在准备分镜" description="质量检查通过后会自动批准并载入镜头生产包。"><span className="text-sm text-[var(--studio-text-secondary)]">{shotAutomation.error || breakdown.stage?.errorMessage || storyboardStatusText(breakdown.stage?.status)}</span></Panel> : <WorkflowStoryboardScroll packages={workbench.packages} selectedId={workbench.selectedPackage?.id} onSelect={(shot) => workbench.selectRoute("storyboard", shot)} />}</div> : null}
+                    {workbench.routeState.stage === "prompt" ? (workbench.selectedPackage ? <WorkflowProductionPackages packages={workbench.packages} selectedId={workbench.selectedPackage.id} onSelect={(shot) => workbench.selectRoute("prompt", shot)} selectedContent={<WorkflowShotEditor mode="prompt" canGeneratePrompt={shotPrompt.actions.canStart} item={workbench.selectedPackage} packages={workbench.packages} referencePanel={<WorkflowReferenceImagePanel images={referenceImages} item={workbench.selectedPackage} />} generatingPrompt={preparing === "shot-prompt" || shotPrompt.busyAction === "start"} onGeneratePrompt={generateShotPrompt} promptReview={<WorkflowShotPromptReview item={workbench.selectedPackage} state={shotPrompt} onApplied={workbench.refreshRemote} />} />} /> : <Empty className="py-20" description="请先生成结构化分镜" />) : null}
                     {workbench.routeState.stage === "video" ? <div className="space-y-4">{workbench.selectedPackage ? <WorkflowShotEditor mode="video" item={workbench.selectedPackage} packages={workbench.packages} /> : null}<WorkflowDeliveryPanel packages={workbench.packages} /></div> : null}
                 </div>
             </section>
-            {workbench.routeState.stage === "video" ? <WorkflowVideoConsole actions={videoActions} item={workbench.selectedPackage} /> : showsRunConsole ? <WorkflowRunConsole agentRun={currentAgentRun} events={workbench.events} health={workbench.health} stage={activeRemote?.stage || null} /> : null}
+            {workbench.routeState.stage === "video" ? <WorkflowVideoConsole actions={videoActions} item={workbench.selectedPackage} /> : null}
         </div>
+        {showsRunConsole ? <WorkflowRunConsole floating agentRun={currentAgentRun} events={workbench.events} health={workbench.health} stage={activeRemote?.stage || null} /> : null}
         <Drawer title="分镜队列" placement="left" size={340} open={queueOpen} onClose={() => setQueueOpen(false)} styles={{ body: { padding: 0, overflow: "hidden" } }}><div className="h-full [&>aside]:!flex [&>aside]:h-full"><WorkflowShotQueue packages={workbench.packages} selectedId={workbench.selectedPackage?.id || ""} onSelect={(shot) => { workbench.selectRoute(workbench.routeState.stage, shot); setQueueOpen(false); }} /></div></Drawer>
         <Drawer title={workbench.routeState.stage === "video" ? "视频控制台" : "运行详情"} placement="right" size={360} open={consoleOpen} onClose={() => setConsoleOpen(false)} styles={{ body: { padding: 0, overflow: "hidden" } }}><div className="h-full [&>aside]:!flex [&>aside]:h-full">{workbench.routeState.stage === "video" ? <WorkflowVideoConsole actions={videoActions} item={workbench.selectedPackage} /> : <WorkflowRunConsole agentRun={currentAgentRun} events={workbench.events} health={workbench.health} stage={activeRemote?.stage || null} />}</div></Drawer>
     </main>;

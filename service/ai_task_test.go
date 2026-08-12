@@ -71,6 +71,27 @@ func TestAITaskSuccessStoresSanitizedResponse(t *testing.T) {
 	}
 }
 
+func TestAITaskPersistsGeneratedSecondsAndUsesSuccessfulResponseDuration(t *testing.T) {
+	setupAITaskTestDB(t)
+	task, err := CreateAITask(CreateAITaskInput{
+		UserID: "usage-video-user", Model: "video-model", Path: "/videos",
+		GeneratedSeconds: 6, RequestBody: []byte(`{"duration":6}`), ContentType: "application/json",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if task.GeneratedSeconds != 6 {
+		t.Fatalf("created seconds = %d", task.GeneratedSeconds)
+	}
+	if err := MarkAITaskSucceeded(task.ID, []byte(`{"task":{"status":"succeeded","duration":8}}`), "application/json"); err != nil {
+		t.Fatal(err)
+	}
+	saved, ok, err := repository.GetAITask(task.ID)
+	if err != nil || !ok || saved.GeneratedSeconds != 8 {
+		t.Fatalf("saved = %#v ok=%v err=%v", saved, ok, err)
+	}
+}
+
 func TestAITaskPersistsChannelID(t *testing.T) {
 	setupAITaskTestDB(t)
 	task, err := CreateAITask(CreateAITaskInput{UserID: "user-channel", ChannelID: "geeknow-video", Model: "grok-imagine-video", Path: "/videos"})

@@ -207,3 +207,8 @@ test("public model selector groups models by configured channel source", () => {
     assert.match(pageSource, /searchText/);
     assert.match(sourceOptionsSource, /多渠道共享/);
 });
+
+test("default model selectors keep configured channel source labels", () => {
+    assert.match(pageSource, /buildCapabilityModelOptions[\s\S]*buildChannelModelSourceGroups/);
+    assert.match(pageSource, /displayLabel/);
+});

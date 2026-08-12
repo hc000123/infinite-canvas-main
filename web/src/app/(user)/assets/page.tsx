@@ -5,11 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { App, Empty, Form, Input, Modal } from "antd";
 
 import { uploadImage } from "@/services/image-storage";
-import { useAssetStore, type Asset, type AssetCategory, type AssetKind } from "@/stores/use-asset-store";
+import { uploadMediaFile } from "@/services/file-storage";
+import { workspaceProjectId } from "@/components/layout/workspace-project-context";
+import { useAssetStore, type Asset, type AssetCategory, type AssetKind, type AssetSubject } from "@/stores/use-asset-store";
 import { useScriptStore } from "../canvas/stores/use-script-store";
 import type { ProductionBibleItem } from "../canvas/utils/production-bible";
 import { normalizeCanvasAssetTitles } from "./asset-canvas-title";
-import { buildAssetCenterSubjects, unorganizedAssets } from "./asset-gallery";
+import { buildAssetCenterSubjects, unorganizedAssets, type AssetCenterSubjectSummary } from "./asset-gallery";
 import { assetEpisodeTitle } from "./asset-episode";
 import { buildAssetImageRevisionHref } from "./asset-image-revision";
 import type { AssetFormValues } from "./components/asset-editor-modal";
@@ -19,6 +21,7 @@ import { AssetInboxSection } from "./components/asset-inbox-section";
 import { AssetOrganizeModal } from "./components/asset-organize-modal";
 import { AssetPageHeader } from "./components/asset-page-header";
 import { AssetSubjectCreateModal } from "./components/asset-subject-create-modal";
+import { AssetVoiceMatchModal } from "./components/asset-voice-match-modal";
 import { AssetPageOverlays } from "./components/asset-page-overlays";
 import { AssetResultsSection } from "./components/asset-results-section";
 import { AssetUploadDropOverlay } from "./components/asset-upload-drop-overlay";
@@ -36,6 +39,8 @@ import { useAssetSelection } from "./use-asset-selection";
 import { useVolcengineAssetReview } from "./use-volcengine-asset-review";
 import { useWorkflowAssetImageActions } from "./use-workflow-asset-image-actions";
 import { buildWorkflowMatchedImagePatch, buildWorkflowUploadedImagePatch, workflowAssetInfo } from "./workflow-asset-image";
+import { subjectCandidateImageInput, subjectVoiceBinding } from "./asset-subject-actions";
+import { assetInProjectLibrary } from "./asset-project-library";
 
 export default function AssetsPage() {
     return (
@@ -57,11 +62,13 @@ function AssetsPageContent() {
     const mediaInputRef = useRef<HTMLInputElement>(null);
     const assetInputRef = useRef<HTMLInputElement>(null);
     const workflowUploadInputRef = useRef<HTMLInputElement>(null);
+    const subjectUploadInputRef = useRef<HTMLInputElement>(null);
     const workflowUploadTargetRef = useRef<Asset | null>(null);
     const {
         addAsset,
         addAssetOnce,
         addFolder,
+        addWorkbenchImage,
         assets: storedAssets,
         creativeProjects,
         ensureProjectFolder,
@@ -83,6 +90,7 @@ function AssetsPageContent() {
         variants,
         token,
         updateAsset,
+        updateSubject,
         updateCanvasProject,
         updateFolder,
         updateProductionBibleItem,
@@ -103,6 +111,9 @@ function AssetsPageContent() {
     const [pendingClassificationIds, setPendingClassificationIds] = useState<string[]>([]);
     const [subjectCreateCategory, setSubjectCreateCategory] = useState<AssetCategory | null>(null);
     const [centerView, setCenterView] = useState<AssetCenterView>("all");
+    const [subjectUploadTarget, setSubjectUploadTarget] = useState<AssetCenterSubjectSummary | null>(null);
+    const [voiceSubject, setVoiceSubject] = useState<AssetSubject | null>(null);
+    const [voiceUploading, setVoiceUploading] = useState(false);
 
     useEffect(() => {
         if (!requestedAssetId || openedRequestedAssetId === requestedAssetId) return;
@@ -174,7 +185,7 @@ function AssetsPageContent() {
         assets,
         creativeProjects,
         folders,
-        initialProjectId: searchParams.get("projectId") || "",
+        initialProjectId: workspaceProjectId("/assets", searchParams),
         previewAsset,
         productionBibleItems,
         projects,
@@ -202,6 +213,8 @@ function AssetsPageContent() {
         blocking: subjectSummaries.filter((summary) => summary.subject.category === "blocking").length,
         other: subjectSummaries.filter((summary) => summary.subject.category === "other").length,
     }), [subjectSummaries]);
+    const voiceProjectId = voiceSubject?.projectId || "";
+    const projectVoiceAssets = useMemo(() => assets.filter((asset): asset is Extract<Asset, { kind: "audio" }> => asset.kind === "audio" && Boolean(voiceProjectId) && (asset.assetBinding?.projectId === voiceProjectId || assetInProjectLibrary(asset, voiceProjectId))), [assets, voiceProjectId]);
     const { organizingAsset, openOrganize, closeOrganize, submitOrganize } = useAssetOrganizeActions({ projectId: projectContextFilter, organizeAsset, createSubjectFromAsset });
     const { deleteFolder, editingFolder, folderDialogOpen, folderName, openCreateFolder, openEditFolder, saveFolder, setFolderDialogOpen, setFolderName } = useAssetFolderActions({
         addFolder,
@@ -244,6 +257,46 @@ function AssetsPageContent() {
     const openProjectImport = () => {
         if (!projectContextFilter) return message.warning("请先选择资产所属项目");
         assetInputRef.current?.click();
+    };
+    const openSubjectUpload = (summary: AssetCenterSubjectSummary) => {
+        setSubjectUploadTarget(summary);
+        if (subjectUploadInputRef.current) subjectUploadInputRef.current.value = "";
+        subjectUploadInputRef.current?.click();
+    };
+    const uploadSubjectImage = async (files?: FileList | null) => {
+        const file = files?.[0];
+        const target = subjectUploadTarget;
+        setSubjectUploadTarget(null);
+        if (!file || !target) return;
+        try {
+            const image = await uploadImage(file);
+            addWorkbenchImage(subjectCandidateImageInput({ subjectId: target.subject.id, variantId: target.primaryVariant.id }, image, file.name));
+            message.success(`已上传到「${target.subject.name}」待选结果`);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "图片上传失败");
+        }
+    };
+    const bindSubjectVoice = (audioAssetId: string) => {
+        if (!voiceSubject) return;
+        const patches = subjectVoiceBinding(voiceSubject, audioAssetId);
+        updateSubject(voiceSubject.id, patches.subjectPatch);
+        updateAsset(audioAssetId, patches.assetPatch);
+        setVoiceSubject({ ...voiceSubject, ...patches.subjectPatch });
+        message.success(`已为「${voiceSubject.name}」匹配声音`);
+    };
+    const uploadSubjectVoice = async (file: File) => {
+        if (!voiceSubject) return;
+        setVoiceUploading(true);
+        try {
+            const media = await uploadMediaFile(file, "asset-audio");
+            const binding = subjectVoiceBinding(voiceSubject, "").assetPatch.assetBinding;
+            const audioAssetId = await addAssetOnce({ kind: "audio", title: file.name.replace(/\.[^.]+$/, "") || "角色声音", coverUrl: "", tags: [], source: "本地上传", note: "", assetBinding: binding, metadata: { projectId: voiceSubject.projectId }, data: { url: media.url, storageKey: media.storageKey, bytes: media.bytes, mimeType: media.mimeType } }, { blob: file });
+            bindSubjectVoice(audioAssetId);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "声音上传失败");
+        } finally {
+            setVoiceUploading(false);
+        }
     };
     useEffect(() => {
         if (isAssetOpen || !pendingClassificationIds.length) return;
@@ -575,6 +628,8 @@ function AssetsPageContent() {
                         onClearOutdatedSelection={clearSelectedOutdatedUsages}
                         onUpdateOutdatedUsage={updateOutdatedUsageToLatest}
                         onOpenBulkOutdated={() => setBulkOutdatedOpen(true)}
+                        onUpload={openSubjectUpload}
+                        onMatchVoice={(summary) => setVoiceSubject(summary.subject)}
                     />
                 )}
             </main>
@@ -587,6 +642,8 @@ function AssetsPageContent() {
                 onCancel={() => setSubjectCreateCategory(null)}
                 onCreate={createSubject}
             />
+            <AssetVoiceMatchModal audios={projectVoiceAssets} open={Boolean(voiceSubject)} subject={voiceSubject} uploading={voiceUploading} onCancel={() => setVoiceSubject(null)} onSelect={bindSubjectVoice} onUpload={(file) => void uploadSubjectVoice(file)} />
+            <input ref={subjectUploadInputRef} hidden type="file" accept="image/*" onChange={(event) => { void uploadSubjectImage(event.target.files); event.target.value = ""; }} />
 
             <AssetOrganizeModal
                 asset={organizingAsset}

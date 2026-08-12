@@ -24,6 +24,13 @@ test("asset page wires project then source then project child canvas selectors",
     assert.match(actions, /changeSourceScope/);
     assert.match(query, /const \[canvasLibraryFilter, setCanvasLibraryFilter\] = useState\(""\)/);
     assert.match(query, /canvasIdsForCreativeProject/);
+    assert.match(page, /workspaceProjectId\("\/assets", searchParams\)/);
     assert.match(page, /onCanvasLibraryFilterChange: assetFilterActions\.changeCanvasLibraryFilter/);
     assert.match(page, /onSourceScopeChange: assetFilterActions\.changeSourceScope/);
+});
+
+test("subject workbench returns to its project asset library", () => {
+    const source = readAssetFile("./[subjectId]/page.tsx");
+    assert.match(source, /const backHref = requestedReturnTo\.startsWith\("\/"\)[\s\S]*`\/assets\?projectId=\$\{encodeURIComponent\(subject\.projectId\)\}`/);
+    assert.match(source, /<Link href=\{backHref\}/);
 });

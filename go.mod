@@ -14,6 +14,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/volcengine/ve-tos-golang-sdk/v2 v2.9.4
 	github.com/volcengine/volcengine-go-sdk v1.2.26
+	github.com/xuri/excelize/v2 v2.10.0
 	golang.org/x/crypto v0.50.0
 	golang.org/x/image v0.41.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -22,7 +23,14 @@ require (
 	gorm.io/gorm v1.31.1
 )
 
-require github.com/rogpeppe/go-internal v1.15.0 // indirect
+require (
+	github.com/richardlehane/mscfb v1.0.4 // indirect
+	github.com/richardlehane/msoleps v1.0.4 // indirect
+	github.com/rogpeppe/go-internal v1.15.0 // indirect
+	github.com/tiendc/go-deepcopy v1.7.1 // indirect
+	github.com/xuri/efp v0.0.1 // indirect
+	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect
+)
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect

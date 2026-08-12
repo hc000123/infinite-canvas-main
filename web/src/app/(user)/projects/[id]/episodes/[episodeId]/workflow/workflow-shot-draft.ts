@@ -26,8 +26,8 @@ export function parseShotBreakdown(contentJson: string): WorkflowShotBreakdownIt
     } catch { return []; }
 }
 
-export function requireWorkflowShotReview(item: ProductionPackage): ProductionPackage {
-    return { ...item, promptInputHash: "", promptStatus: "待审核", shotStatus: "draft" };
+export function prepareWorkflowShotPackage(item: ProductionPackage): ProductionPackage {
+    return { ...item, promptInputHash: "", promptStatus: "待审核", shotStatus: "confirmed" };
 }
 
 function record(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }

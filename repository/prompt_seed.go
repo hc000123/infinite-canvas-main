@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/basketikun/infinite-canvas/model"
@@ -10,15 +12,21 @@ import (
 func seedSystemPrompts(db *gorm.DB) error {
 	now := time.Now().Format(time.RFC3339)
 	for _, item := range systemPromptSeeds(now) {
-		var count int64
-		if err := db.Model(&model.Prompt{}).Where("id = ?", item.ID).Count(&count).Error; err != nil {
-			return err
-		}
-		if count > 0 {
+		existing := model.Prompt{}
+		err := db.Where("id = ?", item.ID).First(&existing).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			if err := db.Create(&item).Error; err != nil {
+				return err
+			}
 			continue
 		}
-		if err := db.Create(&item).Error; err != nil {
+		if err != nil {
 			return err
+		}
+		if existing.Category == "" || existing.Category == "system" {
+			if err := db.Model(&model.Prompt{}).Where("id = ?", item.ID).Update("category", item.Category).Error; err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -107,9 +115,26 @@ func promptSeed(now string, id string, title string, prompt string, tags []strin
 		Prompt:    prompt,
 		Tags:      tags,
 		Metadata:  metadata,
-		Category:  "system",
+		Category:  systemPromptCategory(id, nodeGroup, scenario),
 		Preview:   "系统内置种子模板，可在后台提示词管理中按需编辑。内容用于场景多角度、九宫格、高清放大、重绘增强和图片修复等常用工作流。",
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
+}
+
+func systemPromptCategory(id string, nodeGroup string, scenario string) string {
+	if nodeGroup == "video" {
+		return "video"
+	}
+	if nodeGroup == "text" {
+		return "text"
+	}
+	value := strings.ToLower(id + " " + scenario)
+	if strings.Contains(value, "scene") || strings.Contains(value, "场景") {
+		return "scene"
+	}
+	if strings.Contains(value, "character") || strings.Contains(value, "face") || strings.Contains(value, "hand") || strings.Contains(value, "角色") || strings.Contains(value, "人像") {
+		return "character"
+	}
+	return "prop"
 }

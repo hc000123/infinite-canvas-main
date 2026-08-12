@@ -1,362 +1,393 @@
 "use client";
 
-import { ChevronDown, ChevronUp, FolderPlus, Plus, Search } from "lucide-react";
+import { BookOpenText, Building2, Copy, FilePlus2, Folder, FolderOpen, FolderPlus, Map, MoreHorizontal, Package, Pencil, Plus, Search, Trash2, Type, UserRound, Video } from "lucide-react";
 import { type UIEvent, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
-import { Alert, App, Button, Empty, Form, Input, Segmented, Select, Spin, Tag } from "antd";
+import { Alert, App, Button, Dropdown, Empty, Form, Input, Modal, Segmented, Select, Spin, Tag } from "antd";
 
-import { PromptCard } from "@/components/prompts/prompt-card";
-import { PromptCreateDialog, type PromptCreateFormValues } from "@/components/prompts/prompt-select-dialog";
 import { PromptDetailDialog } from "@/components/prompts/prompt-detail-dialog";
-import { PromptProfileManager } from "@/components/prompts/prompt-profile-manager";
+import { promptCategoryOptions, type PromptBusinessCategory } from "@/components/prompts/prompt-category";
+import { promptNodeGroupLabel, promptTypeLabel, promptTypeOptions, promptTypesForNodeGroup } from "@/components/prompts/prompt-template";
 import { usePromptList } from "@/components/prompts/use-prompt-list";
-import { defaultPromptTypeForNodeGroup, parsePromptVariablesText, promptTypeLabel, promptTypeOptions } from "@/components/prompts/prompt-template";
 import { useCopyText } from "@/hooks/use-copy-text";
-import { cn } from "@/lib/utils";
-import { saveAdminPrompt } from "@/services/api/admin";
-import { useAssetStore } from "@/stores/use-asset-store";
-import { useUserStore } from "@/stores/use-user-store";
-import { ALL_PROMPTS_OPTION, type Prompt } from "@/services/api/prompts";
-import { useCreativeProjectStore } from "../projects/use-creative-project-store";
-import { ToolMetricGrid, ToolWorkbenchLayout } from "../components/tool-workbench";
+import { ALL_PROMPTS_OPTION, type Prompt, type PromptNodeGroup, type PromptTemplateType } from "@/services/api/prompts";
+import { matchesPromptLibraryFilter, type PersonalPrompt, type PersonalPromptWriteInput } from "@/stores/prompt-library";
+import { usePersonalPromptStore } from "@/stores/use-personal-prompt-store";
 
-const SCENARIO_FILTER_COLLAPSED_COUNT = 8;
-const TAG_FILTER_COLLAPSED_COUNT = 12;
-
-function getVisibleFilterOptions(options: string[], expanded: boolean, selectedValues: string[], collapsedCount: number) {
-    if (expanded || options.length <= collapsedCount) return options;
-    const pinnedValues = selectedValues.filter((value) => value !== ALL_PROMPTS_OPTION && options.includes(value));
-    const selectedOutside = pinnedValues.filter((value) => !options.slice(0, collapsedCount).includes(value));
-    const baseCount = Math.max(options[0] === ALL_PROMPTS_OPTION ? 1 : 0, collapsedCount - selectedOutside.length);
-    return Array.from(new Set([...options.slice(0, baseCount), ...selectedOutside]));
-}
+type LibraryScope = "all" | "backend" | "personal" | `category:${PromptBusinessCategory}` | `folder:${string}`;
+type PromptEditorValues = { title: string; prompt: string; tagsText?: string; folderId?: string; nodeGroup: PromptNodeGroup; type: PromptTemplateType };
 
 export default function PromptsPage() {
-    const { message } = App.useApp();
-    const searchParams = useSearchParams();
-    const queryClient = useQueryClient();
-    const token = useUserStore((state) => state.token);
-    const [createForm] = Form.useForm<PromptCreateFormValues>();
-    const [titleKeyword, setTitleKeyword] = useState("");
-    const [selectedTags, setSelectedTags] = useState<string[]>([]);
-    const [selectedCategory, setSelectedCategory] = useState(ALL_PROMPTS_OPTION);
-    const [selectedType, setSelectedType] = useState(ALL_PROMPTS_OPTION);
-    const [selectedScenario, setSelectedScenario] = useState(ALL_PROMPTS_OPTION);
-    const [favoriteOnly, setFavoriteOnly] = useState(false);
-    const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
-    const [createOpen, setCreateOpen] = useState(false);
-    const [isSavingPrompt, setIsSavingPrompt] = useState(false);
-    const [scenarioFiltersExpanded, setScenarioFiltersExpanded] = useState(false);
-    const [tagFiltersExpanded, setTagFiltersExpanded] = useState(false);
-    const [workspaceMode, setWorkspaceMode] = useState<"active" | "library">("active");
-    const [profileProjectId, setProfileProjectId] = useState(searchParams.get("projectId") || "");
-    const allProjects = useCreativeProjectStore((state) => state.projects);
-    const projects = useMemo(() => allProjects.filter((project) => project.status === "active"), [allProjects]);
-    const addAsset = useAssetStore((state) => state.addAsset);
+    const { message, modal } = App.useApp();
     const copyText = useCopyText();
-    const {
-        query,
-        items: promptItems,
-        tags: promptTags,
-        categories: promptCategoryOptions,
-        types: promptTypes,
-        scenarios: promptScenarios,
-        total: totalPrompts,
-    } = usePromptList({ keyword: titleKeyword, tags: selectedTags, category: selectedCategory, type: selectedType, scenario: selectedScenario, favorite: favoriteOnly });
-    const typeOptions = [ALL_PROMPTS_OPTION, ...promptTypeOptions.map((item) => item.value), ...promptTypes.filter((type) => type !== ALL_PROMPTS_OPTION && !promptTypeOptions.some((item) => item.value === type))];
-    const promptSummaryText = query.isLoading ? "正在读取提示词库..." : query.isError ? "提示词读取失败，请稍后重试。" : `共 ${totalPrompts} 条提示词，按标题、标签与分类快速查找灵感。`;
-    const showPromptContent = !query.isLoading && !query.isError;
-    const listFooterText = query.isFetchingNextPage ? "加载更多提示词..." : query.hasNextPage ? "继续向下滚动加载更多" : promptItems.length > 0 ? `已显示全部 ${promptItems.length} 条提示词` : null;
-    const activeFilterCount = (selectedCategory !== ALL_PROMPTS_OPTION ? 1 : 0) + (selectedType !== ALL_PROMPTS_OPTION ? 1 : 0) + (selectedScenario !== ALL_PROMPTS_OPTION ? 1 : 0) + selectedTags.length + (favoriteOnly ? 1 : 0);
-    const defaultCreateCategory = () => (selectedCategory !== ALL_PROMPTS_OPTION ? selectedCategory : promptCategoryOptions.find((category) => category !== ALL_PROMPTS_OPTION) || "system");
-    const visiblePromptScenarios = useMemo(
-        () => getVisibleFilterOptions(promptScenarios, scenarioFiltersExpanded, selectedScenario === ALL_PROMPTS_OPTION ? [] : [selectedScenario], SCENARIO_FILTER_COLLAPSED_COUNT),
-        [promptScenarios, scenarioFiltersExpanded, selectedScenario],
-    );
-    const visiblePromptTags = useMemo(() => getVisibleFilterOptions(promptTags, tagFiltersExpanded, selectedTags, TAG_FILTER_COLLAPSED_COUNT), [promptTags, selectedTags, tagFiltersExpanded]);
-    const hiddenScenarioCount = Math.max(0, promptScenarios.length - visiblePromptScenarios.length);
-    const hiddenTagCount = Math.max(0, promptTags.length - visiblePromptTags.length);
+    const [editorForm] = Form.useForm<PromptEditorValues>();
+    const [folderForm] = Form.useForm<{ name: string }>();
+    const folders = usePersonalPromptStore((state) => state.folders);
+    const personalPrompts = usePersonalPromptStore((state) => state.prompts);
+    const hydrated = usePersonalPromptStore((state) => state.hydrated);
+    const addFolder = usePersonalPromptStore((state) => state.addFolder);
+    const renameFolder = usePersonalPromptStore((state) => state.renameFolder);
+    const removeFolder = usePersonalPromptStore((state) => state.removeFolder);
+    const addPrompt = usePersonalPromptStore((state) => state.addPrompt);
+    const updatePrompt = usePersonalPromptStore((state) => state.updatePrompt);
+    const removePrompt = usePersonalPromptStore((state) => state.removePrompt);
+    const duplicatePrompt = usePersonalPromptStore((state) => state.duplicatePrompt);
+    const [scope, setScope] = useState<LibraryScope>("all");
+    const [keyword, setKeyword] = useState("");
+    const [nodeGroup, setNodeGroup] = useState<PromptNodeGroup | "all">("all");
+    const [sortMode, setSortMode] = useState<"updated" | "title">("updated");
+    const [detailPrompt, setDetailPrompt] = useState<Prompt | null>(null);
+    const [editingPrompt, setEditingPrompt] = useState<PersonalPrompt | null>(null);
+    const [editorOpen, setEditorOpen] = useState(false);
+    const [folderOpen, setFolderOpen] = useState(false);
+    const [editingFolderId, setEditingFolderId] = useState<string>();
+    const selectedBackendCategory = scope.startsWith("category:") ? (scope.slice(9) as PromptBusinessCategory) : "";
+    const showBackend = scope === "all" || scope === "backend" || Boolean(selectedBackendCategory);
+    const company = usePromptList({
+        keyword,
+        tags: [],
+        category: selectedBackendCategory || ALL_PROMPTS_OPTION,
+        nodeGroup: nodeGroup === "all" ? ALL_PROMPTS_OPTION : nodeGroup,
+        enabled: showBackend,
+    });
+    const selectedFolderId = scope.startsWith("folder:") ? scope.slice(7) : undefined;
+    const visiblePersonalPrompts = useMemo(() => {
+        if (scope === "backend" || selectedBackendCategory) return [];
+        const items = personalPrompts.filter((item) => matchesPromptLibraryFilter(item, { folderId: selectedFolderId, keyword, nodeGroup }));
+        return items.sort((left, right) => (sortMode === "title" ? left.title.localeCompare(right.title, "zh-CN") : right.updatedAt.localeCompare(left.updatedAt)));
+    }, [keyword, nodeGroup, personalPrompts, scope, selectedBackendCategory, selectedFolderId, sortMode]);
+    const companyItems = scope === "personal" || selectedFolderId ? [] : company.items;
+    const resultCount = companyItems.length + visiblePersonalPrompts.length;
 
     useEffect(() => {
-        if (query.isError) {
-            message.error(query.error instanceof Error ? query.error.message : "获取提示词失败");
-        }
-    }, [message, query.error, query.isError]);
+        if (company.query.isError && showBackend) message.error(company.query.error instanceof Error ? company.query.error.message : "后台提示词读取失败");
+    }, [company.query.error, company.query.isError, message, showBackend]);
 
-    const toggleTag = (tag: string) => {
-        if (tag === ALL_PROMPTS_OPTION) return setSelectedTags([]);
-        setSelectedTags((items) => (items.includes(tag) ? items.filter((item) => item !== tag) : [...items, tag]));
+    const openNewPrompt = (folderId = selectedFolderId) => {
+        setEditingPrompt(null);
+        editorForm.setFieldsValue({ title: "", prompt: "", tagsText: "", folderId, nodeGroup: "image", type: "image" });
+        setEditorOpen(true);
     };
 
-    const savePromptAsset = (item: Prompt) => {
-        addAsset({ kind: "text", title: item.title, coverUrl: item.coverUrl, tags: item.tags, source: item.category, data: { content: item.prompt }, metadata: { source: "prompt-library", promptId: item.id, githubUrl: item.githubUrl } });
-        message.success("已加入资产");
+    const openEditPrompt = (item: PersonalPrompt) => {
+        setEditingPrompt(item);
+        editorForm.setFieldsValue({ ...item, tagsText: item.tags.join(", ") });
+        setEditorOpen(true);
     };
 
-    const openCreatePrompt = () => {
-        if (!token) {
-            message.warning("请先登录管理员账号后再新建提示词");
-            return;
+    const saveEditor = async () => {
+        const values = await editorForm.validateFields();
+        const input: PersonalPromptWriteInput = {
+            title: values.title,
+            prompt: values.prompt,
+            tags: (values.tagsText || "").split(/[,，]/).map((tag) => tag.trim()).filter(Boolean),
+            folderId: values.folderId || undefined,
+            nodeGroup: values.nodeGroup,
+            type: values.type,
+        };
+        if (editingPrompt) updatePrompt(editingPrompt.id, input);
+        else addPrompt(input);
+        setEditorOpen(false);
+        message.success(editingPrompt ? "提示词已更新" : "提示词已保存到我的提示词");
+    };
+
+    const saveCompanyPrompt = (item: Prompt) => {
+        addPrompt({
+            title: item.title,
+            prompt: item.prompt,
+            tags: item.tags,
+            nodeGroup: normalizeNodeGroup(item.metadata?.nodeGroup),
+            type: normalizePromptType(item.metadata?.type),
+        });
+        message.success("已复制到我的提示词");
+    };
+
+    const openNewFolder = () => {
+        setEditingFolderId(undefined);
+        folderForm.setFieldsValue({ name: "" });
+        setFolderOpen(true);
+    };
+
+    const openRenameFolder = (id: string) => {
+        const folder = folders.find((item) => item.id === id);
+        if (!folder) return;
+        setEditingFolderId(id);
+        folderForm.setFieldsValue({ name: folder.name });
+        setFolderOpen(true);
+    };
+
+    const saveFolder = async () => {
+        const { name } = await folderForm.validateFields();
+        try {
+            if (editingFolderId) renameFolder(editingFolderId, name);
+            else {
+                const id = addFolder(name);
+                setScope(`folder:${id}`);
+            }
+            setFolderOpen(false);
+            message.success(editingFolderId ? "文件夹已重命名" : "文件夹已新建");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "文件夹保存失败");
         }
-        createForm.setFieldsValue({
-            title: "",
-            category: defaultCreateCategory(),
-            coverUrl: "",
-            prompt: "",
-            tagText: "",
-            variableText: "",
-            metadata: {
-                nodeGroup: "image",
-                type: defaultPromptTypeForNodeGroup("image"),
-                scenario: "",
-                favorite: false,
+    };
+
+    const confirmRemoveFolder = (id: string) => {
+        const folder = folders.find((item) => item.id === id);
+        if (!folder) return;
+        modal.confirm({
+            title: `删除文件夹“${folder.name}”？`,
+            content: "文件夹内的提示词会移到“未分类”，不会被删除。",
+            okText: "删除文件夹",
+            okButtonProps: { danger: true },
+            cancelText: "取消",
+            onOk: () => {
+                removeFolder(id);
+                if (scope === `folder:${id}`) setScope("personal");
             },
         });
-        setCreateOpen(true);
     };
 
-    const saveCreatedPrompt = async () => {
-        if (!token) {
-            message.warning("请先登录管理员账号后再新建提示词");
-            return;
-        }
-        const value = await createForm.validateFields();
-        const { tagText = "", variableText = "", metadata, ...promptValue } = value;
-        const nextNodeGroup = metadata?.nodeGroup || "image";
-        setIsSavingPrompt(true);
-        try {
-            const saved = await saveAdminPrompt(token, {
-                ...promptValue,
-                category: promptValue.category || defaultCreateCategory(),
-                coverUrl: promptValue.coverUrl || "/logo.svg",
-                tags: tagText
-                    .split(",")
-                    .map((item) => item.trim())
-                    .filter(Boolean),
-                metadata: {
-                    ...metadata,
-                    nodeGroup: nextNodeGroup,
-                    variables: parsePromptVariablesText(variableText),
-                    favorite: metadata?.favorite === true,
-                },
-            });
-            setCreateOpen(false);
-            setSelectedPrompt(saved);
-            await queryClient.invalidateQueries({ queryKey: ["prompts"] });
-            message.success("提示词已新建");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "新建提示词失败");
-        } finally {
-            setIsSavingPrompt(false);
-        }
+    const confirmRemovePrompt = (item: PersonalPrompt) => {
+        modal.confirm({
+            title: `删除“${item.title}”？`,
+            content: "删除后无法恢复。",
+            okText: "删除",
+            okButtonProps: { danger: true },
+            cancelText: "取消",
+            onOk: () => removePrompt(item.id),
+        });
     };
 
-    const handleListScroll = (event: UIEvent<HTMLDivElement>) => {
+    const handleScroll = (event: UIEvent<HTMLElement>) => {
         const target = event.currentTarget;
-        if (query.hasNextPage && !query.isFetchingNextPage && target.scrollTop + target.clientHeight >= target.scrollHeight - 160) {
-            void query.fetchNextPage();
-        }
+        if (showBackend && company.query.hasNextPage && !company.query.isFetchingNextPage && target.scrollTop + target.clientHeight >= target.scrollHeight - 160) void company.query.fetchNextPage();
     };
 
     return (
-        <div className="flex h-full flex-col overflow-hidden bg-[var(--studio-shell-bg)] text-[var(--studio-text-primary)]">
-            <main className="studio-shell min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6 xl:px-7" onScroll={handleListScroll}>
-                <div className="studio-page-header mb-5 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-                    <div>
-                        <p className="text-xs font-semibold tracking-[0.16em] text-[var(--studio-accent)]">提示词配方台</p>
-                        <h1 className="mt-1 text-2xl font-semibold text-[var(--studio-text-primary)]">让标准、项目风格和个人习惯一起生效</h1>
+        <main className="studio-shell min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6 xl:px-7" onScroll={handleScroll}>
+            <div className="mx-auto grid w-full max-w-7xl gap-4 lg:grid-cols-[248px_minmax(0,1fr)]">
+                <aside className="studio-rail h-fit p-3 lg:sticky lg:top-5">
+                    <div className="px-2 py-2">
+                        <p className="text-xs font-semibold tracking-[0.16em] text-[var(--studio-accent)]">PROMPT LIBRARY</p>
+                        <h1 className="mt-1 text-xl font-semibold text-[var(--studio-text-primary)]">提示词库</h1>
+                        <p className="mt-1 text-xs leading-5 text-[var(--studio-text-secondary)]">后台统一模板与个人提示词在这里汇总。</p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                        {workspaceMode === "active" ? <Select className="min-w-52" allowClear placeholder="未选择项目" value={profileProjectId || undefined} options={projects.map((project) => ({ label: project.title, value: project.id }))} onChange={(value) => setProfileProjectId(value || "")} /> : null}
-                        <Segmented value={workspaceMode} options={[{ label: "当前生效", value: "active" }, { label: "全部模板", value: "library" }]} onChange={(value) => setWorkspaceMode(value as "active" | "library")} />
-                    </div>
-                </div>
-                {workspaceMode === "active" ? (
-                    <section className="studio-section p-4">
-                        <PromptProfileManager projectId={profileProjectId || undefined} />
-                    </section>
-                ) : (
-                <ToolWorkbenchLayout
-                    sidebar={
-                        <aside className="studio-rail h-fit p-4 lg:sticky lg:top-5">
-                            <p className="text-xs font-semibold tracking-[0.16em] text-[var(--studio-accent)]">提示词中心</p>
-                            <h1 className="mt-2 text-2xl font-semibold tracking-normal text-[var(--studio-text-primary)]">提示词中心</h1>
-                            <p className="mt-2 text-xs leading-5 text-[var(--studio-text-secondary)]">{promptSummaryText}</p>
-
-                            <ToolMetricGrid
-                                className="mt-5 grid-cols-2"
-                                items={[
-                                    { label: "提示词", value: totalPrompts },
-                                    { label: "筛选项", value: activeFilterCount },
-                                ]}
+                    <nav className="mt-3 space-y-1" aria-label="提示词资料夹">
+                        <LibraryNavButton active={scope === "all"} icon={<BookOpenText className="size-4" />} label="全部提示词" onClick={() => setScope("all")} />
+                        <LibraryNavButton active={scope === "backend"} icon={<Building2 className="size-4" />} label="后台提示词" onClick={() => setScope("backend")} />
+                        <LibraryNavButton active={scope === "personal"} icon={<UserRound className="size-4" />} label="我的提示词" count={personalPrompts.length} onClick={() => setScope("personal")} />
+                        <div className="px-2 pb-1 pt-4 text-xs font-medium text-[var(--studio-text-muted)]">后台分类</div>
+                        {promptCategoryOptions.map((category) => (
+                            <LibraryNavButton
+                                key={category.value}
+                                active={scope === `category:${category.value}`}
+                                icon={promptCategoryIcon(category.value)}
+                                label={category.label}
+                                onClick={() => setScope(`category:${category.value}`)}
                             />
-
-                            {showPromptContent ? (
-                                <div className="mt-5 grid gap-4 border-t border-[var(--studio-border-subtle)] pt-4">
-                                    <div>
-                                        <div className="mb-2 text-xs font-medium text-[var(--studio-text-muted)]">分类</div>
-                                        <div className="flex flex-wrap gap-2">
-                                            {promptCategoryOptions.map((category) => (
-                                                <Tag.CheckableTag key={category} checked={selectedCategory === category} className={cn("prompt-filter-tag", selectedCategory === category && "is-active")} onChange={() => setSelectedCategory(category)}>
-                                                    {category}
-                                                </Tag.CheckableTag>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div className="mb-2 text-xs font-medium text-[var(--studio-text-muted)]">类型</div>
-                                        <div className="flex flex-wrap gap-2">
-                                            {typeOptions.map((type) => (
-                                                <Tag.CheckableTag
-                                                    key={type}
-                                                    checked={selectedType === type}
-                                                    className={cn("prompt-filter-tag", selectedType === type && "is-active")}
-                                                    onChange={() => {
-                                                        setSelectedType(type);
-                                                        setSelectedScenario(ALL_PROMPTS_OPTION);
-                                                    }}
-                                                >
-                                                    {type === ALL_PROMPTS_OPTION ? "全部" : promptTypeLabel(type)}
-                                                </Tag.CheckableTag>
-                                            ))}
-                                            <Tag.CheckableTag checked={favoriteOnly} className={cn("prompt-filter-tag", favoriteOnly && "is-active")} onChange={() => setFavoriteOnly((value) => !value)}>
-                                                常用
-                                            </Tag.CheckableTag>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div className="mb-2 text-xs font-medium text-[var(--studio-text-muted)]">场景</div>
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            {visiblePromptScenarios.map((scenario) => (
-                                                <Tag.CheckableTag key={scenario} checked={selectedScenario === scenario} className={cn("prompt-filter-tag", selectedScenario === scenario && "is-active")} onChange={() => setSelectedScenario(scenario)}>
-                                                    {scenario}
-                                                </Tag.CheckableTag>
-                                            ))}
-                                            {promptScenarios.length > SCENARIO_FILTER_COLLAPSED_COUNT ? (
-                                                <Button
-                                                    size="middle"
-                                                    type="text"
-                                                    className="!h-8 !px-2 !text-[var(--studio-text-secondary)] hover:!text-[var(--studio-text-primary)]"
-                                                    icon={scenarioFiltersExpanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-                                                    onClick={() => setScenarioFiltersExpanded((value) => !value)}
-                                                >
-                                                    {scenarioFiltersExpanded ? "收起场景" : `展开${hiddenScenarioCount ? ` ${hiddenScenarioCount} 个` : ""}场景`}
-                                                </Button>
-                                            ) : null}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div className="mb-2 text-xs font-medium text-[var(--studio-text-muted)]">标签</div>
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            {visiblePromptTags.map((tag) => (
-                                                <Tag.CheckableTag
-                                                    key={tag}
-                                                    checked={tag === ALL_PROMPTS_OPTION ? selectedTags.length === 0 : selectedTags.includes(tag)}
-                                                    className={cn("prompt-filter-tag", (tag === ALL_PROMPTS_OPTION ? selectedTags.length === 0 : selectedTags.includes(tag)) && "is-active")}
-                                                    onChange={() => toggleTag(tag)}
-                                                >
-                                                    {tag}
-                                                </Tag.CheckableTag>
-                                            ))}
-                                            {promptTags.length > TAG_FILTER_COLLAPSED_COUNT ? (
-                                                <Button
-                                                    size="middle"
-                                                    type="text"
-                                                    className="!h-8 !px-2 !text-[var(--studio-text-secondary)] hover:!text-[var(--studio-text-primary)]"
-                                                    icon={tagFiltersExpanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-                                                    onClick={() => setTagFiltersExpanded((value) => !value)}
-                                                >
-                                                    {tagFiltersExpanded ? "收起标签" : `展开${hiddenTagCount ? ` ${hiddenTagCount} 个` : ""}标签`}
-                                                </Button>
-                                            ) : null}
-                                        </div>
-                                    </div>
+                        ))}
+                        <div className="flex items-center justify-between px-2 pb-1 pt-4">
+                            <span className="text-xs font-medium text-[var(--studio-text-muted)]">我的文件夹</span>
+                            <Button type="text" size="small" className="!h-7 !w-7 !p-0" icon={<FolderPlus className="size-3.5" />} aria-label="新建文件夹" onClick={openNewFolder} />
+                        </div>
+                        {folders.map((folder) => {
+                            const active = scope === `folder:${folder.id}`;
+                            const count = personalPrompts.filter((item) => item.folderId === folder.id).length;
+                            return (
+                                <div key={folder.id} className="group flex items-center gap-1">
+                                    <button
+                                        type="button"
+                                        className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors ${active ? "bg-[var(--studio-accent-soft)] text-[var(--studio-accent)]" : "text-[var(--studio-text-secondary)] hover:bg-[var(--studio-panel-muted-bg)] hover:text-[var(--studio-text-primary)]"}`}
+                                        onClick={() => setScope(`folder:${folder.id}`)}
+                                    >
+                                        {active ? <FolderOpen className="size-4 shrink-0" /> : <Folder className="size-4 shrink-0" />}
+                                        <span className="min-w-0 flex-1 truncate">{folder.name}</span>
+                                        <span className="text-xs text-[var(--studio-text-muted)]">{count}</span>
+                                    </button>
+                                    <Dropdown
+                                        trigger={["click"]}
+                                        menu={{
+                                            items: [
+                                                { key: "rename", label: "重命名", icon: <Pencil className="size-3.5" /> },
+                                                { key: "delete", label: "删除文件夹", danger: true, icon: <Trash2 className="size-3.5" /> },
+                                            ],
+                                            onClick: ({ key }) => (key === "rename" ? openRenameFolder(folder.id) : confirmRemoveFolder(folder.id)),
+                                        }}
+                                    >
+                                        <Button type="text" size="small" className="!h-8 !w-8 !p-0 opacity-0 group-hover:opacity-100" icon={<MoreHorizontal className="size-4" />} aria-label={`${folder.name}操作`} />
+                                    </Dropdown>
                                 </div>
-                            ) : null}
-                        </aside>
-                    }
-                >
-                    <section className="min-w-0">
-                        <header className="studio-page-header flex flex-wrap items-start justify-between gap-4 px-4 py-3">
+                            );
+                        })}
+                        {hydrated && folders.length === 0 ? <button type="button" className="w-full rounded-md px-3 py-2 text-left text-xs text-[var(--studio-text-muted)] hover:bg-[var(--studio-panel-muted-bg)]" onClick={openNewFolder}>还没有文件夹，点击新建</button> : null}
+                    </nav>
+                </aside>
+
+                <section className="min-w-0">
+                    <header className="studio-page-header px-4 py-4">
+                        <div className="flex flex-wrap items-start justify-between gap-4">
                             <div>
-                                <p className="text-xs font-semibold tracking-[0.16em] text-[var(--studio-accent)]">提示词列表</p>
-                                <h2 className="mt-2 text-3xl font-semibold leading-tight tracking-normal text-[var(--studio-text-primary)]">灵感检索</h2>
-                                <p className="mt-2 text-sm text-[var(--studio-text-secondary)]">{promptItems.length ? `当前显示 ${promptItems.length} 条提示词` : promptSummaryText}</p>
+                                <p className="text-xs font-semibold tracking-[0.16em] text-[var(--studio-accent)]">{scopeTitle(scope, folders)}</p>
+                                <h2 className="mt-1 text-2xl font-semibold text-[var(--studio-text-primary)]">整理与复用每一条提示词</h2>
+                                <p className="mt-1 text-sm text-[var(--studio-text-secondary)]">后台提示词由管理员统一维护；自己的提示词可编辑并移动到任意文件夹。</p>
                             </div>
-                            {showPromptContent ? (
-                                <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
-                                    <Input
-                                        size="large"
-                                        className="min-w-0 rounded-lg border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] text-[var(--studio-text-primary)] placeholder:text-[var(--studio-text-muted)] sm:w-[360px] xl:w-[420px]"
-                                        prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />}
-                                        value={titleKeyword}
-                                        placeholder="搜索标题、内容或标签"
-                                        onChange={(event) => setTitleKeyword(event.target.value)}
-                                    />
-                                    <Button size="large" type="primary" icon={<Plus className="size-4" />} onClick={openCreatePrompt}>
-                                        新建提示词
-                                    </Button>
-                                </div>
-                            ) : null}
-                        </header>
-
-                        {query.isLoading ? (
-                            <div className="studio-section mt-5 flex h-60 flex-col items-center justify-center gap-3 text-sm text-[var(--studio-text-secondary)]">
-                                <Spin />
-                                <span>正在读取提示词...</span>
-                            </div>
-                        ) : null}
-                        {query.isError ? (
-                            <Alert
-                                className="mt-5"
-                                type="error"
-                                showIcon
-                                message="提示词读取失败"
-                                description={query.error instanceof Error ? query.error.message : "请确认后端服务已启动后重试。"}
-                                action={
-                                    <Button size="small" onClick={() => void query.refetch()}>
-                                        重试
-                                    </Button>
-                                }
+                            <Button type="primary" icon={<Plus className="size-4" />} onClick={() => openNewPrompt()}>
+                                新建提示词
+                            </Button>
+                        </div>
+                        <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center">
+                            <Input className="min-w-0 md:max-w-lg" size="large" prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />} placeholder="搜索标题、正文或标签" value={keyword} onChange={(event) => setKeyword(event.target.value)} />
+                            <Segmented
+                                value={nodeGroup}
+                                options={[{ label: "全部类型", value: "all" }, { label: "图片", value: "image" }, { label: "视频", value: "video" }, { label: "文本", value: "text" }]}
+                                onChange={(value) => setNodeGroup(value as PromptNodeGroup | "all")}
                             />
-                        ) : null}
-                        {showPromptContent ? (
-                            <div className="studio-section mt-5 p-4">
-                                <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                                    {promptItems.map((item) => (
-                                        <PromptCard
-                                            key={item.id}
-                                            item={item}
-                                            onOpen={() => setSelectedPrompt(item)}
-                                            onCopy={() => copyText(item.prompt, "提示词已复制")}
-                                            extraAction={
-                                                <Button size="small" icon={<FolderPlus className="size-3.5" />} onClick={() => savePromptAsset(item)}>
-                                                    加入资产
-                                                </Button>
+                            <Select
+                                className="w-28 shrink-0"
+                                value={sortMode}
+                                options={[{ label: "最近更新", value: "updated" }, { label: "名称升序", value: "title" }]}
+                                onChange={setSortMode}
+                            />
+                        </div>
+                    </header>
+
+                    {showBackend && company.query.isLoading ? <div className="mt-4 flex h-40 items-center justify-center"><Spin /></div> : null}
+                    {showBackend && company.query.isError ? <Alert className="mt-4" type="warning" showIcon title="后台提示词暂时无法读取" description="个人提示词仍可正常管理。" action={<Button size="small" onClick={() => void company.query.refetch()}>重试</Button>} /> : null}
+                    {!company.query.isLoading && hydrated ? (
+                        <div className="mt-4 space-y-5">
+                            {companyItems.length ? (
+                                <PromptSection title="后台提示词" icon={<Building2 className="size-4" />} count={companyItems.length} description="由后台统一维护，外侧直接读取同一内容。">
+                                    {companyItems.map((item) => (
+                                        <PromptRow
+                                            key={`company:${item.id}`}
+                                            title={item.title}
+                                            content={item.prompt}
+                                            tags={promptDisplayTags(item)}
+                                            source="后台内置"
+                                            onOpen={() => setDetailPrompt(item)}
+                                            actions={
+                                                <>
+                                                    <Button size="small" type="text" icon={<Copy className="size-3.5" />} onClick={() => copyText(item.prompt, "提示词已复制")}>复制</Button>
+                                                    <Button size="small" icon={<FilePlus2 className="size-3.5" />} onClick={() => saveCompanyPrompt(item)}>保存到我的</Button>
+                                                </>
                                             }
                                         />
                                     ))}
+                                </PromptSection>
+                            ) : null}
+                            {visiblePersonalPrompts.length ? (
+                                <PromptSection title="我的提示词" icon={<UserRound className="size-4" />} count={visiblePersonalPrompts.length} description={selectedFolderId ? `文件夹：${folders.find((folder) => folder.id === selectedFolderId)?.name || "未命名"}` : "保存在当前浏览器，可编辑与分类。"}>
+                                    {visiblePersonalPrompts.map((item) => (
+                                        <PromptRow
+                                            key={`personal:${item.id}`}
+                                            title={item.title}
+                                            content={item.prompt}
+                                            tags={[promptNodeGroupLabel(item.nodeGroup), promptTypeLabel(item.type), ...item.tags]}
+                                            source={folders.find((folder) => folder.id === item.folderId)?.name || "未分类"}
+                                            onOpen={() => setDetailPrompt(personalPromptForDetail(item))}
+                                            actions={
+                                                <Dropdown
+                                                    trigger={["click"]}
+                                                    menu={{
+                                                        items: [
+                                                            { key: "edit", label: "编辑与移动", icon: <Pencil className="size-3.5" /> },
+                                                            { key: "duplicate", label: "创建副本", icon: <Copy className="size-3.5" /> },
+                                                            { key: "delete", label: "删除", danger: true, icon: <Trash2 className="size-3.5" /> },
+                                                        ],
+                                                        onClick: ({ key }) => {
+                                                            if (key === "edit") openEditPrompt(item);
+                                                            else if (key === "duplicate") {
+                                                                duplicatePrompt(item.id);
+                                                                message.success("已创建副本");
+                                                            } else confirmRemovePrompt(item);
+                                                        },
+                                                    }}
+                                                >
+                                                    <Button size="small" icon={<MoreHorizontal className="size-3.5" />}>管理</Button>
+                                                </Dropdown>
+                                            }
+                                        />
+                                    ))}
+                                </PromptSection>
+                            ) : null}
+                            {resultCount === 0 && !company.query.isError ? (
+                                <div className="studio-section flex min-h-80 items-center justify-center p-6">
+                                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={keyword ? "没有找到匹配的提示词" : scope === "backend" || selectedBackendCategory ? "该后台分类暂无提示词" : "这里还没有提示词"}>
+                                        {scope !== "backend" && !selectedBackendCategory ? <Button type="primary" icon={<Plus className="size-4" />} onClick={() => openNewPrompt()}>新建提示词</Button> : null}
+                                    </Empty>
                                 </div>
-                                {promptItems.length === 0 ? (
-                                    <div className="flex min-h-[360px] items-center justify-center">
-                                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到匹配的提示词">
-                                            <Button type="primary" icon={<Plus className="size-4" />} onClick={openCreatePrompt}>
-                                                新建提示词
-                                            </Button>
-                                        </Empty>
-                                    </div>
-                                ) : null}
-                                <div className="mt-6 text-center text-xs text-[var(--studio-text-muted)]">{listFooterText}</div>
-                            </div>
-                        ) : null}
-                    </section>
-                </ToolWorkbenchLayout>
-                )}
-            </main>
+                            ) : null}
+                            {company.query.isFetchingNextPage ? <div className="py-3 text-center text-xs text-[var(--studio-text-muted)]">正在加载更多后台提示词...</div> : null}
+                        </div>
+                    ) : null}
+                </section>
+            </div>
 
-            <PromptDetailDialog prompt={selectedPrompt} onClose={() => setSelectedPrompt(null)} onCopy={(prompt) => copyText(prompt, "提示词已复制")} onSaveAsset={savePromptAsset} />
-            <PromptCreateDialog form={createForm} open={createOpen} categories={promptCategoryOptions} saving={isSavingPrompt} onCancel={() => setCreateOpen(false)} onSave={saveCreatedPrompt} />
-        </div>
+            <PromptDetailDialog prompt={detailPrompt} onClose={() => setDetailPrompt(null)} onCopy={(text) => copyText(text, "提示词已复制")} />
+            <Modal rootClassName="studio-modal" title={editingPrompt ? "编辑提示词" : "新建提示词"} open={editorOpen} onCancel={() => setEditorOpen(false)} onOk={() => void saveEditor()} okText="保存" cancelText="取消" width={680} destroyOnHidden>
+                <Form form={editorForm} layout="vertical" requiredMark={false} className="pt-2">
+                    <Form.Item name="title" label="名称" rules={[{ required: true, whitespace: true, message: "请输入提示词名称" }]}><Input placeholder="例如：角色三视图母版" /></Form.Item>
+                    <Form.Item name="prompt" label="提示词正文" rules={[{ required: true, whitespace: true, message: "请输入提示词正文" }]}><Input.TextArea autoSize={{ minRows: 7, maxRows: 14 }} placeholder="输入可直接复用的提示词内容" /></Form.Item>
+                    <div className="grid gap-x-3 md:grid-cols-3">
+                        <Form.Item name="nodeGroup" label="适用类型" rules={[{ required: true }]}>
+                            <Select options={[{ label: "图片", value: "image" }, { label: "视频", value: "video" }, { label: "文本", value: "text" }]} onChange={(value) => editorForm.setFieldValue("type", promptTypesForNodeGroup(value)[0] || "workflow")} />
+                        </Form.Item>
+                        <Form.Item name="type" label="用途" rules={[{ required: true }]}>
+                            <Select options={promptTypeOptions.map((item) => ({ label: item.label, value: item.value }))} />
+                        </Form.Item>
+                        <Form.Item name="folderId" label="文件夹"><Select allowClear placeholder="未分类" options={folders.map((folder) => ({ label: folder.name, value: folder.id }))} /></Form.Item>
+                    </div>
+                    <Form.Item name="tagsText" label="标签"><Input placeholder="用逗号分隔，例如：人物，写实，母版" /></Form.Item>
+                </Form>
+            </Modal>
+            <Modal rootClassName="studio-modal" title={editingFolderId ? "重命名文件夹" : "新建文件夹"} open={folderOpen} onCancel={() => setFolderOpen(false)} onOk={() => void saveFolder()} okText="保存" cancelText="取消" destroyOnHidden>
+                <Form form={folderForm} layout="vertical" requiredMark={false} className="pt-2">
+                    <Form.Item name="name" label="文件夹名称" rules={[{ required: true, whitespace: true, message: "请输入文件夹名称" }]}><Input autoFocus placeholder="例如：角色、镜头、风格参考" onPressEnter={() => void saveFolder()} /></Form.Item>
+                </Form>
+            </Modal>
+        </main>
     );
+}
+
+function LibraryNavButton({ active, icon, label, count, onClick }: { active: boolean; icon: React.ReactNode; label: string; count?: number; onClick: () => void }) {
+    return <button type="button" className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors ${active ? "bg-[var(--studio-accent-soft)] text-[var(--studio-accent)]" : "text-[var(--studio-text-secondary)] hover:bg-[var(--studio-panel-muted-bg)] hover:text-[var(--studio-text-primary)]"}`} onClick={onClick}>{icon}<span className="flex-1">{label}</span>{count === undefined ? null : <span className="text-xs text-[var(--studio-text-muted)]">{count}</span>}</button>;
+}
+
+function PromptSection({ title, icon, count, description, children }: { title: string; icon: React.ReactNode; count: number; description: string; children: React.ReactNode }) {
+    return <section className="studio-section overflow-hidden"><header className="flex items-center gap-2 border-b border-[var(--studio-border-subtle)] px-4 py-3"><span className="text-[var(--studio-accent)]">{icon}</span><h3 className="font-semibold text-[var(--studio-text-primary)]">{title}</h3><Tag className="studio-tag">{count}</Tag><span className="ml-auto hidden text-xs text-[var(--studio-text-muted)] sm:block">{description}</span></header><div className="divide-y divide-[var(--studio-border-subtle)]">{children}</div></section>;
+}
+
+function PromptRow({ title, content, tags, source, onOpen, actions }: { title: string; content: string; tags: string[]; source: string; onOpen: () => void; actions: React.ReactNode }) {
+    return <article className="group flex flex-col gap-3 px-4 py-3 transition-colors hover:bg-[var(--studio-panel-muted-bg)] sm:flex-row sm:items-center"><button type="button" className="min-w-0 flex-1 text-left" onClick={onOpen}><div className="flex flex-wrap items-center gap-2"><h4 className="font-medium text-[var(--studio-text-primary)]">{title}</h4><span className="text-xs text-[var(--studio-text-muted)]">{source}</span></div><p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--studio-text-secondary)]">{content}</p><div className="mt-2 flex flex-wrap gap-1.5">{tags.slice(0, 5).map((tag) => <Tag key={tag} className="studio-tag !text-[11px]">{tag}</Tag>)}</div></button><div className="flex shrink-0 items-center gap-1 self-end sm:self-center">{actions}</div></article>;
+}
+
+function scopeTitle(scope: LibraryScope, folders: { id: string; name: string }[]) {
+    if (scope === "backend") return "后台提示词";
+    if (scope === "personal") return "我的提示词";
+    if (scope.startsWith("category:")) return promptCategoryOptions.find((category) => category.value === scope.slice(9))?.label || "后台分类";
+    if (scope.startsWith("folder:")) return folders.find((folder) => folder.id === scope.slice(7))?.name || "我的文件夹";
+    return "全部提示词";
+}
+
+function promptCategoryIcon(category: PromptBusinessCategory) {
+    if (category === "scene") return <Map className="size-4" />;
+    if (category === "prop") return <Package className="size-4" />;
+    if (category === "character") return <UserRound className="size-4" />;
+    if (category === "video") return <Video className="size-4" />;
+    return <Type className="size-4" />;
+}
+
+function normalizeNodeGroup(value?: string): PromptNodeGroup {
+    return value === "video" || value === "text" ? value : "image";
+}
+
+function normalizePromptType(value?: string): PromptTemplateType {
+    return promptTypeOptions.some((item) => item.value === value) ? (value as PromptTemplateType) : "workflow";
+}
+
+function promptDisplayTags(item: Prompt) {
+    return [item.metadata?.nodeGroup ? promptNodeGroupLabel(item.metadata.nodeGroup) : "", item.metadata?.type ? promptTypeLabel(item.metadata.type) : "", ...item.tags].filter(Boolean);
+}
+
+function personalPromptForDetail(item: PersonalPrompt): Prompt {
+    return { id: item.id, title: item.title, prompt: item.prompt, tags: item.tags, category: "我的提示词", coverUrl: "", githubUrl: "", preview: "", createdAt: item.createdAt, updatedAt: item.updatedAt, metadata: { nodeGroup: item.nodeGroup, type: item.type } };
 }

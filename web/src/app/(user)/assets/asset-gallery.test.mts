@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { Asset, AssetSubject, AssetVariant, ImageAsset } from "../../../stores/use-asset-store.ts";
-import { buildAssetSubjectSummary, isGalleryMediaAsset, visibleGallerySubjectGroups } from "./asset-gallery.ts";
+import type { Asset, AssetSubject, AssetVariant, ImageAsset, TextAsset } from "../../../stores/use-asset-store.ts";
+import { buildAssetCenterSubjects, buildAssetSubjectSummary, isGalleryMediaAsset, visibleGallerySubjectGroups } from "./asset-gallery.ts";
 
 const now = "2026-08-08T00:00:00.000Z";
 const subject: AssetSubject = { id: "subject-a", projectId: "project-a", category: "character", code: "CHAR-001", name: "林夏", tags: ["女主"], createdAt: now, updatedAt: now };
@@ -27,6 +27,26 @@ test("builds one subject summary and prefers the current formal image", () => {
     assert.equal(summary.coverAsset?.id, "current");
     assert.equal(summary.variantCount, 2);
     assert.equal(summary.formalImageCount, 2);
+});
+
+test("shows the canonical workflow prompt and latest image on subject cards", () => {
+    const variants: AssetVariant[] = [{ id: "variant-a", subjectId: subject.id, name: "基础形象", prompt: "", referenceImageIds: [], createdAt: now, updatedAt: now }];
+    const workflowAsset: TextAsset = {
+        id: "workflow-text",
+        kind: "text",
+        title: "林夏",
+        coverUrl: "",
+        tags: ["视频工作流"],
+        createdAt: now,
+        updatedAt: now,
+        assetBinding: { projectId: subject.projectId, subjectId: subject.id, category: "character", variantId: "variant-a", variantName: "基础形象", allEpisodes: false, episodeIds: ["episode-a"] },
+        data: { content: "角色统一设定提示词" },
+        metadata: { originalWorkflow: { importKey: "project-a:episode-a:CHAR-001", imagePrompt: "角色统一设定提示词" } },
+    };
+    const [summary] = buildAssetCenterSubjects({ subjects: [subject], variants, assets: [workflowAsset, image("older", "2026-08-08T01:00:00.000Z"), image("newest", "2026-08-08T02:00:00.000Z")], workbenchImages: [], projectId: subject.projectId });
+
+    assert.equal(summary.prompt, "角色统一设定提示词");
+    assert.equal(summary.coverAsset?.id, "newest");
 });
 
 test("accepts image video and audio but rejects text", () => {

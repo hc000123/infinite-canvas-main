@@ -102,6 +102,15 @@ export async function downloadProjectCachePackage(projectId: string, snapshot: P
     saveAs(response.data, filename);
 }
 
+export async function downloadProjectCacheSelection(projectId: string, fileIds: string[], token: string, filename: string) {
+    const response = await axios.post(`/api/v1/project-cache/projects/${encodeURIComponent(projectId)}/package/selection`, { fileIds }, { headers: { Authorization: `Bearer ${token}` }, responseType: "blob" });
+    const signature = new Uint8Array(await response.data.slice(-22, -18).arrayBuffer());
+    if (signature.length !== 4 || signature[0] !== 0x50 || signature[1] !== 0x4b || signature[2] !== 0x05 || signature[3] !== 0x06) {
+        throw new Error("所选缓存下载失败，下载内容不完整");
+    }
+    saveAs(response.data, filename);
+}
+
 function cacheFileName(disposition: string | undefined, fallback: string) {
     const encoded = disposition?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
     if (encoded) {

@@ -20,38 +20,40 @@ import (
 const redactedValue = "[redacted]"
 
 type CreateAITaskInput struct {
-	UserID        string
-	TaskType      string
-	Provider      string
-	ChannelID     string
-	Protocol      string
-	Model         string
-	Path          string
-	Credits       int
-	RequestBody   []byte
-	ContentType   string
-	FrontendTrace string
+	UserID           string
+	TaskType         string
+	Provider         string
+	ChannelID        string
+	Protocol         string
+	Model            string
+	Path             string
+	Credits          int
+	GeneratedSeconds int
+	RequestBody      []byte
+	ContentType      string
+	FrontendTrace    string
 }
 
 func CreateAITask(input CreateAITaskInput) (model.AITask, error) {
 	stamp := now()
 	frontendTrace := sanitizeFrontendTraceJSON(input.FrontendTrace)
 	task := model.AITask{
-		ID:          newID("aitask"),
-		UserID:      input.UserID,
-		Kind:        inferAITaskKind(input.Path),
-		TaskType:    input.TaskType,
-		ActionType:  inferAITaskActionType(input.Path, input.RequestBody, input.ContentType),
-		Provider:    input.Provider,
-		ChannelID:   strings.TrimSpace(input.ChannelID),
-		Protocol:    input.Protocol,
-		Model:       strings.TrimSpace(input.Model),
-		Path:        input.Path,
-		Status:      model.AITaskStatusCreated,
-		Credits:     input.Credits,
-		RequestJSON: mergeAITaskFrontendTrace(SanitizeAIJSON(input.RequestBody, input.ContentType), input.FrontendTrace),
-		CreatedAt:   stamp,
-		UpdatedAt:   stamp,
+		ID:               newID("aitask"),
+		UserID:           input.UserID,
+		Kind:             inferAITaskKind(input.Path),
+		TaskType:         input.TaskType,
+		ActionType:       inferAITaskActionType(input.Path, input.RequestBody, input.ContentType),
+		Provider:         input.Provider,
+		ChannelID:        strings.TrimSpace(input.ChannelID),
+		Protocol:         input.Protocol,
+		Model:            strings.TrimSpace(input.Model),
+		Path:             input.Path,
+		Status:           model.AITaskStatusCreated,
+		Credits:          input.Credits,
+		GeneratedSeconds: max(0, input.GeneratedSeconds),
+		RequestJSON:      mergeAITaskFrontendTrace(SanitizeAIJSON(input.RequestBody, input.ContentType), input.FrontendTrace),
+		CreatedAt:        stamp,
+		UpdatedAt:        stamp,
 	}
 	if len(frontendTrace) > 0 {
 		task.FrontendTraceJSON = marshalSanitized(frontendTrace)
@@ -107,6 +109,11 @@ func MarkAITaskSucceeded(id string, responseBody []byte, contentType string) err
 		return err
 	}
 	task.Status = model.AITaskStatusSucceeded
+	if isVideoAITask(task) {
+		if seconds := aiTaskGeneratedSecondsFromResponse(responseBody); seconds > 0 {
+			task.GeneratedSeconds = seconds
+		}
+	}
 	task.ResponseJSON = preserveAITaskFrontendArtifacts(sanitizeAITaskResponse(responseBody, contentType), task.ResponseJSON)
 	task.ErrorMessage = ""
 	task.UpdatedAt = now()
@@ -826,7 +833,33 @@ func applyArkVideoTaskPayload(task *model.AITask, normalizedBody []byte) {
 		task.ErrorMessage = ""
 	}
 	task.ResponseJSON = preserveAITaskFrontendArtifacts(SanitizeAIJSON(normalizedBody, "application/json"), task.ResponseJSON)
+	if isVideoAITask(*task) && task.Status == model.AITaskStatusSucceeded {
+		if seconds := aiTaskGeneratedSecondsFromResponse(normalizedBody); seconds > 0 {
+			task.GeneratedSeconds = seconds
+		}
+	}
 	task.UpdatedAt = now()
+}
+
+func aiTaskGeneratedSecondsFromResponse(body []byte) int {
+	var payload map[string]any
+	if json.Unmarshal(body, &payload) != nil {
+		return 0
+	}
+	candidates := []map[string]any{payload}
+	for _, key := range []string{"task", "data", "output"} {
+		if nested, ok := payload[key].(map[string]any); ok {
+			candidates = append(candidates, nested)
+		}
+	}
+	for _, item := range candidates {
+		for _, key := range []string{"duration", "seconds"} {
+			if seconds := int(aiTaskInt64Value(item, key)); seconds > 0 {
+				return seconds
+			}
+		}
+	}
+	return 0
 }
 
 func saveAITask(task model.AITask) error {

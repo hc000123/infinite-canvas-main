@@ -166,7 +166,7 @@ GeekNow 预设默认只写入三个私有渠道，不自动公开任何新模型
 
 当前预设包含 `sd2-720p-ap-fast`、`sd2-720p-ap`、`sd2-1080p-ap-fast`、`sd2-1080p-ap`、`sd2-720p-ax-fast`、`sd2-720p-ax`、`sd2-720p-ds`、`sd2-720p-ds-fast`、`sd2-720p-ax2`、`sd2-720p-ax2-fast`、`sd2-720p-ds-v933`、`sd2.5-480p-ax2`、`sd2.5-720p-ax2`、`sd2.5-480p-ax2-20s` 与 `sd2.5-720p-ax2-20s`。实际可用范围仍以当前 API Key 调用 `/v1/models` 的结果为准。
 
-SD2.5 AX2 支持 4–30 秒；带 `-20s` 后缀的模型固定为 20 秒；DS 系列只允许 10 秒或 15 秒。分辨率由模型名决定。图、音频、视频参考素材必须是可访问的 HTTPS URL；星链云 OSS 上传使用独立的 `https://oss.vjimeng.vip` 直传服务，不与视频 Base URL 混用，当前仍需先上传后再把 URL 作为引用提交。
+SD2.5 AX2 支持 4–30 秒；带 `-20s` 后缀的模型固定为 20 秒；DS 系列只允许 10 秒或 15 秒。分辨率由模型名决定。图、音频、视频参考素材最终必须是可访问的 HTTPS URL；画布会使用后端保存的渠道 Key 向独立的 `https://oss.vjimeng.vip` 申请直传签名，由浏览器 PUT 素材并登记完成，再把返回 URL 提交给视频接口。OSS 地址不与视频 Base URL 混用，API Key 不返回浏览器。
 
 ### 即梦 CLI 视频渠道
 

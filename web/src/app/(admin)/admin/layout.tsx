@@ -9,7 +9,6 @@ import {
     HomeOutlined,
     LogoutOutlined,
     MenuOutlined,
-    PictureOutlined,
     RobotOutlined,
     SafetyCertificateOutlined,
     SettingOutlined,
@@ -28,7 +27,6 @@ const baseAdminMenus = [
     { key: "/admin/login-approvals", icon: <AuditOutlined />, label: "登录审批" },
     { key: "/admin/ai-tasks", icon: <RobotOutlined />, label: "任务运维" },
     { key: "/admin/prompts", icon: <FileTextOutlined />, label: "提示词管理" },
-    { key: "/admin/assets", icon: <PictureOutlined />, label: "素材管理" },
     { key: "/admin/skills", icon: <ApartmentOutlined />, label: "Skill 中心" },
     { key: "/admin/agents", icon: <DeploymentUnitOutlined />, label: "Agent 中心" },
     { key: "/admin/settings", icon: <SettingOutlined />, label: "系统设置" },
@@ -63,15 +61,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             ? "/admin/skills"
             : pathname.startsWith("/admin/settings")
               ? "/admin/settings"
-              : pathname.startsWith("/admin/assets")
-                ? "/admin/assets"
-                : pathname.startsWith("/admin/prompts")
-                  ? "/admin/prompts"
-                  : pathname.startsWith("/admin/ai-tasks")
-                    ? "/admin/ai-tasks"
-                    : pathname.startsWith("/admin/users")
-                      ? "/admin/users"
-                      : "";
+              : pathname.startsWith("/admin/prompts")
+                ? "/admin/prompts"
+                : pathname.startsWith("/admin/ai-tasks")
+                  ? "/admin/ai-tasks"
+                  : pathname.startsWith("/admin/users")
+                    ? "/admin/users"
+                    : "";
     const pageTitle = pathname.startsWith("/admin/login-approvals")
         ? "登录审批"
         : pathname.startsWith("/admin/admins")
@@ -82,13 +78,11 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             ? "Skill 中心"
             : pathname.startsWith("/admin/settings")
               ? "系统设置"
-              : pathname.startsWith("/admin/assets")
-                ? "素材管理"
-                : pathname.startsWith("/admin/prompts")
-                  ? "提示词管理"
-                  : pathname.startsWith("/admin/ai-tasks")
-                    ? "任务运维"
-                    : "用户管理";
+              : pathname.startsWith("/admin/prompts")
+                ? "提示词管理"
+                : pathname.startsWith("/admin/ai-tasks")
+                  ? "任务运维"
+                  : "用户管理";
 
     useEffect(() => {
         if (!isReady) return;

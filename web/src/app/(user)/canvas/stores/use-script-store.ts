@@ -73,7 +73,6 @@ export const useScriptStore = create<ScriptStore>()(
                 const id = nanoid();
                 const order = input.order ?? nextOrder(get().episodes.filter((episode) => episode.projectId === input.projectId));
                 const episode = normalizeScriptEpisode({ ...input, code: input.code || defaultEpisodeCode(order), order });
-                if (get().episodes.some((item) => item.projectId === episode.projectId && item.code === episode.code)) throw new Error(`${episode.code} 已存在`);
                 set((state) => ({ episodes: [...state.episodes, { ...episode, id, sceneIds: [], createdAt: now, updatedAt: now }] }));
                 return id;
             },
@@ -82,7 +81,6 @@ export const useScriptStore = create<ScriptStore>()(
                     const current = state.episodes.find((episode) => episode.id === id);
                     if (!current) return {};
                     const next = normalizeScriptEpisode({ ...current, code: patch.code || current.code || defaultEpisodeCode(current.order), ...patch });
-                    if (state.episodes.some((episode) => episode.id !== id && episode.projectId === next.projectId && episode.code === next.code)) throw new Error(`${next.code} 已存在`);
                     return { episodes: state.episodes.map((episode) => (episode.id === id ? { ...episode, ...next, sceneIds: episode.sceneIds, updatedAt: new Date().toISOString() } : episode)) };
                 }),
             removeEpisode: (id) =>

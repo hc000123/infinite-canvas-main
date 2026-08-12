@@ -1,5 +1,6 @@
 import type { Asset, AssetKind, AssetSubject, AssetVariant, AssetWorkbenchImage, AudioAsset, ImageAsset, VideoAsset } from "../../../stores/use-asset-store.ts";
 import { assetInProjectLibrary } from "./asset-project-library.ts";
+import { workflowAssetInfo, workflowAssetPrompt } from "./workflow-asset-image.ts";
 
 export type GalleryMediaAsset = ImageAsset | VideoAsset | AudioAsset;
 export type AssetSubjectSummary = {
@@ -15,6 +16,7 @@ export type AssetCenterSubjectSummary = {
     coverAsset?: ImageAsset;
     variantCount: number;
     pendingCount: number;
+    prompt: string;
     versionCount: number;
     relatedMediaCount: number;
     readiness: "empty" | "pending" | "ready";
@@ -49,8 +51,10 @@ export function buildAssetCenterSubjects(input: {
             const variants = input.variants.filter((variant) => variant.subjectId === subject.id).sort((left, right) => left.createdAt.localeCompare(right.createdAt));
             const primaryVariant = variants[0];
             if (!primaryVariant) return null;
+            const subjectAssets = input.assets.filter((asset) => asset.assetBinding?.subjectId === subject.id);
             const formalImages = input.assets.filter((asset): asset is ImageAsset => asset.kind === "image" && asset.assetBinding?.subjectId === subject.id);
-            const coverAsset = formalImages.find((asset) => asset.id === primaryVariant.currentAssetId);
+            const coverAsset = formalImages.find((asset) => asset.id === primaryVariant.currentAssetId) || [...formalImages].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+            const workflowAsset = subjectAssets.find((asset) => workflowAssetInfo(asset) && (asset.assetBinding?.variantId === primaryVariant.id || (!asset.assetBinding?.variantId && asset.assetBinding?.variantName === primaryVariant.name)));
             const pendingCount = input.workbenchImages.filter((image) => image.subjectId === subject.id && image.role === "candidate" && !image.selectedAssetId).length;
             const relatedMediaCount = input.assets.filter((asset) => asset.kind !== "image" && asset.assetBinding?.subjectId === subject.id).length;
             return {
@@ -60,6 +64,7 @@ export function buildAssetCenterSubjects(input: {
                 coverAsset,
                 variantCount: variants.length,
                 pendingCount,
+                prompt: workflowAssetPrompt(workflowAsset) || primaryVariant.prompt,
                 versionCount: formalImages.length,
                 relatedMediaCount,
                 readiness: coverAsset ? "ready" : pendingCount ? "pending" : "empty",

@@ -2,9 +2,12 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"mime/multipart"
+	"net/http"
+	"net/http/httptest"
 	"net/textproto"
 	"strings"
 	"testing"
@@ -18,6 +21,56 @@ func TestIsGeekNowVideoChannelUsesStablePresetID(t *testing.T) {
 	}
 	if IsGeekNowVideoChannel(model.ModelChannel{ID: "custom-video", Protocol: "openai"}) {
 		t.Fatal("custom OpenAI video channel must remain generic")
+	}
+}
+
+func TestGeekNowPresignURLUsesOfficialUploadHost(t *testing.T) {
+	if got := geekNowPresignURL("https://geeknow.ai/v1"); got != "https://www.geeknow.top/api/upload/presign" {
+		t.Fatalf("presign URL = %q", got)
+	}
+}
+
+func TestUploadGeekNowMaterialSendsContentLength(t *testing.T) {
+	var uploadLength int64
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/upload/presign":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"success": true,
+				"data": map[string]any{
+					"upload_url":  server.URL + "/upload",
+					"public_url":  "https://cdn.example/reference.png",
+					"content_type": "image/png",
+				},
+			})
+		case "/upload":
+			uploadLength = r.ContentLength
+			if uploadLength <= 0 {
+				w.WriteHeader(http.StatusLengthRequired)
+			}
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	body, contentType := geekNowMultipartBody(t, "manxue-2.5", []string{"reference_image"})
+	form, err := readArkMultipartForm(body, contentType)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer form.RemoveAll()
+	header := form.File["input_reference[]"][0]
+	publicURL, err := uploadGeekNowMaterial(context.Background(), model.ModelChannel{BaseURL: server.URL + "/v1", APIKey: "test-key"}, header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if publicURL != "https://cdn.example/reference.png" {
+		t.Fatalf("public URL = %q", publicURL)
+	}
+	if uploadLength != header.Size {
+		t.Fatalf("upload Content-Length = %d, want %d", uploadLength, header.Size)
 	}
 }
 
@@ -67,6 +120,36 @@ func TestBuildGeekNowVideoCreateRequestMapsModelFamilies(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestBuildGeekNowVideoCreateRequestClampsManxueDurationToTwentyNineSeconds(t *testing.T) {
+	normalized, _, err := BuildGeekNowVideoCreateRequest([]byte(`{"model":"manxue-2.5","prompt":"hi","duration":30,"ratio":"16:9","resolution":"720p"}`), "application/json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(normalized, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["duration"] != float64(29) {
+		t.Fatalf("duration = %#v, want 29", payload["duration"])
+	}
+}
+
+func TestBuildGeekNowVideoCreateRequestClampsManxuePromptToFiveThousandCharacters(t *testing.T) {
+	prompt := strings.Repeat("夏", 5001)
+	body, _ := json.Marshal(map[string]any{"model": "manxue-2.5", "prompt": prompt, "duration": 6, "ratio": "16:9", "resolution": "720p"})
+	normalized, _, err := BuildGeekNowVideoCreateRequest(body, "application/json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(normalized, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if got := len([]rune(payload["prompt"].(string))); got != 5000 {
+		t.Fatalf("prompt length = %d, want 5000", got)
 	}
 }
 
@@ -194,6 +277,20 @@ func TestNormalizeGeekNowVideoTaskResponse(t *testing.T) {
 	content, _ := payload["content"].(map[string]any)
 	if content["video_url"] != "https://cdn.example/video.mp4" {
 		t.Fatalf("content = %#v", content)
+	}
+}
+
+func TestNormalizeGeekNowVideoTaskResponsePrefersTaskIDOverVideoID(t *testing.T) {
+	normalized, err := NormalizeGeekNowVideoTaskResponse([]byte(`{"id":"vid-1","task_id":"task-1","status":"queued"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(normalized, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["id"] != "task-1" {
+		t.Fatalf("id = %#v, want task-1", payload["id"])
 	}
 }
 

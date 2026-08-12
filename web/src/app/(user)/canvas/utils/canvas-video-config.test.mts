@@ -283,6 +283,31 @@ test("keeps Seedance 2.5 settings inside its range", () => {
     assert.equal(patch.vquality, "480");
 });
 
+test("maps a previous 15 second model maximum to the 30 second maximum when selecting Xinglian SD2.5", () => {
+    const config = {
+        ...routedVideoConfig("sd2-720p-fast", "xinglian-cloud"),
+        videoSeconds: "15",
+        vquality: "720",
+        modelProtocols: [
+            { model: "sd2-720p-fast", protocol: "xinglian-cloud" as const },
+            { model: "sd2.5-720p-ax2", protocol: "xinglian-cloud" as const },
+        ],
+        modelCapabilities: [
+            { model: "sd2-720p-fast", capabilities: ["video" as const] },
+            { model: "sd2.5-720p-ax2", capabilities: ["video" as const] },
+        ],
+        videoModels: ["sd2-720p-fast", "sd2.5-720p-ax2"],
+    } as const;
+
+    assert.deepEqual(buildCanvasVideoModelPatch(config, "sd2.5-720p-ax2"), {
+        model: "sd2.5-720p-ax2",
+        provider: "xinglian-cloud",
+        seconds: "30",
+        duration: "30",
+        vquality: "720",
+    });
+});
+
 test("video config ignores completed task duration when editable seconds exist", () => {
     assert.equal(buildCanvasVideoConfig(cloudConfig, { provider: "volcengine-ark", taskId: "task-1", seconds: "6", duration: "10" }).videoSeconds, "6");
     assert.equal(buildCanvasVideoConfig({ ...cloudConfig, videoSeconds: "6" }, { provider: "volcengine-ark", taskId: "task-1", duration: "10" }).videoSeconds, "6");

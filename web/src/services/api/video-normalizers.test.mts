@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { isRemoteOrInlineMediaUrl, isSeedance25Model, normalizeSeedanceDuration, normalizeSeedanceRatio, normalizeSeedanceResolution } from "./video-normalizers.ts";
+import { isRemoteOrInlineMediaUrl, isSeedance25Model, normalizeOpenAIVideoSeconds, normalizeSeedanceDuration, normalizeSeedanceRatio, normalizeSeedanceResolution } from "./video-normalizers.ts";
+
+test("keeps manxue-2.5 at its 29 second maximum without widening generic OpenAI video models", () => {
+    assert.equal(normalizeOpenAIVideoSeconds("29", "manxue-2.5"), "29");
+    assert.equal(normalizeOpenAIVideoSeconds("30", "manxue-2.5"), "29");
+    assert.equal(normalizeOpenAIVideoSeconds("29", "other-video"), "20");
+});
 
 test("preserves remote and inline media urls for Seedance references", () => {
     assert.equal(isRemoteOrInlineMediaUrl("https://example.com/video.mp4"), true);

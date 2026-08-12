@@ -1,4 +1,4 @@
-import { useEffect, type Dispatch, type RefObject, type SetStateAction } from "react";
+import { useEffect, useRef, type Dispatch, type RefObject, type SetStateAction } from "react";
 
 import { AI_VIDEO_POLL_INTERVAL_MS } from "@/services/api/ai-provider";
 import { fetchVideoTaskContent, refreshVideoTask } from "@/services/api/video";
@@ -28,6 +28,8 @@ type UseCanvasVideoTaskRecoveryOptions = {
 };
 
 export function useCanvasVideoTaskRecovery({ projectLoaded, nodesRef, recoveringVideoTaskIdsRef, canvasAiConfig, cacheUploadedCanvasMedia, setNodes, toVideoMetadata, archiveRecoveredVideoNode }: UseCanvasVideoTaskRecoveryOptions) {
+    const recoveryOptionsRef = useRef({ canvasAiConfig, cacheUploadedCanvasMedia, toVideoMetadata, archiveRecoveredVideoNode });
+    recoveryOptionsRef.current = { canvasAiConfig, cacheUploadedCanvasMedia, toVideoMetadata, archiveRecoveredVideoNode };
     useEffect(() => {
         if (!projectLoaded) return;
         const recoveryTaskIds = new Set(
@@ -45,11 +47,8 @@ export function useCanvasVideoTaskRecovery({ projectLoaded, nodesRef, recovering
                 recoveringVideoTaskIdsRef.current.add(taskId);
                 void recoverVideoTaskNode({
                     node,
-                    canvasAiConfig,
-                    cacheUploadedCanvasMedia,
                     setNodes,
-                    toVideoMetadata,
-                    archiveRecoveredVideoNode,
+                    ...recoveryOptionsRef.current,
                 }).finally(() => {
                     recoveringVideoTaskIdsRef.current.delete(taskId);
                 });
@@ -63,7 +62,7 @@ export function useCanvasVideoTaskRecovery({ projectLoaded, nodesRef, recovering
             window.clearInterval(timer);
             window.removeEventListener("online", recoverNodes);
         };
-    }, [archiveRecoveredVideoNode, cacheUploadedCanvasMedia, canvasAiConfig, nodesRef, projectLoaded, recoveringVideoTaskIdsRef, setNodes, toVideoMetadata]);
+    }, [nodesRef, projectLoaded, recoveringVideoTaskIdsRef, setNodes]);
 }
 
 async function recoverVideoTaskNode({

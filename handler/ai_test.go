@@ -623,6 +623,77 @@ func TestGeekNowVideoProxyCreatesNormalizedTask(t *testing.T) {
 	}
 }
 
+func TestGeekNowManxueProxyUploadsMultipartImagesBeforeCreatingTask(t *testing.T) {
+	setupAIHandlerTestDB(t)
+	uploaded := ""
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer geeknow-key" && r.URL.Path != "/signed/reference.png" {
+			t.Fatalf("authorization = %q for %s", r.Header.Get("Authorization"), r.URL.Path)
+		}
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/upload/presign":
+			payload := readJSONMap(t, mustReadAll(t, r.Body))
+			if payload["file_name"] != "reference.png" || payload["content_type"] != "image/png" {
+				t.Fatalf("presign payload = %#v", payload)
+			}
+			_, _ = w.Write([]byte(`{"success":true,"data":{"method":"PUT","upload_url":"` + upstreamURL(r) + `/signed/reference.png","public_url":"https://cdn.example.com/reference.png","content_type":"image/png"}}`))
+		case r.Method == http.MethodPut && r.URL.Path == "/signed/reference.png":
+			uploaded = string(mustReadAll(t, r.Body))
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/videos":
+			payload := readJSONMap(t, mustReadAll(t, r.Body))
+			references, _ := payload["referenceImages"].([]any)
+			if payload["model"] != "manxue-2.5" || payload["duration"] != float64(29) || len(references) != 1 || references[0] != "https://cdn.example.com/reference.png" {
+				t.Fatalf("create payload = %#v", payload)
+			}
+			if uploaded != "image-bytes" {
+				t.Fatalf("uploaded = %q", uploaded)
+			}
+			_, _ = w.Write([]byte(`{"id":"manxue-task","status":"queued"}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer upstream.Close()
+	channel := model.ModelChannel{ID: "geeknow-video", Protocol: "openai", Name: "GeekNow 视频", BaseURL: upstream.URL + "/v1", APIKey: "geeknow-key", Models: []string{"manxue-2.5"}, Capabilities: []string{"video", "video_query"}, Weight: 1, Enabled: true}
+	saveVideoLifecycleHandlerSettings(t, "manxue-2.5", 0, channel)
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for key, value := range map[string]string{"model": "manxue-2.5", "prompt": "参考人物生成视频", "duration": "29", "ratio": "9:16", "resolution": "720p"} {
+		if err := writer.WriteField(key, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	header := make(textproto.MIMEHeader)
+	header.Set("Content-Disposition", `form-data; name="input_reference[]"; filename="reference.png"`)
+	header.Set("Content-Type", "image/png")
+	part, err := writer.CreatePart(header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = part.Write([]byte("image-bytes"))
+	_ = writer.WriteField("input_reference_role[]", "reference_image")
+	_ = writer.Close()
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/videos", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	request = request.WithContext(service.WithUser(request.Context(), model.AuthUser{ID: "user-geeknow", Username: "geeknow", Role: model.UserRoleUser}))
+	response := httptest.NewRecorder()
+	proxyAIRequest(response, request, "/videos")
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
+	}
+	if payload := readJSONMap(t, response.Body.Bytes()); payload["id"] != "manxue-task" || payload["status"] != "queued" {
+		t.Fatalf("response = %#v", payload)
+	}
+}
+
+func upstreamURL(r *http.Request) string {
+	return "http://" + r.Host
+}
+
 func TestGeekNowVideoProxyRefundsTerminalCreateResultOnce(t *testing.T) {
 	for _, status := range []model.AITaskStatus{model.AITaskStatusFailed, model.AITaskStatusCancelled} {
 		t.Run(string(status), func(t *testing.T) {
@@ -1044,6 +1115,85 @@ func TestVideoProxyUsesOwnedLocalTaskAcrossProtocolChannels(t *testing.T) {
 				t.Fatalf("decoy status = %q, want queued", decoySaved.Status)
 			}
 		})
+	}
+}
+
+func TestGeekNowVideoProxyKeepsOwnedTaskQueuedDuringTransientNotFound(t *testing.T) {
+	setupAIHandlerTestDB(t)
+	upstreamRequests := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamRequests++
+		if r.URL.Path != "/v1/videos/task-late" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"error":{"message":"Task not found","type":"invalid_request_error"}}`))
+	}))
+	defer upstream.Close()
+
+	channel := model.ModelChannel{ID: "geeknow-video", Protocol: "openai", Name: "GeekNow 视频", BaseURL: upstream.URL + "/v1", APIKey: "geeknow-key", Models: []string{"manxue-2.5"}, Capabilities: []string{"video", "video_query"}, Enabled: true}
+	saveVideoLifecycleHandlerSettings(t, "manxue-2.5", 2, channel)
+	task := seedProtocolVideoAITask(t, "geeknow-owner", channel, "manxue-2.5", "task-late", 2)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/videos/task-late?model=manxue-2.5", nil)
+	request.Header.Set("X-AI-Task-ID", task.ID)
+	request = request.WithContext(service.WithUser(request.Context(), model.AuthUser{ID: "geeknow-owner", Username: "owner", Role: model.UserRoleUser}))
+	response := httptest.NewRecorder()
+	proxyAIGetRequest(response, request, "/videos/task-late")
+
+	payload := readJSONMap(t, response.Body.Bytes())
+	if payload["id"] != "task-late" || payload["status"] != "queued" || payload["raw_status"] != "pending_visibility" {
+		t.Fatalf("response = %#v", payload)
+	}
+	saved, _, _ := repository.GetAITask(task.ID)
+	if saved.Status != model.AITaskStatusQueued || saved.FinishedAt != "" || saved.CreditsRefunded != 0 {
+		t.Fatalf("task changed during transient miss: %#v", saved)
+	}
+
+	unownedRequest := httptest.NewRequest(http.MethodGet, "/api/v1/videos/task-late?model=manxue-2.5", nil)
+	unownedResponse := httptest.NewRecorder()
+	proxyAIGetRequest(unownedResponse, unownedRequest, "/videos/task-late")
+	unownedPayload := readJSONMap(t, unownedResponse.Body.Bytes())
+	if unownedPayload["code"] != float64(1) || upstreamRequests != 2 {
+		t.Fatalf("unowned response = %#v requests=%d", unownedPayload, upstreamRequests)
+	}
+}
+
+func TestGeekNowVideoProxyKeepsRequestedTaskIDWhenQueryReturnsVideoID(t *testing.T) {
+	setupAIHandlerTestDB(t)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/videos/task-real" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"vid-1","task_id":"vid-1","status":"queued"}`))
+	}))
+	defer upstream.Close()
+
+	channel := model.ModelChannel{ID: "geeknow-video", Protocol: "openai", Name: "GeekNow 视频", BaseURL: upstream.URL + "/v1", APIKey: "geeknow-key", Models: []string{"manxue-2.5"}, Capabilities: []string{"video", "video_query"}, Enabled: true}
+	saveVideoLifecycleHandlerSettings(t, "manxue-2.5", 0, channel)
+	task := seedProtocolVideoAITask(t, "geeknow-owner", channel, "manxue-2.5", "task-real", 0)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/videos/task-real?model=manxue-2.5", nil)
+	request.Header.Set("X-AI-Task-ID", task.ID)
+	request = request.WithContext(service.WithUser(request.Context(), model.AuthUser{ID: "geeknow-owner", Username: "owner", Role: model.UserRoleUser}))
+	response := httptest.NewRecorder()
+	proxyAIGetRequest(response, request, "/videos/task-real")
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
+	}
+	payload := readJSONMap(t, response.Body.Bytes())
+	if payload["id"] != "task-real" {
+		t.Fatalf("response id = %#v, want task-real", payload["id"])
+	}
+	saved, _, err := repository.GetAITask(task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.UpstreamTaskID != "task-real" {
+		t.Fatalf("upstream task id = %q, want task-real", saved.UpstreamTaskID)
 	}
 }
 

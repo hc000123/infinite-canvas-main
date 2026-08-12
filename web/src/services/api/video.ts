@@ -5,14 +5,17 @@ import { normalizeDreaminaVideoSettings } from "@/lib/dreamina-video-capabilitie
 import { imageToDataUrl } from "@/services/image-storage";
 import { resolveMediaUrl } from "@/services/file-storage";
 import { AI_REQUEST_TIMEOUT_MS, AI_VIDEO_CONTENT_TIMEOUT_MS, AI_VIDEO_MAX_POLL_ATTEMPTS, AI_VIDEO_POLL_INTERVAL_MS, AI_VIDEO_TASK_TIMEOUT_MS, aiApiUrl, aiHeaders, delay, normalizeAiError, refreshRemoteUser } from "@/services/api/ai-provider";
-import { isRemoteOrInlineMediaUrl, normalizeSeedanceRatio, normalizeSeedanceResolution, normalizeSeedanceSeed, normalizeVideoResolution, normalizeVideoSeconds, normalizeVideoSize } from "@/services/api/video-normalizers";
+import { isRemoteOrInlineMediaUrl, normalizeOpenAIVideoSeconds, normalizeSeedanceRatio, normalizeSeedanceResolution, normalizeSeedanceSeed, normalizeVideoResolution, normalizeVideoSize } from "@/services/api/video-normalizers";
 import { buildSeedanceVideoTaskPayload, defaultSeedanceImageRole, normalizeVideoReferenceMode, seedanceAssetURIFromImageReference, seedanceAssetURIFromVideoReference, type SeedanceImageReferenceInput, type SeedanceOrderedReferenceInput } from "@/services/api/video-reference";
 import { buildDreaminaVideoPayload } from "@/services/api/dreamina-video-payload";
 import { buildXinglianVideoPayload } from "@/services/api/xinglian-video-payload";
 import { buildMiniMaxVideoPayload, type MiniMaxVideoReference } from "@/services/api/minimax-video-payload";
-import { aiTaskRequestHeaders, aiTaskTraceHeaders, preserveVideoTaskLedger, readAiTaskLedgerFromHeaders, type AiTaskLedger, type AiTaskTrace } from "@/services/api/ai-task-trace";
+import { aiTaskRequestHeaders, aiTaskTraceHeaders, fetchUserAITaskDetail, preserveVideoTaskLedger, readAiTaskLedgerFromHeaders, type AiTaskLedger, type AiTaskTrace } from "@/services/api/ai-task-trace";
 import { appendOmniV2VVideoInput, isOmniV2VModel } from "@/services/api/omni-v2v-payload";
+import { apiPost } from "@/services/api/request";
+import { uploadXinglianBlob, type XinglianUploadComplete, type XinglianUploadSign, type XinglianUploadType } from "@/services/api/xinglian-upload";
 import { type AiConfig } from "@/stores/use-config-store";
+import { useUserStore } from "@/stores/use-user-store";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio } from "@/types/audio";
 import type { ReferenceVideo } from "@/types/video";
@@ -128,7 +131,10 @@ export async function preflightVideoGeneration(config: AiConfig) {
 }
 
 export async function refreshVideoTask(config: AiConfig, taskId: string, aiTaskId?: string) {
-    return queryVideoTask(config, taskId, resolveVideoRequestModel(config), aiTaskId);
+    if (!aiTaskId?.trim()) return queryVideoTask(config, taskId, resolveVideoRequestModel(config));
+    const detail = await fetchUserAITaskDetail(aiTaskId).catch(() => null);
+    const resolvedTaskId = detail?.task.upstreamTaskId?.trim() || taskId;
+    return queryVideoTask(config, resolvedTaskId, resolveVideoRequestModel(config), aiTaskId);
 }
 
 export async function fetchVideoTaskContent(config: AiConfig, task: NormalizedVideoTask) {
@@ -307,13 +313,14 @@ export async function buildVideoPayload(config: AiConfig, prompt: string, refere
     if (config.videoProtocol === "xinglian-cloud") {
         return buildXinglianVideoRequest(config, prompt, references, model);
     }
+    const seconds = normalizeOpenAIVideoSeconds(config.videoSeconds, model);
     if (!references.images.length && !references.videos.length && !references.audios.length && !isOmniV2VModel(model)) {
         const seed = normalizeSeedanceSeed(config.videoSeed);
         return {
             model,
             prompt,
-            seconds: normalizeVideoSeconds(config.videoSeconds),
-            duration: normalizeVideoSeconds(config.videoSeconds),
+            seconds,
+            duration: seconds,
             ratio: normalizeSeedanceRatio(config.size),
             size: normalizeVideoSize(config.size) || undefined,
             resolution: normalizeSeedanceResolution(config.vquality),
@@ -326,11 +333,11 @@ export async function buildVideoPayload(config: AiConfig, prompt: string, refere
     const body = new FormData();
     body.append("model", model);
     body.append("prompt", prompt);
-    body.append("seconds", normalizeVideoSeconds(config.videoSeconds));
+    body.append("seconds", seconds);
     if (normalizeVideoSize(config.size)) body.append("size", normalizeVideoSize(config.size)!);
     body.append("resolution_name", normalizeVideoResolution(config.vquality));
     body.append("preset", "normal");
-    body.append("duration", normalizeVideoSeconds(config.videoSeconds));
+    body.append("duration", seconds);
     body.append("ratio", normalizeSeedanceRatio(config.size));
     body.append("resolution", normalizeSeedanceResolution(config.vquality));
     body.append("generate_audio", String(config.videoGenerateAudio === "true"));
@@ -469,7 +476,11 @@ async function dreaminaMediaFile(reference: ReferenceVideo | ReferenceAudio, kin
 }
 
 async function buildXinglianVideoRequest(config: AiConfig, prompt: string, references: NormalizedVideoReferences, model: string) {
-    const [images, videos, audios] = await Promise.all([xinglianReferenceURLs(references.images), xinglianReferenceURLs(references.videos), xinglianReferenceURLs(references.audios)]);
+    const [images, videos, audios] = await Promise.all([
+        xinglianReferenceURLs(references.images, "image", model),
+        xinglianReferenceURLs(references.videos, "video", model),
+        xinglianReferenceURLs(references.audios, "audio", model),
+    ]);
     const referenceMode = normalizeVideoReferenceMode(config.videoReferenceMode);
     const settings = normalizeDreaminaVideoSettings({
         protocol: "xinglian-cloud",
@@ -490,14 +501,41 @@ async function buildXinglianVideoRequest(config: AiConfig, prompt: string, refer
     });
 }
 
-async function xinglianReferenceURLs(references: Array<{ url?: string; storageKey?: string }>) {
+async function xinglianReferenceURLs(references: Array<ReferenceImage | ReferenceVideo | ReferenceAudio>, type: XinglianUploadType, model: string) {
     return Promise.all(
         references.map(async (reference) => {
-            const url = reference.url || (reference.storageKey ? await resolveMediaUrl(reference.storageKey, "") : "");
-            if (!url.startsWith("https://")) throw new Error("星链云参考素材必须先上传为 HTTPS 地址");
-            return url;
+            const directURL = reference.url?.trim() || "";
+            if (directURL.startsWith("https://")) return directURL;
+            const file = await xinglianReferenceFile(reference, type);
+            const token = useUserStore.getState().token;
+            return uploadXinglianBlob(
+                { model, filename: file.name, type, blob: file },
+                {
+                    sign: (input) => apiPost<XinglianUploadSign>("/api/v1/xinglian/uploads/sign", input, token),
+                    put: (uploadURL, init) => fetch(uploadURL, init),
+                    complete: (input) => apiPost<XinglianUploadComplete>("/api/v1/xinglian/uploads/complete", input, token),
+                },
+            );
         }),
     );
+}
+
+async function xinglianReferenceFile(reference: ReferenceImage | ReferenceVideo | ReferenceAudio, type: XinglianUploadType) {
+    if (type === "image") {
+        const image = reference as ReferenceImage;
+        const dataUrl = await imageToDataUrl(image);
+        if (!dataUrl?.startsWith("data:")) throw new Error(`星链云无法读取图片“${image.name || "未命名图片"}”`);
+        return dataUrlToFile({ ...image, dataUrl });
+    }
+    const media = reference as ReferenceVideo | ReferenceAudio;
+    const url = media.storageKey ? await resolveMediaUrl(media.storageKey, media.url || "") : media.url || "";
+    if (!url) throw new Error(`星链云无法读取${type === "video" ? "视频" : "音频"}“${media.name || "未命名素材"}”`);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`星链云读取参考素材失败：HTTP ${response.status}`);
+    const blob = await response.blob();
+    const fallbackType = type === "video" ? "video/mp4" : "audio/mpeg";
+    const mimeType = blob.type || (media.type?.includes("/") ? media.type : "") || fallbackType;
+    return new File([blob], media.name || (type === "video" ? "reference.mp4" : "reference.mp3"), { type: mimeType });
 }
 
 export type NormalizedVideoReferences = {

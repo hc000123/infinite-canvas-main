@@ -37,6 +37,8 @@ func New() *gin.Engine {
 	v1.POST("/responses", middleware.AuditAIToolUse, gin.WrapF(handler.AIResponses))
 	v1.POST("/videos", middleware.AuditAIToolUse, gin.WrapF(handler.AIVideos))
 	v1.GET("/videos/preflight", gin.WrapF(handler.AIVideoPreflight))
+	v1.POST("/xinglian/uploads/sign", gin.WrapF(handler.SignXinglianUpload))
+	v1.POST("/xinglian/uploads/complete", gin.WrapF(handler.CompleteXinglianUpload))
 	v1.POST("/jimeng-login/start", gin.WrapF(handler.UserStartJimengLogin))
 	v1.POST("/jimeng-login/check", gin.WrapF(handler.UserCheckJimengLogin))
 	v1.GET("/agent-configs", gin.WrapF(handler.AgentConfigs))
@@ -220,6 +222,7 @@ func New() *gin.Engine {
 	v1.POST("/project-cache/projects/:id/status", func(c *gin.Context) { handler.UpdateProjectCacheStatus(c.Writer, c.Request, c.Param("id")) })
 	v1.POST("/project-cache/projects/:id/package/preflight", func(c *gin.Context) { handler.PreflightProjectCachePackage(c.Writer, c.Request, c.Param("id")) })
 	v1.POST("/project-cache/projects/:id/package", func(c *gin.Context) { handler.DownloadProjectCachePackage(c.Writer, c.Request, c.Param("id")) })
+	v1.POST("/project-cache/projects/:id/package/selection", func(c *gin.Context) { handler.DownloadProjectCacheSelection(c.Writer, c.Request, c.Param("id")) })
 	v1.GET("/project-cache/files/:id", func(c *gin.Context) { handler.ProjectCacheFile(c.Writer, c.Request, c.Param("id")) })
 	v1.POST("/project-cache/files/:id/move", func(c *gin.Context) { handler.MoveProjectCacheFile(c.Writer, c.Request, c.Param("id")) })
 	v1.DELETE("/project-cache/files/:id", func(c *gin.Context) { handler.DeleteProjectCacheFile(c.Writer, c.Request, c.Param("id")) })
@@ -243,7 +246,6 @@ func New() *gin.Engine {
 	v1.POST("/proxy/video-download", gin.WrapF(handler.AIProxyVideoDownload))
 	v1.POST("/activity-logs", gin.WrapF(handler.UserActivityReport))
 	api.GET("/prompts", middleware.OptionalAuth, gin.WrapF(handler.Prompts))
-	api.GET("/assets", middleware.OptionalAuth, gin.WrapF(handler.Assets))
 	api.POST("/admin/login", gin.WrapF(handler.AdminLogin))
 
 	admin := api.Group("/admin", middleware.AdminAuth)
@@ -274,6 +276,7 @@ func New() *gin.Engine {
 	})
 	admin.GET("/ai-usage-summary", gin.WrapF(handler.AdminAIUsageSummary))
 	admin.GET("/ai-usage-records", gin.WrapF(handler.AdminAIUsageRecords))
+	admin.GET("/ai-usage-export", gin.WrapF(handler.AdminAIUsageExport))
 	admin.GET("/ai-tasks", gin.WrapF(handler.AdminAITasks))
 	admin.GET("/ai-tasks/:id", func(c *gin.Context) {
 		handler.AdminAITask(c.Writer, c.Request, c.Param("id"))
@@ -295,42 +298,6 @@ func New() *gin.Engine {
 	admin.POST("/prompts/batch-delete", gin.WrapF(handler.AdminDeletePrompts))
 	admin.DELETE("/prompts/:id", func(c *gin.Context) {
 		handler.AdminDeletePrompt(c.Writer, c.Request, c.Param("id"))
-	})
-	admin.GET("/assets", gin.WrapF(handler.AdminAssets))
-	admin.GET("/asset-projects", gin.WrapF(handler.AdminAssetProjects))
-	admin.POST("/asset-projects", func(c *gin.Context) {
-		handler.AdminSaveAssetProject(c.Writer, c.Request, "")
-	})
-	admin.PATCH("/asset-projects/:id", func(c *gin.Context) {
-		handler.AdminSaveAssetProject(c.Writer, c.Request, c.Param("id"))
-	})
-	admin.DELETE("/asset-projects/:id", func(c *gin.Context) {
-		handler.AdminDeleteAssetProject(c.Writer, c.Request, c.Param("id"))
-	})
-	admin.GET("/asset-projects/:id/folders", func(c *gin.Context) {
-		handler.AdminAssetFolders(c.Writer, c.Request, c.Param("id"))
-	})
-	admin.POST("/asset-projects/:id/folders", func(c *gin.Context) {
-		handler.AdminSaveAssetFolder(c.Writer, c.Request, c.Param("id"), "")
-	})
-	admin.PATCH("/asset-projects/:id/folders/:folderId", func(c *gin.Context) {
-		handler.AdminSaveAssetFolder(c.Writer, c.Request, c.Param("id"), c.Param("folderId"))
-	})
-	admin.DELETE("/asset-projects/:id/folders/:folderId", func(c *gin.Context) {
-		handler.AdminDeleteAssetFolder(c.Writer, c.Request, c.Param("id"), c.Param("folderId"))
-	})
-	admin.POST("/assets", gin.WrapF(handler.AdminSaveAsset))
-	admin.POST("/assets/upload", gin.WrapF(handler.AdminUploadAssetMedia))
-	admin.POST("/assets/batch-update", gin.WrapF(handler.AdminBatchUpdateAssets))
-	admin.POST("/assets/batch-delete", gin.WrapF(handler.AdminBatchDeleteAssets))
-	admin.POST("/assets/:id/volcengine-review", func(c *gin.Context) {
-		handler.AdminSubmitAssetVolcengineReview(c.Writer, c.Request, c.Param("id"))
-	})
-	admin.POST("/assets/:id/volcengine-review/refresh", func(c *gin.Context) {
-		handler.AdminRefreshAssetVolcengineReview(c.Writer, c.Request, c.Param("id"))
-	})
-	admin.DELETE("/assets/:id", func(c *gin.Context) {
-		handler.AdminDeleteAsset(c.Writer, c.Request, c.Param("id"))
 	})
 
 	superAdmin := api.Group("/admin", middleware.SuperAdminAuth)

@@ -27,6 +27,7 @@ export type WorkflowVideoReference = {
 };
 
 export type WorkflowShotDraft = {
+    narrative?: string;
     shotSize: string;
     camera: string;
     movement: string;

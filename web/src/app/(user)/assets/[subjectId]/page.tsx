@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { App, Button, Collapse, Empty, Input, Modal, Select, Tag } from "antd";
 import { ArrowLeft, ImageIcon, Sparkles } from "lucide-react";
@@ -16,6 +16,7 @@ import { candidateAssetInput, copyWorkbenchImageInput, referenceFromWorkbenchIma
 import { useCreativeProjectStore } from "../../projects/use-creative-project-store";
 import { assetCategoryLabel } from "../asset-subjects";
 import { buildAssetImageRevisionHref } from "../asset-image-revision";
+import { workflowAssetEditPatch, workflowAssetInfo, workflowAssetPrompt, workflowAssetVariantId } from "../workflow-asset-image";
 import { AssetCandidateGrid } from "./components/asset-candidate-grid";
 import { AssetRelatedMediaPanel } from "./components/asset-related-media-panel";
 import { AssetReferencePanel } from "./components/asset-reference-panel";
@@ -37,6 +38,7 @@ export default function AssetSubjectWorkbenchPage() {
 function AssetSubjectWorkbench({ subject }: { subject: AssetSubject }) {
     const { message, modal } = App.useApp();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const candidateInputRef = useRef<HTMLInputElement>(null);
     const referenceInputRef = useRef<HTMLInputElement>(null);
     const assets = useAssetStore((state) => state.assets);
@@ -50,6 +52,7 @@ function AssetSubjectWorkbench({ subject }: { subject: AssetSubject }) {
     const addWorkbenchImage = useAssetStore((state) => state.addWorkbenchImage);
     const promoteWorkbenchImage = useAssetStore((state) => state.promoteWorkbenchImage);
     const setVariantCurrentAsset = useAssetStore((state) => state.setVariantCurrentAsset);
+    const updateAsset = useAssetStore((state) => state.updateAsset);
     const projects = useCreativeProjectStore((state) => state.projects);
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const subjectVariants = useMemo(() => variants.filter((variant) => variant.subjectId === subject.id), [subject.id, variants]);
@@ -57,7 +60,10 @@ function AssetSubjectWorkbench({ subject }: { subject: AssetSubject }) {
     const [referencePickerOpen, setReferencePickerOpen] = useState(false);
     const [copyCandidate, setCopyCandidate] = useState<AssetWorkbenchImage | null>(null);
     const [copyTargetVariantId, setCopyTargetVariantId] = useState("");
-    const activeVariant = subjectVariants.find((variant) => variant.id === activeVariantId) || subjectVariants[0];
+    const requestedVariantId = searchParams.get("variantId") || "";
+    const requestedReturnTo = searchParams.get("returnTo") || "";
+    const backHref = requestedReturnTo.startsWith("/") && !requestedReturnTo.startsWith("//") ? requestedReturnTo : `/assets?projectId=${encodeURIComponent(subject.projectId)}`;
+    const activeVariant = subjectVariants.find((variant) => variant.id === activeVariantId) || subjectVariants.find((variant) => variant.id === requestedVariantId) || subjectVariants[0];
 
     useEffect(() => {
         if (!activeVariant || activeVariantId === activeVariant.id) return;
@@ -68,8 +74,10 @@ function AssetSubjectWorkbench({ subject }: { subject: AssetSubject }) {
     const generationVariant: AssetVariant = activeVariant || { id: "", subjectId: subject.id, name: "", prompt: "", referenceImageIds: [], createdAt: "", updatedAt: "" };
     const references = workbenchImages.filter((image) => image.variantId === generationVariant.id && generationVariant.referenceImageIds.includes(image.id));
     const candidates = workbenchImages.filter((image) => image.variantId === generationVariant.id && image.role === "candidate" && !image.selectedAssetId);
-    const formalAssets = assets.filter((asset) => asset.kind === "image" && asset.assetBinding?.subjectId === subject.id && (asset.assetBinding.variantId === generationVariant.id || (!asset.assetBinding.variantId && asset.assetBinding.variantName === generationVariant.name)));
-    const relatedMedia = assets.filter((asset) => asset.kind !== "image" && asset.assetBinding?.subjectId === subject.id);
+    const variantAssets = assets.filter((asset) => asset.assetBinding?.subjectId === subject.id && workflowAssetVariantId(asset, subjectVariants) === generationVariant.id);
+    const workflowAsset = variantAssets.find((asset) => workflowAssetInfo(asset));
+    const formalAssets = variantAssets.filter((asset) => asset.kind === "image");
+    const relatedMedia = assets.filter((asset) => asset.kind !== "image" && asset.assetBinding?.subjectId === subject.id && !workflowAssetInfo(asset));
     const currentAsset = formalAssets.find((asset) => asset.id === generationVariant.currentAssetId);
     const generation = useAssetWorkbenchGeneration({ addWorkbenchImage, projectTitle: project ? project.title || "未命名项目" : undefined, references: references.map(workbenchImageReference), subject, variant: generationVariant });
     const savedVariantConfig = activeVariant?.config;
@@ -87,6 +95,11 @@ function AssetSubjectWorkbench({ subject }: { subject: AssetSubject }) {
     const createVariant = (name: string) => {
         const id = ensureVariant({ subjectId: subject.id, name, prompt: "", referenceImageIds: [] });
         setActiveVariantId(id);
+    };
+    const workflowPrompt = workflowAssetPrompt(workflowAsset) || activeVariant.prompt;
+    const updatePrompt = (value: string) => {
+        updateVariant(activeVariant.id, { prompt: value });
+        if (workflowAsset) updateAsset(workflowAsset.id, workflowAssetEditPatch(workflowAsset, { description: workflowAssetInfo(workflowAsset)?.description || "", imagePrompt: value }));
     };
     const copyVariant = (id: string) => {
         const source = subjectVariants.find((variant) => variant.id === id);
@@ -158,18 +171,18 @@ function AssetSubjectWorkbench({ subject }: { subject: AssetSubject }) {
         <div className="studio-workspace flex h-full flex-col overflow-hidden bg-[var(--studio-shell-bg)] text-[var(--studio-text-primary)]">
             <header className="studio-toolbar m-3 mb-0 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
                 <div className="flex min-w-0 items-center gap-3">
-                    <Link href="/assets" className="flex size-8 shrink-0 items-center justify-center rounded-lg text-[var(--studio-text-muted)] transition hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]"><ArrowLeft className="size-4" /></Link>
+                    <Link href={backHref} className="flex size-8 shrink-0 items-center justify-center rounded-lg text-[var(--studio-text-muted)] transition hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]"><ArrowLeft className="size-4" /></Link>
                     <div className="min-w-0"><div className="flex items-center gap-2 text-xs text-[var(--studio-text-muted)]"><span>{project?.title || "项目已移除"}</span><span>/</span><span>{assetCategoryLabel(subject.category)}</span><Tag bordered={false} className="!m-0">{subject.code}</Tag></div><h1 className="mt-0.5 truncate text-lg font-semibold">{subject.name}</h1></div>
                 </div>
                 <div className="text-xs text-[var(--studio-text-muted)]">所有修改已保存在本机</div>
             </header>
 
-            <main className="studio-shell grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto p-3 lg:grid-cols-[320px_minmax(0,1fr)] lg:overflow-hidden">
+            <main className="studio-shell grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto p-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,7fr)] lg:overflow-hidden">
                 <aside className="studio-rail thin-scrollbar grid content-start gap-4 overflow-y-auto p-3">
                     <AssetVariantNav compact={subjectVariants.length === 1} activeId={activeVariant.id} variants={subjectVariants} onCreate={createVariant} onDelete={deleteVariant} onDuplicate={copyVariant} onRename={(id, name) => updateVariant(id, { name })} onSelect={setActiveVariantId} />
                     <section className="rounded-xl border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-3">
                         <div className="mb-2 flex items-center justify-between"><h2 className="text-sm font-semibold">画面描述</h2><Sparkles className="size-4 text-[var(--studio-accent)]" /></div>
-                        <Input.TextArea value={activeVariant.prompt} autoSize={{ minRows: 7, maxRows: 14 }} placeholder="描述主体外观、环境、构图和需要保持的一致性…" onChange={(event) => updateVariant(activeVariant.id, { prompt: event.target.value })} />
+                        <Input.TextArea value={workflowPrompt} autoSize={{ minRows: 7, maxRows: 14 }} placeholder="描述主体外观、环境、构图和需要保持的一致性…" onChange={(event) => updatePrompt(event.target.value)} />
                         <Collapse ghost size="small" className="!mt-2" items={[{ key: "settings", label: "生成设置", children: <div className="grid gap-3"><ModelPicker config={generation.effectiveConfig} modelType="image" value={generation.model} onChange={(value) => { generation.updateConfig("imageModel", value); updateVariant(activeVariant.id, { config: { ...activeVariant.config, imageModel: value } }); }} fullWidth allowCustomModel={generation.allowCustomModel} onMissingConfig={() => generation.openConfigDialog(false)} /><ImageSettingsPanel config={generation.effectiveConfig} onConfigChange={(key, value) => { generation.updateConfig(key, value); updateVariant(activeVariant.id, { config: { ...activeVariant.config, [key]: String(value) } }); }} theme={theme} showTitle={false} className="space-y-3" maxCount={10} quickCount={4} compact /></div> }]} />
                         <Button type="primary" block size="large" className="!mt-2" icon={<Sparkles className="size-4" />} loading={generation.running} disabled={!activeVariant.prompt.trim()} onClick={() => void generation.generate()}>生成待选结果</Button>
                     </section>

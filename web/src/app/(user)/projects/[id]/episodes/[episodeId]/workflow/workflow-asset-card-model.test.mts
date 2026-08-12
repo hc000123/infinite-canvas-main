@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildWorkflowAssetCards, clearWorkflowAssetFailures, defaultWorkflowAssetSelection, workflowAssetCategoryCounts, workflowAssetEditPatch, workflowAssetGenerationProgress, workflowAssetSelectionPatch, workflowAssetVersionChoices } from "./workflow-asset-card-model.ts";
+import { workflowAssetEditPatch } from "../../../../../assets/workflow-asset-image.ts";
+import { buildWorkflowAssetCards, clearWorkflowAssetFailures, defaultWorkflowAssetSelection, workflowAssetBindingPatch, workflowAssetCategoryCounts, workflowAssetGenerationProgress, workflowAssetSelectionPatch, workflowAssetUnbindingPatch, workflowAssetVersionChoices } from "./workflow-asset-card-model.ts";
 import { mapAssetDesignArtifactToAssets } from "./workflow-artifact-mapping.ts";
 
 const artifact = JSON.stringify({ items: [
@@ -82,6 +83,18 @@ test("updates prompt metadata without replacing image data or history", () => {
     assert.equal((patch.metadata?.originalWorkflow as Record<string, unknown>).imagePrompt, "新提示词");
     assert.deepEqual(patch.metadata?.versions, [{ id: "v1" }]);
     assert.equal("data" in patch, false);
+});
+
+test("binds a workflow row to an existing project asset and detaches the previous match", () => {
+    const asset = { id: "image-existing", kind: "image", title: "阿宁", metadata: { source: "library" } } as never;
+    const row = mapAssetDesignArtifactToAssets(JSON.stringify({ items: [{ logicalAssetId: "CHAR-001", kind: "character", name: "阿宁", imagePrompt: "角色设定" }] }), [], { episodeId: "e1", projectId: "p1" }).items[0];
+    const bound = workflowAssetBindingPatch(asset, row, { episodeId: "e1", projectId: "p1" });
+    const detached = workflowAssetUnbindingPatch({ ...asset, metadata: bound.metadata } as never, row.importKey);
+
+    assert.equal((bound.metadata?.originalWorkflow as Record<string, unknown>).importKey, "p1:e1:CHAR-001");
+    assert.equal((bound.metadata?.originalWorkflow as Record<string, unknown>).logicalAssetId, "CHAR-001");
+    assert.equal((detached.metadata?.originalWorkflow as Record<string, unknown>).importKey, "");
+    assert.equal((detached.metadata?.originalWorkflow as Record<string, unknown>).sourceProjectId, "");
 });
 
 test("lists image versions newest first and identifies the current choice", () => {

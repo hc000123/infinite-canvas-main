@@ -39,6 +39,11 @@ export function useWorkflowAssetAutomation(input: {
     }, [action.type, actionKey, executing, input]);
 
     const retry = useCallback(async () => {
+        if (localError) {
+            consumed.current.delete(actionKey);
+            setLocalError("");
+            return;
+        }
         const target = failedStage(input.prompts) || failedStage(input.extraction);
         if (!target?.stage || executing) return;
         setExecuting("retry");
@@ -56,7 +61,7 @@ export function useWorkflowAssetAutomation(input: {
         } finally {
             setExecuting("");
         }
-    }, [executing, input]);
+    }, [actionKey, executing, input, localError]);
 
     const failed = Boolean(localError || failedStage(input.prompts) || failedStage(input.extraction));
     const ready = ["approved", "applied"].includes(input.prompts.stage?.status || "");
@@ -70,9 +75,15 @@ export function useWorkflowAssetAutomation(input: {
 }
 
 async function executeAutomationAction(type: Exclude<ReturnType<typeof nextWorkflowAssetAction>["type"], "idle">, input: Parameters<typeof useWorkflowAssetAutomation>[0]) {
-    if (type === "start-extraction") await startWorkflowStage(input.runId, "asset-extraction", input.extraction.startKey);
+    if (type === "approve-extraction") await approveStage(input.extraction);
+    if (type === "approve-prompts") await approveStage(input.prompts);
     if (type === "start-prompts") await startWorkflowStage(input.runId, "asset-image-prompt", input.prompts.startKey);
     await input.refresh();
+}
+
+async function approveStage(state: StageActions) {
+    if (!state.stage || !state.artifact) throw new Error("资产整理结果不完整，请刷新后重试");
+    await reviewWorkflowStage(state.stage.id, { artifactHash: state.artifact.contentHash, decision: "approved" });
 }
 
 function stageSnapshot(state: StageActions) {

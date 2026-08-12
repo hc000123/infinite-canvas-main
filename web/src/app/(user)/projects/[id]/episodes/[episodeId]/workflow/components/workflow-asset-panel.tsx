@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, App, Button, Empty, Image, Segmented, Spin } from "antd";
 import { CheckCircle2, Library, RefreshCw, TriangleAlert, WandSparkles } from "lucide-react";
 
-import { workflowAssetPrompt } from "@/app/(user)/assets/workflow-asset-image";
+import { workflowAssetEditPatch, workflowAssetPrompt, workflowAssetVariantId } from "@/app/(user)/assets/workflow-asset-image";
 import { AssetPickerModal, type InsertAssetPayload } from "@/app/(user)/canvas/components/asset-picker-modal";
 import { applyWorkflowStage, type RemoteWorkflowArtifact, type RemoteWorkflowStageRun } from "@/services/api/workflow-runs";
 import { useAssetStore, type Asset, type AssetBinding, type AssetCategory } from "@/stores/use-asset-store";
@@ -16,10 +16,12 @@ import {
     clearWorkflowAssetFailures,
     defaultWorkflowAssetSelection,
     workflowAssetCategoryCounts,
-    workflowAssetEditPatch,
+    workflowAssetBindingPatch,
     workflowAssetGenerationProgress,
     workflowAssetSelectionPatch,
+    workflowAssetUnbindingPatch,
     type WorkflowAssetCategory,
+    type WorkflowAssetVariant,
 } from "../workflow-asset-card-model";
 import { startBackgroundTask } from "../workflow-background-task";
 import { mapAssetDesignArtifactToAssets } from "../workflow-artifact-mapping";
@@ -29,9 +31,7 @@ import { workflowAssetFileImportPatch, workflowAssetLibraryImportPatch, workflow
 export function WorkflowAssetPanel(props: {
     artifact: RemoteWorkflowArtifact | null;
     automation: ReturnType<typeof useWorkflowAssetAutomation>;
-    canApprove: boolean;
     episodeId: string;
-    onApprove: () => unknown | Promise<unknown>;
     onApplied: () => void | Promise<void>;
     projectId: string;
     projectTitle: string;
@@ -40,31 +40,36 @@ export function WorkflowAssetPanel(props: {
     const { message, modal } = App.useApp();
     const [filter, setFilter] = useState<WorkflowAssetCategory>("all");
     const [applying, setApplying] = useState(false);
+    const [materializeError, setMaterializeError] = useState("");
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [failed, setFailed] = useState<Record<string, string>>({});
     const [importTarget, setImportTarget] = useState<{ asset: Asset; logicalAssetId: string } | null>(null);
     const [pickerOpen, setPickerOpen] = useState(false);
     const [importing, setImporting] = useState(false);
     const fileInput = useRef<HTMLInputElement>(null);
+    const materializationForArtifact = useRef("");
     const selectionForArtifact = useRef("");
     const assets = useAssetStore((state) => state.assets);
     const addAssetOnce = useAssetStore((state) => state.addAssetOnce);
     const ensureProjectFolder = useAssetStore((state) => state.ensureProjectFolder);
     const ensureSubject = useAssetStore((state) => state.ensureSubject);
+    const ensureVariant = useAssetStore((state) => state.ensureVariant);
+    const setVariantCurrentAsset = useAssetStore((state) => state.setVariantCurrentAsset);
     const updateAsset = useAssetStore((state) => state.updateAsset);
+    const updateVariant = useAssetStore((state) => state.updateVariant);
     const mapping = useMemo(() => mapAssetDesignArtifactToAssets(props.artifact?.contentJson || "", assets, { episodeId: props.episodeId, projectId: props.projectId }), [assets, props.artifact?.contentJson, props.episodeId, props.projectId]);
     const cards = useMemo(() => buildWorkflowAssetCards(mapping.items, assets), [assets, mapping.items]);
     const counts = useMemo(() => workflowAssetCategoryCounts(cards), [cards]);
     const generationProgress = useMemo(() => workflowAssetGenerationProgress(cards), [cards]);
     const visible = cards.filter((card) => filter === "all" || card.category === filter);
     const variants = cards.flatMap((card) => card.variants);
+    const bindingAssets = useMemo(() => assets.filter((asset) => asset.assetBinding?.projectId === props.projectId), [assets, props.projectId]);
     const imageActions = useWorkflowAssetImageActions();
     const automation = props.automation;
-    const needsMaterialization = mapping.items.some((item) => !item.targetAssetId);
-
     const materialize = useCallback(async () => {
         if (!props.artifact || !props.stage || !["approved", "applied"].includes(props.stage.status) || applying) return;
         setApplying(true);
+        setMaterializeError("");
         try {
             const folderId = ensureProjectFolder(props.projectId, props.projectTitle);
             const subjectIds = new Map<string, string>();
@@ -78,6 +83,16 @@ export function WorkflowAssetPanel(props: {
                 const manuallyEdited = currentWorkflow.manuallyEdited === true;
                 const description = manuallyEdited ? readString(currentWorkflow.description) || item.description : item.description;
                 const imagePrompt = manuallyEdited ? readString(currentWorkflow.imagePrompt) || workflowAssetPrompt(current) || item.imagePrompt : item.imagePrompt;
+                const category: AssetCategory = item.kind === "character" || item.kind === "costume" ? "character" : item.kind === "scene" ? "scene" : item.kind === "prop" ? "prop" : "other";
+                const parentItem = item.kind === "costume" ? mapping.items.find((row) => row.logicalAssetId === item.parentLogicalAssetId) : undefined;
+                const subjectKey = item.kind === "costume" ? item.parentLogicalAssetId : item.logicalAssetId;
+                const existingBinding = current?.assetBinding?.projectId === props.projectId ? current.assetBinding : undefined;
+                const subjectId = existingBinding?.subjectId || subjectIds.get(subjectKey) || ensureSubject({ projectId: props.projectId, category, sourceKey: subjectKey, name: parentItem?.name || item.name, tags: ["视频工作流"] });
+                const variantName = existingBinding?.variantName || item.variantName || (category === "character" ? "基础形象" : "基础状态");
+                const variantId = workflowAssetVariantId(current, useAssetStore.getState().variants) || ensureVariant({ subjectId, name: variantName, prompt: imagePrompt, referenceImageIds: [] });
+                updateVariant(variantId, { prompt: imagePrompt });
+                const allEpisodes = existingBinding?.allEpisodes ?? false;
+                const assetBinding: AssetBinding = { projectId: props.projectId, subjectId, category: existingBinding?.category || category, variantId, variantName, allEpisodes, episodeIds: allEpisodes ? [] : Array.from(new Set([...(existingBinding?.episodeIds || []), props.episodeId])) };
                 const originalWorkflow = {
                     ...currentWorkflow,
                     assetId: item.logicalAssetId,
@@ -98,15 +113,10 @@ export function WorkflowAssetPanel(props: {
                     sourceProjectId: props.projectId,
                     sourceStage: "asset-image-prompt",
                     status: item.preserveImage ? "image_generated" : "text_ready",
-                    variantName: item.variantName,
+                    variantName,
                     variantType: item.variantType,
                     version: String(props.artifact.version),
                 };
-                const category: AssetCategory = item.kind === "character" || item.kind === "costume" ? "character" : item.kind === "scene" ? "scene" : item.kind === "prop" ? "prop" : "other";
-                const parentItem = item.kind === "costume" ? mapping.items.find((row) => row.logicalAssetId === item.parentLogicalAssetId) : undefined;
-                const subjectKey = item.kind === "costume" ? item.parentLogicalAssetId : item.logicalAssetId;
-                const subjectId = subjectIds.get(subjectKey) || ensureSubject({ projectId: props.projectId, category, sourceKey: subjectKey, name: parentItem?.name || item.name, tags: ["视频工作流"] });
-                const assetBinding: AssetBinding = { projectId: props.projectId, subjectId, category, variantName: item.variantName || (category === "character" ? "基础形象" : "基础状态"), allEpisodes: false, episodeIds: [props.episodeId] };
                 if (current) {
                     updateAsset(current.id, {
                         assetBinding,
@@ -118,6 +128,7 @@ export function WorkflowAssetPanel(props: {
                         title: item.name,
                         ...(current.kind === "text" ? { data: { content: imagePrompt } } : {}),
                     });
+                    if (current.kind === "image") setVariantCurrentAsset(variantId, current.id);
                     continue;
                 }
                 const libraryAssetId = await addAssetOnce({
@@ -136,11 +147,19 @@ export function WorkflowAssetPanel(props: {
                 updateAsset(libraryAssetId, { metadata: { ...created?.metadata, originalWorkflow: { ...originalWorkflow, libraryAssetId } } });
             }
         } catch (error) {
+            setMaterializeError(error instanceof Error ? error.message : "资产卡片同步失败");
             message.error(error instanceof Error ? error.message : "资产卡片同步失败，请重试");
         } finally {
             setApplying(false);
         }
-    }, [addAssetOnce, applying, ensureProjectFolder, ensureSubject, mapping.items, message, props, updateAsset]);
+    }, [addAssetOnce, applying, ensureProjectFolder, ensureSubject, ensureVariant, mapping.items, message, props, setVariantCurrentAsset, updateAsset, updateVariant]);
+
+    useEffect(() => {
+        const key = props.artifact?.contentHash || "";
+        if (!key || materializationForArtifact.current === key || !["approved", "applied"].includes(props.stage?.status || "")) return;
+        materializationForArtifact.current = key;
+        void materialize();
+    }, [materialize, props.artifact?.contentHash, props.stage?.status]);
 
     useEffect(() => {
         if (!props.artifact || !props.stage || props.stage.status !== "approved" || !generationProgress.ready || applying) return;
@@ -172,7 +191,18 @@ export function WorkflowAssetPanel(props: {
     };
     const saveVariant = (asset: Asset, input: { description: string; imagePrompt: string }) => {
         updateAsset(asset.id, workflowAssetEditPatch(asset, input));
+        const variantId = workflowAssetVariantId(asset, useAssetStore.getState().variants);
+        if (variantId) updateVariant(variantId, { prompt: input.imagePrompt });
         message.success("资产卡片已更新");
+    };
+    const bindVariant = (variant: WorkflowAssetVariant, assetId: string) => {
+        const target = bindingAssets.find((asset) => asset.id === assetId);
+        if (!target || target.id === variant.asset?.id) return;
+        if (variant.asset) updateAsset(variant.asset.id, workflowAssetUnbindingPatch(variant.asset, variant.row.importKey));
+        updateAsset(target.id, workflowAssetBindingPatch(target, variant.row, { episodeId: props.episodeId, projectId: props.projectId }));
+        const variantId = workflowAssetVariantId(target, useAssetStore.getState().variants);
+        if (variantId) updateVariant(variantId, { prompt: variant.row.imagePrompt });
+        message.success(`已将 ${variant.row.name} 绑定到 ${target.title}`);
     };
     const runGeneration = async (targets: Asset[]) => {
         const logicalByAsset = new Map(variants.filter((variant) => variant.asset).map((variant) => [variant.asset!.id, variant.logicalAssetId]));
@@ -208,9 +238,14 @@ export function WorkflowAssetPanel(props: {
         });
     };
     const selectedAssets = variants.flatMap((variant) => (variant.asset && selectedIds.includes(variant.logicalAssetId) && workflowAssetPrompt(variant.asset) ? [variant.asset] : []));
+    const setCurrentWorkflowAsset = (asset: Asset) => {
+        const variantId = workflowAssetVariantId(asset, useAssetStore.getState().variants);
+        if (variantId) setVariantCurrentAsset(variantId, asset.id);
+    };
     const finishImport = (patch: Parameters<typeof updateAsset>[1]) => {
         if (!importTarget) return;
         updateAsset(importTarget.asset.id, patch);
+        setCurrentWorkflowAsset(importTarget.asset);
         setSelectedIds((ids) => ids.filter((id) => id !== importTarget.logicalAssetId));
         message.success(`已导入并绑定 ${importTarget.logicalAssetId}`);
         setImportTarget(null);
@@ -275,8 +310,7 @@ export function WorkflowAssetPanel(props: {
                                 重新整理
                             </Button>
                         ) : null}
-                        {props.stage?.status === "needs_review" ? <Button type="primary" icon={<CheckCircle2 className="size-4" />} disabled={!props.canApprove} onClick={() => void props.onApprove()}>批准资产提示词</Button> : null}
-                        {["approved", "applied"].includes(props.stage?.status || "") && needsMaterialization ? <Button icon={<Library className="size-4" />} loading={applying} onClick={() => void materialize()}>建立正式资产卡片</Button> : null}
+                        {materializeError ? <Button icon={<Library className="size-4" />} loading={applying} onClick={() => void materialize()}>重新建立资产卡片</Button> : null}
                         <Button type="primary" icon={<WandSparkles className="size-4" />} disabled={!selectedAssets.length} loading={Boolean(imageActions.generatingIds.length)} onClick={() => confirmGenerate(selectedAssets)}>
                             确认生成 {selectedAssets.length} 张草图
                         </Button>
@@ -305,14 +339,16 @@ export function WorkflowAssetPanel(props: {
                 </div>
             ) : (
                 <Image.PreviewGroup>
-                    <section className="grid gap-3 md:grid-cols-2">
+                    <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                         {visible.map((card) => (
                             <WorkflowAssetCard
                                 key={card.logicalAssetId}
                                 card={card}
+                                bindingAssets={bindingAssets}
                                 failed={failed}
                                 generatingIds={imageActions.generatingIds}
                                 onGenerate={(asset) => confirmGenerate([asset])}
+                                onBind={bindVariant}
                                 onImport={startImport}
                                 onSave={saveVariant}
                                 onSelectionChange={setVariantSelected}
@@ -332,7 +368,6 @@ export function WorkflowAssetPanel(props: {
             <AssetPickerModal
                 open={pickerOpen}
                 title={`导入并绑定 ${importTarget?.logicalAssetId || "资产"}`}
-                defaultKind="image"
                 allowedKinds={["image"]}
                 onInsert={(payload) => void importPicked(payload)}
                 onClose={() => {

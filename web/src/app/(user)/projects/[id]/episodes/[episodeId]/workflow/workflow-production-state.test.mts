@@ -17,10 +17,18 @@ function fixture(patch: Partial<ProductionPackage> = {}): ProductionPackage {
 test("marks a confirmed prompt stale when the shot draft changes", () => {
     const next = updateShotDraft(fixture(), { action: "阿宁转身" });
     assert.equal(next.shotDraft?.action, "阿宁转身");
-    assert.equal(next.shotStatus, "draft");
+    assert.equal(next.shotStatus, "confirmed");
     assert.equal(next.promptStatus, "需修改");
     assert.equal(next.promptInputHash, "");
     assert.equal(next.prompt, "旧提示词");
+});
+
+test("editing the natural-language storyboard keeps structured fields and invalidates the prompt", () => {
+    const next = updateShotDraft(fixture(), { narrative: "镜头跟随阿宁进门。" });
+    assert.equal(next.shotDraft?.narrative, "镜头跟随阿宁进门。");
+    assert.equal(next.shotDraft?.shotSize, "中景");
+    assert.equal(next.shotStatus, "confirmed");
+    assert.equal(next.promptStatus, "需修改");
 });
 
 test("hashes normalized shot input and asset versions deterministically", () => {

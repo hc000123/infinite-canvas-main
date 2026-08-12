@@ -173,6 +173,12 @@ func ListAIUsageRecords(q model.AIUsageRecordQuery) (model.AIUsageRecordList, er
 			record.Provider = task.Provider
 			record.UpstreamTaskID = task.UpstreamTaskID
 			record.ErrorMessage = task.ErrorMessage
+			if task.Kind == "video" && task.Status == model.AITaskStatusSucceeded {
+				record.GeneratedSeconds = max(0, task.GeneratedSeconds)
+				if record.GeneratedSeconds == 0 {
+					record.DurationIssue = "missing_duration"
+				}
+			}
 			_ = json.Unmarshal([]byte(task.FrontendTraceJSON), &record.FrontendTrace)
 		} else if run, ok := runs[item.UsageKey]; ok {
 			record.SourceType = model.AIUsageSourceAgentRun

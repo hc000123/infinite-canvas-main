@@ -66,6 +66,19 @@ test("describes MiniMax H3 generation capabilities", () => {
     assert.match(validateDreaminaReferences({ ...base, mode: "multiframe2video", images: 2, videos: 0, audios: 0 }).error, /不支持多帧故事/);
 });
 
+test("allows GeekNow manxue-2.5 durations from 4 to 29 seconds", () => {
+    const capability = resolveDreaminaVideoCapability({ protocol: "openai", model: "manxue-2.5", mode: "multimodal2video" });
+
+    assert.equal(capability?.label, "manxue 2.5 · 4–29s · 多模态");
+    assert.deepEqual(capability?.duration, { min: 4, max: 29 });
+    assert.deepEqual(capability?.resolutions, ["480", "720"]);
+    assert.deepEqual(capability?.references, { images: 30, videos: 10, audios: 10, total: 50, allowAudioOnly: true });
+    assert.deepEqual(
+        normalizeDreaminaVideoSettings({ protocol: "openai", model: "manxue-2.5", mode: "multimodal2video", seconds: "30", resolution: "1080" }),
+        { seconds: "29", resolution: "720" },
+    );
+});
+
 test("does not treat longer Seedance version names as 2.5", () => {
     const ark = resolveDreaminaVideoCapability({ protocol: "volcengine-ark", model: "doubao-seedance-2-50", mode: "multimodal2video" });
     const jimeng = resolveDreaminaVideoCapability({ protocol: "jimeng-cli", model: "seedance2.50", mode: "multimodal2video" });

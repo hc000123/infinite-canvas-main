@@ -60,12 +60,23 @@ func GetWorkflowAssetSlots(userID, stageRunID string) (WorkflowAssetSlotArtifact
 	if !ok || stage.StageID != WorkflowStageAssetExtraction {
 		return WorkflowAssetSlotArtifact{}, safeMessageError{message: "资产解析阶段不存在"}
 	}
+	artifactID := stage.OutputArtifactID
+	if stage.InvocationID != "" {
+		projection, err := projectWorkflowInvocation(userID, stage)
+		if err != nil {
+			return WorkflowAssetSlotArtifact{}, err
+		}
+		stage = projection.Stage
+		if len(projection.Artifacts) == 1 && len(projection.Artifacts[0].ArtifactIDs) == 1 {
+			artifactID = projection.Artifacts[0].ArtifactIDs[0]
+		}
+	}
 	switch stage.Status {
 	case model.WorkflowStageRunStatusNeedsReview, model.WorkflowStageRunStatusApproved, model.WorkflowStageRunStatusApplied:
 	default:
 		return WorkflowAssetSlotArtifact{}, safeMessageError{message: "资产解析结果尚未生成"}
 	}
-	base, err := GetArtifact(userID, stage.OutputArtifactID)
+	base, err := GetArtifact(userID, artifactID)
 	if err != nil || base.Artifact.ArtifactType != "asset_catalog" {
 		return WorkflowAssetSlotArtifact{}, safeMessageError{message: "资产解析结果缺少标准产物"}
 	}

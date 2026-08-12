@@ -23,3 +23,15 @@ export function filterProjectCacheFiles<T extends { category: string; context: {
 export function projectCacheStatusLabel(status: ProjectCacheDisplayStatus) {
     return status === "deleted" ? "项目已删除" : status === "orphaned" ? "未关联当前项目" : status === "unassigned" ? "未归属" : "正常";
 }
+
+export function toggleVisibleCacheSelection(selected: ReadonlySet<string>, visibleIds: string[]) {
+    const next = new Set(selected);
+    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => next.has(id));
+    visibleIds.forEach((id) => allVisibleSelected ? next.delete(id) : next.add(id));
+    return next;
+}
+
+export function pruneCacheSelection(selected: ReadonlySet<string>, validIds: string[]) {
+    const valid = new Set(validIds);
+    return new Set([...selected].filter((id) => valid.has(id)));
+}

@@ -226,6 +226,7 @@ function InfiniteCanvasPage() {
         viewport,
         viewportRef,
     } = useCanvasPageLocalState();
+    const getNodes = useCallback(() => nodesRef.current, [nodesRef]);
     const capacity = useCanvasCapacity(nodes, connections);
     const { downloadNodeMedia, cacheUploadedCanvasMedia } = useCanvasMediaCache({
         token,
@@ -235,7 +236,7 @@ function InfiniteCanvasPage() {
         projectId: workspaceProjectId,
         projectTitle: workspaceProjectTitle,
         episodeContext: canvasEpisodeContext,
-        getNodes: () => nodesRef.current,
+        getNodes,
         setNodes,
     });
     const { historyState, resetHistory, undoCanvas, redoCanvas, pauseHistory, resumeHistory, skipNextHistoryCommit, getCleanupHistory } = useCanvasHistory({
@@ -271,7 +272,7 @@ function InfiniteCanvasPage() {
         canvasId,
         canvasTitle: currentProject?.title || "未命名画布",
         ensureProjectFolder,
-        getNodes: () => nodesRef.current,
+        getNodes,
         projectPreset: currentProject?.preset,
         setNodes,
         workspaceProjectId,
@@ -284,7 +285,7 @@ function InfiniteCanvasPage() {
         canvasId,
         canvasTitle: currentProject?.title || "未命名画布",
         episodeContext: canvasEpisodeContext,
-        getNodes: () => nodesRef.current,
+        getNodes,
         prepareGeneratedAssetNode,
         projectId: workspaceProjectId,
         projectPreset: currentProject?.preset,

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { buildWorkflowGeneratedImagePatch, workflowAssetPrompt } from "@/app/(user)/assets/workflow-asset-image";
+import { buildWorkflowGeneratedImagePatch, workflowAssetPrompt, workflowAssetVariantId } from "@/app/(user)/assets/workflow-asset-image";
 import { requestGeneration } from "@/services/api/image";
 import { uploadImage } from "@/services/image-storage";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
@@ -12,6 +12,7 @@ import { mapWithConcurrency } from "./workflow-background-task";
 export function useWorkflowAssetImageActions() {
     const config = useEffectiveConfig();
     const model = (config.imageModel || config.model).trim();
+    const setVariantCurrentAsset = useAssetStore((state) => state.setVariantCurrentAsset);
     const updateAsset = useAssetStore((state) => state.updateAsset);
     const [generatingIds, setGeneratingIds] = useState<string[]>([]);
 
@@ -30,6 +31,8 @@ export function useWorkflowAssetImageActions() {
                     if (!result) throw new Error("图片模型没有返回结果");
                     const stored = await uploadImage(result.dataUrl);
                     updateAsset(asset.id, buildWorkflowGeneratedImagePatch(asset, stored, { config: requestConfig, model, result }));
+                    const variantId = workflowAssetVariantId(asset, useAssetStore.getState().variants);
+                    if (variantId) setVariantCurrentAsset(variantId, asset.id);
                     succeededIds.push(asset.id);
                 } catch (error) {
                     failed.push({ id: asset.id, message: error instanceof Error ? error.message : "生成失败" });

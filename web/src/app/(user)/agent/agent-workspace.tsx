@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Alert, Button, Input, Select, Spin } from "antd";
-import { ArrowLeft, CircleAlert, Clock3, LoaderCircle, Search } from "lucide-react";
+import { ArrowLeft, LoaderCircle, Search } from "lucide-react";
 
 import { listWorkflowRuns, type WorkflowRunListItem } from "@/services/api/workflow-runs";
 import { useUserStore } from "@/stores/use-user-store";
@@ -14,7 +14,6 @@ import { EpisodeWorkflowWorkbench } from "../projects/[id]/episodes/[episodeId]/
 import { buildAgentProjectViews, filterAgentProjectViews, type AgentAttentionStatus } from "./agent-workspace-model";
 import { AgentEpisodeOverview } from "./components/agent-episode-overview";
 import { AgentProjectOverview } from "./components/agent-project-overview";
-import { AgentStageGates } from "./components/agent-stage-gates";
 
 const statusOptions: Array<{ label: string; value: AgentAttentionStatus }> = [
     { label: "全部状态", value: "all" },
@@ -63,13 +62,8 @@ export function AgentWorkspace() {
     const visibleProjects = useMemo(() => filterAgentProjectViews(views, { keyword, status }), [keyword, status, views]);
     const selectedProject = views.find((project) => project.id === projectId);
     const selectedEpisode = selectedProject?.episodes.find((episode) => episode.id === episodeId);
-    const totals = useMemo(() => ({
-        running: views.reduce((total, project) => total + project.runningCount, 0),
-        review: views.reduce((total, project) => total + project.reviewCount, 0),
-        attention: views.reduce((total, project) => total + project.failureCount + project.warningCount, 0),
-    }), [views]);
-
     if (!projectsHydrated || !scriptsHydrated) return <main className="studio-shell grid min-h-[calc(100dvh-3.5rem)] place-items-center"><Spin description="正在读取生产总控" /></main>;
+    if (selectedEpisode) return <EpisodeWorkflowWorkbench episodeId={episodeId} projectId={projectId} />;
 
     return (
         <main className="studio-shell h-full min-h-0 overflow-y-auto text-[var(--studio-text-primary)]">
@@ -82,12 +76,6 @@ export function AgentWorkspace() {
                     </div>
                     {projectId ? <Button icon={<ArrowLeft className="size-4" />} onClick={() => router.push("/agent")}>所有项目</Button> : null}
                 </header>
-
-                <section className="mt-5 grid gap-px border border-[var(--studio-border-subtle)] bg-[var(--studio-border-subtle)] sm:grid-cols-3">
-                    <Metric icon={LoaderCircle} label="运行中的分集" value={totals.running} />
-                    <Metric icon={Clock3} label="等待你审核" value={totals.review} />
-                    <Metric icon={CircleAlert} label="异常与占位警告" value={totals.attention} />
-                </section>
 
                 <div className="mt-5 flex flex-wrap items-center gap-2">
                     <Select className="min-w-48" value={projectId || "all"} options={[{ label: "所有项目", value: "all" }, ...views.map((project) => ({ label: project.title, value: project.id }))]} onChange={(value) => router.push(value === "all" ? "/agent" : `/agent?projectId=${encodeURIComponent(value)}`)} />
@@ -106,16 +94,10 @@ export function AgentWorkspace() {
                                 <p className="text-sm text-[var(--studio-text-secondary)]">{selectedProject.episodeCount} 个分集 · 总体 {selectedProject.progress}%</p>
                             </div>
                             <AgentEpisodeOverview episodes={selectedProject.episodes} selectedEpisodeId={episodeId} />
-                            {selectedEpisode ? <AgentStageGates episode={selectedEpisode} /> : null}
-                            {selectedEpisode ? <div className="h-[calc(100dvh-5rem)] min-h-[720px] overflow-hidden border border-[var(--studio-border-subtle)]"><EpisodeWorkflowWorkbench episodeId={episodeId} projectId={projectId} /></div> : null}
                         </>
                     ) : <Alert type="info" showIcon title="项目不存在或已归档" action={<Button size="small" onClick={() => router.push("/agent")}>返回所有项目</Button>} />}
                 </div>
             </div>
         </main>
     );
-}
-
-function Metric({ icon: Icon, label, value }: { icon: typeof Clock3; label: string; value: number }) {
-    return <div className="flex items-center justify-between bg-[var(--studio-panel-bg)] px-4 py-4"><div><p className="text-xs text-[var(--studio-text-muted)]">{label}</p><p className="mt-1 font-mono text-2xl font-medium">{value}</p></div><Icon className="size-5 text-[var(--studio-text-muted)]" /></div>;
 }

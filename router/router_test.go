@@ -19,6 +19,7 @@ func TestAIUsageRoutesRequireCorrectRoles(t *testing.T) {
 		"/api/me/ai-usage-summary",
 		"/api/me/ai-usage-records",
 		"/api/admin/ai-usage-records",
+		"/api/admin/ai-usage-export",
 	} {
 		request := httptest.NewRequest(http.MethodGet, path, nil)
 		response := httptest.NewRecorder()
@@ -42,6 +43,36 @@ func TestVolcengineVideoReviewRouteExists(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
 		t.Fatalf("video review route did not reach auth middleware: status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestXinglianDirectUploadRoutesRequireAuth(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := New()
+	for _, path := range []string{"/api/v1/xinglian/uploads/sign", "/api/v1/xinglian/uploads/complete"} {
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
+		app.ServeHTTP(recorder, request)
+		if recorder.Code == http.StatusNotFound {
+			t.Fatalf("Xinglian upload route missing: %s", path)
+		}
+		if !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+			t.Fatalf("Xinglian upload route did not reach auth: path=%s body=%s", path, recorder.Body.String())
+		}
+	}
+}
+
+func TestProjectCacheSelectionRouteRequiresAuth(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := New()
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/project-cache/projects/p1/package/selection", strings.NewReader(`{"fileIds":["f1"]}`))
+	app.ServeHTTP(recorder, request)
+	if recorder.Code == http.StatusNotFound {
+		t.Fatalf("project cache selection route missing: %s", recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+		t.Fatalf("project cache selection route did not reach auth: body=%s", recorder.Body.String())
 	}
 }
 

@@ -57,9 +57,6 @@
 - `workflow_media_batches`
 - `workflow_media_items`
 - `prompts`
-- `asset_projects`
-- `asset_folders`
-- `assets`
 - `settings`
 
 后续新增表时再同步补充本文档，未实际使用的规划表不提前写入。
@@ -176,7 +173,7 @@ Workflow Adapter 不新增数据库表，也不调用模型。Adapter 定义保�
 
 ### prompts
 
-提示词表。用于保存管理员手动维护的公开提示词、分类和预览内容；旧版内置 GitHub 远程提示词会在启动时清理。启动时会补齐缺失的系统种子模板，例如场景多角度、九宫格、高清放大、重绘增强和图片修复；已有同 ID 记录不会被覆盖。
+提示词表。用于保存管理员手动维护的公开提示词、分类和预览内容；旧版内置 GitHub 远程提示词会在启动时清理。启动时会补齐缺失的系统种子模板，例如场景多角度、九宫格、高清放大、重绘增强和图片修复；已有同 ID 记录保留编辑内容，仅在仍使用旧 `system` 分类时补齐业务分类。
 
 | 字段         | 类型   | 说明                                            |
 | ------------ | ------ | ----------------------------------------------- |
@@ -186,7 +183,7 @@ Workflow Adapter 不新增数据库表，也不调用模型。Adapter 定义保�
 | `prompt`     | string | 提示词内容                                      |
 | `tags`       | json   | 标签列表                                                                      |
 | `metadata`   | json   | 提示词模板结构化信息，可为空；旧提示词没有该字段时按普通提示词展示            |
-| `category`   | string | 分类标识                                                                      |
+| `category`   | string | 业务分类：`scene`、`prop`、`character`、`video`、`text`                        |
 | `preview`    | text   | Markdown 展示内容，可包含文本、图片、视频链接等                               |
 | `created_at` | string | 创建时间                                                                      |
 | `updated_at` | string | 更新时间                                                                      |
@@ -215,59 +212,7 @@ Workflow Adapter 不新增数据库表，也不调用模型。Adapter 定义保�
 
 旧提示词缺少以上公司标准字段时，前端按 `kind=template`、`policy=optional`、`enabled=true` 解释，只作为可选模板展示，不会自动加入图片或视频提示词。
 
-### asset_projects
-
-后台公共素材库的独立项目，不绑定浏览器本地项目中心。
-
-| 字段         | 类型   | 说明             |
-| ------------ | ------ | ---------------- |
-| `id`         | string | 主键             |
-| `name`       | string | 唯一项目名称     |
-| `created_at` | string | 创建时间         |
-| `updated_at` | string | 项目最近变更时间 |
-
-### asset_folders
-
-素材项目内的多级文件夹。
-
-| 字段         | 类型   | 说明                                         |
-| ------------ | ------ | -------------------------------------------- |
-| `id`         | string | 主键                                         |
-| `project_id` | string | 所属素材项目                                 |
-| `parent_id`  | string | 上级文件夹；为空表示项目根目录               |
-| `name`       | string | 文件夹名称；同一项目、同一父目录下保持唯一   |
-| `created_at` | string | 创建时间                                     |
-| `updated_at` | string | 更新时间                                     |
-
-### assets
-
-素材表。当前用于后台素材库。
-
-| 字段                      | 类型   | 说明                                              |
-| ------------------------- | ------ | ------------------------------------------------- |
-| `id`                      | string | 主键                                              |
-| `project_id`              | string | 所属后台素材项目                                  |
-| `folder_id`               | string | 所属文件夹；为空表示项目根目录                    |
-| `title`                   | string | 标题                                              |
-| `type`                    | string | 素材类型：`text`、`image`、`video`、`audio` 等    |
-| `cover_url`               | string | 封面图                                            |
-| `tags`                    | json   | 标签列表                                          |
-| `category`                | string | 分类标识                                          |
-| `description`             | string | 描述                                              |
-| `content`                 | text   | 文本或 Markdown 内容                              |
-| `url`                     | string | 图片、视频等媒体地址                              |
-| `episode_numbers`         | json   | 适用集数，可同时标记多集                          |
-| `all_episodes`            | bool   | 是否全剧通用；为真时不保留具体集数                |
-| `volcengine_asset_id`     | string | 火山素材 Asset ID，可为空                         |
-| `volcengine_group_id`     | string | 火山素材组 ID，可为空                             |
-| `volcengine_project_name` | string | 火山 ProjectName，可为空                          |
-| `volcengine_status`       | string | 火山审核状态：`Processing`、`Active`、`Failed` 等 |
-| `volcengine_error`        | string | 火山审核失败原因，可为空                          |
-| `volcengine_public_url`   | string | 提交给火山的公网素材 URL，可为空                  |
-| `volcengine_submitted_at` | string | 提交火山审核时间，可为空                          |
-| `volcengine_updated_at`   | string | 最近刷新火山审核状态时间，可为空                  |
-| `created_at`              | string | 创建时间                                          |
-| `updated_at`              | string | 更新时间                                          |
+浏览器本地资产中心使用 localforage 持久化主体、形态、版本和引用关系，不属于后端数据库表。旧版服务端公共素材库的 `asset_projects`、`asset_folders`、`assets` 表不再迁移或提供接口；已有数据库中的旧数据不会由启动流程主动删除。
 
 ### settings
 
@@ -415,6 +360,7 @@ Workflow Adapter 不新增数据库表，也不调用模型。Adapter 定义保�
 | `status`               | string | 任务状态：`created`、`queued`、`running`、`succeeded`、`failed`、`cancelled` |
 | `credits`              | number | 本次预扣算力点                                                               |
 | `credits_refunded`     | number | 已返还算力点数量                                                             |
+| `generated_seconds`    | number | 视频任务有效秒数；成功响应提供实际成片时长时更新，非视频任务为 0              |
 | `upstream_task_id`     | string | 上游任务 ID，用于 Ark / 星链 / 即梦 / GeekNow / 普通异步视频任务             |
 | `raw_status`           | string | 上游原始状态，用于 Ark / 即梦 / 星链 / GeekNow / 普通 OpenAI 兼容异步视频任务 |
 | `video_url`            | text   | 上游返回的视频地址，用于 Ark / 即梦 / 星链 / GeekNow / 普通 OpenAI 兼容异步视频任务 |
@@ -449,6 +395,7 @@ Workflow Adapter 不新增数据库表，也不调用模型。Adapter 定义保�
 | `GET /api/v1/ai-tasks/:id`             | 当前登录用户查看自己的 AI 任务账本摘要和关联算力点流水                                            |
 | `POST /api/v1/ai-tasks/:id/frontend-artifact` | 当前登录用户把前台生成产物 `assetId / nodeId / canvasId` 等反写到任务响应 JSON             |
 | `POST /api/admin/ai-tasks/:id/refund`  | 管理员对失败/取消或异常任务手动返还，已返还任务会拒绝重复返还                                     |
+| `GET /api/admin/ai-usage-export`       | 管理员按日期范围、成员和模型筛选并下载 XLSX 用量报表，汇总净积分和成功视频秒数                     |
 
 ### agent_config_records
 

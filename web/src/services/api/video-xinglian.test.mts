@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { buildXinglianVideoPayload } from "./xinglian-video-payload.ts";
@@ -24,4 +25,12 @@ test("builds a JSON SD2 request for HTTPS reference media", () => {
         images: ["https://files.example.com/reference.png"],
         audios: ["https://files.example.com/voice.mp3"],
     });
+});
+
+test("uploads local Xinglian references before building the video request", () => {
+    const source = readFileSync(new URL("./video.ts", import.meta.url), "utf8");
+
+    assert.match(source, /uploadXinglianBlob/);
+    assert.match(source, /xinglianReferenceFile/);
+    assert.doesNotMatch(source, /星链云参考素材必须先上传为 HTTPS 地址/);
 });

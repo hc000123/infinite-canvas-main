@@ -16,7 +16,11 @@ import (
 )
 
 var promptCategories = []model.PromptCategory{
-	{Category: "system", Name: "系统", Description: "系统提示词分类"},
+	{Category: "scene", Name: "场景", Description: "场景与空间环境提示词"},
+	{Category: "prop", Name: "道具", Description: "道具与通用图片资产提示词"},
+	{Category: "character", Name: "角色", Description: "角色设定与人物修复提示词"},
+	{Category: "video", Name: "视频", Description: "视频镜头与动态生成提示词"},
+	{Category: "text", Name: "文本", Description: "文本创作与分析提示词"},
 }
 
 var legacyBuiltinPromptCategories = []string{
@@ -96,9 +100,6 @@ func DB() (*gorm.DB, error) {
 			&model.WorkflowMediaBatch{},
 			&model.WorkflowMediaItem{},
 			&model.Prompt{},
-			&model.AssetProject{},
-			&model.AssetFolder{},
-			&model.Asset{},
 			&model.Setting{},
 		)
 		if dbErr != nil {

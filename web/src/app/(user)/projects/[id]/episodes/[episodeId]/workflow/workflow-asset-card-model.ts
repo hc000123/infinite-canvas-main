@@ -79,20 +79,52 @@ export function workflowAssetVersionChoices(asset: Asset): AssetVersionRecord[] 
     return assetVersionRecords(asset).filter((version) => version.kind === "image").sort((left, right) => right.versionNumber - left.versionNumber);
 }
 
-export function workflowAssetEditPatch(asset: Asset, input: { description: string; imagePrompt: string }): Partial<Asset> {
-    const description = input.description.trim();
-    const imagePrompt = input.imagePrompt.trim();
+export function workflowAssetBindingPatch(asset: Asset, row: WorkflowArtifactMappingRow, scope: { episodeId: string; projectId: string }): Partial<Asset> {
     const workflow = readRecord(asset.metadata?.originalWorkflow);
-    const patch: Partial<Asset> = {
+    return {
+        ...(asset.assetBinding ? { assetBinding: { ...asset.assetBinding, episodeIds: Array.from(new Set([...asset.assetBinding.episodeIds, scope.episodeId])) } } : {}),
         metadata: {
             ...(asset.metadata || {}),
-            prompt: imagePrompt,
-            originalWorkflow: { ...workflow, description, imagePrompt, prompt: imagePrompt, manuallyEdited: true },
+            originalWorkflow: {
+                ...workflow,
+                assetId: row.logicalAssetId,
+                description: row.description,
+                episode: scope.episodeId,
+                imagePrompt: row.imagePrompt,
+                importKey: row.importKey,
+                libraryAssetId: asset.id,
+                logicalAssetId: row.logicalAssetId,
+                name: row.name,
+                projectId: scope.projectId,
+                prompt: row.imagePrompt,
+                scriptEvidence: row.scriptEvidence,
+                sourceEpisodeId: scope.episodeId,
+                sourceProjectId: scope.projectId,
+                sourceStage: "asset-image-prompt",
+            },
         },
-        note: imagePrompt,
     };
-    if (asset.kind === "text") patch.data = { content: imagePrompt };
-    return patch;
+}
+
+export function workflowAssetUnbindingPatch(asset: Asset, importKey: string): Partial<Asset> {
+    const workflow = readRecord(asset.metadata?.originalWorkflow);
+    if (readString(workflow.importKey) !== importKey) return {};
+    return {
+        metadata: {
+            ...(asset.metadata || {}),
+            originalWorkflow: {
+                ...workflow,
+                assetId: "",
+                episode: "",
+                importKey: "",
+                libraryAssetId: "",
+                logicalAssetId: "",
+                projectId: "",
+                sourceEpisodeId: "",
+                sourceProjectId: "",
+            },
+        },
+    };
 }
 
 function normalizeCategory(kind: string): Exclude<WorkflowAssetCategory, "all"> {
@@ -103,6 +135,10 @@ function normalizeCategory(kind: string): Exclude<WorkflowAssetCategory, "all"> 
 
 function readRecord(value: unknown) {
     return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function readString(value: unknown) {
+    return typeof value === "string" ? value.trim() : "";
 }
 
 function assetSkipped(asset?: Asset) {

@@ -95,6 +95,11 @@ type ProjectCachePackageInput struct {
 	ContinueOnMissing bool                        `json:"continueOnMissing"`
 }
 
+type ProjectCacheSelectionInput struct {
+	ProjectID string   `json:"-"`
+	FileIDs   []string `json:"fileIds"`
+}
+
 type ProjectCachePackagePreflight struct {
 	Missing   []string `json:"missing"`
 	FileCount int      `json:"fileCount"`

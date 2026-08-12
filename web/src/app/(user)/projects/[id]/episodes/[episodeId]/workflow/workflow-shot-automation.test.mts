@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { shouldAutoLoadStoryboard } from "./workflow-shot-automation.ts";
+import { nextWorkflowShotAction } from "./workflow-shot-automation.ts";
 
-test("loads a storyboard only after the human approval gate", () => {
-    assert.equal(shouldAutoLoadStoryboard({ stageStatus: "approved", gatePassed: true, shotCount: 4 }), true);
-    assert.equal(shouldAutoLoadStoryboard({ stageStatus: "needs_review", gatePassed: true, shotCount: 4 }), false);
-    assert.equal(shouldAutoLoadStoryboard({ stageStatus: "needs_review", gatePassed: false, shotCount: 4 }), false);
-    assert.equal(shouldAutoLoadStoryboard({ stageStatus: "approved", gatePassed: true, shotCount: 0 }), false);
+test("approves and loads valid storyboards without a human gate", () => {
+    assert.deepEqual(nextWorkflowShotAction({ stageStatus: "needs_review", gatePassed: true, shotCount: 4 }), { type: "approve" });
+    assert.deepEqual(nextWorkflowShotAction({ stageStatus: "approved", gatePassed: true, shotCount: 4 }), { type: "load" });
+});
+
+test("stops when output is invalid or already applied", () => {
+    assert.equal(nextWorkflowShotAction({ stageStatus: "needs_review", gatePassed: false, shotCount: 4 }).type, "idle");
+    assert.equal(nextWorkflowShotAction({ stageStatus: "approved", gatePassed: true, shotCount: 0 }).type, "idle");
+    assert.equal(nextWorkflowShotAction({ stageStatus: "applied", gatePassed: true, shotCount: 4 }).type, "idle");
 });

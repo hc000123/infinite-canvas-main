@@ -26,6 +26,7 @@ type AITask struct {
 	Status                AITaskStatus             `json:"status" gorm:"index"`
 	Credits               int                      `json:"credits"`
 	CreditsRefunded       int                      `json:"creditsRefunded"`
+	GeneratedSeconds      int                      `json:"generatedSeconds"`
 	UpstreamTaskID        string                   `json:"upstreamTaskId" gorm:"index"`
 	RawStatus             string                   `json:"rawStatus"`
 	VideoURL              string                   `json:"videoUrl" gorm:"type:text"`

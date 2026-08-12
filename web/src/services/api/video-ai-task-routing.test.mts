@@ -18,6 +18,12 @@ test("preserves the supplied local ai task id on a refreshed task", () => {
     assert.match(videoApi, /return \{ \.\.\.normalizeVideoTask\(unwrapVideoResponse\(response\.data\)\), aiTaskId: aiTaskId\?\.trim\(\) \|\| undefined \}/);
 });
 
+test("refreshes a persisted video task with the authoritative upstream task id", () => {
+    assert.match(videoApi, /const detail = await fetchUserAITaskDetail\(aiTaskId\)\.catch\(\(\) => null\)/);
+    assert.match(videoApi, /const resolvedTaskId = detail\?\.task\.upstreamTaskId\?\.trim\(\) \|\| taskId/);
+    assert.match(videoApi, /return queryVideoTask\(config, resolvedTaskId, resolveVideoRequestModel\(config\), aiTaskId\)/);
+});
+
 test("passes persisted local ai task ids from every manual video refresh entry", () => {
     assert.match(canvasRefresh, /refreshVideoTask\(generationConfig, node\.metadata\.taskId, node\.metadata\.aiTaskId\)/);
     assert.match(canvasRecovery, /refreshVideoTask\(generationConfig, node\.metadata\?\.taskId \|\| "", node\.metadata\?\.aiTaskId\)/);

@@ -17,6 +17,30 @@ test("presents the Agent route as production control instead of an Agent definit
     const source = read("./agent-workspace.tsx");
     assert.match(source, />生产总控</);
     assert.doesNotMatch(source, />项目 Agent</);
+    assert.doesNotMatch(source, /运行中的分集|等待你审核|异常与占位警告/);
+});
+
+test("places extraction controls in their own production stages", () => {
+    const source = read("../projects/[id]/episodes/[episodeId]/workflow/episode-workflow-workbench.tsx");
+    assert.match(source, /routeState\.stage === "asset-extraction"[\s\S]*WorkflowStageExtractionPanel/);
+    assert.match(source, /routeState\.stage === "storyboard"[\s\S]*WorkflowStageExtractionPanel/);
+    assert.doesNotMatch(source, /routeState\.stage === "script"[\s\S]*WorkflowScriptExtractionPanel/);
+});
+
+test("uses a prose storyboard stream, production packages, and a floating runtime console", () => {
+    const workbench = read("../projects/[id]/episodes/[episodeId]/workflow/episode-workflow-workbench.tsx");
+    const editor = read("../projects/[id]/episodes/[episodeId]/workflow/components/workflow-shot-editor.tsx");
+    const scroll = read("../projects/[id]/episodes/[episodeId]/workflow/components/workflow-storyboard-scroll.tsx");
+    const console = read("../projects/[id]/episodes/[episodeId]/workflow/components/workflow-run-console.tsx");
+    assert.match(workbench, /WorkflowStoryboardScroll/);
+    assert.match(workbench, /const showsQueue = workbench\.routeState\.stage === "video"/);
+    assert.doesNotMatch(workbench, /批准结构化分镜/);
+    assert.match(editor, /镜头生产包/);
+    assert.doesNotMatch(editor, /确认分镜/);
+    assert.match(scroll, /提示词待生成/);
+    assert.doesNotMatch(scroll, /: item\.promptStatus/);
+    assert.match(console, /floating/);
+    assert.match(console, /fixed bottom-5 right-5/);
 });
 
 test("keeps local projects visible while remote progress reports an error", () => {
@@ -33,7 +57,8 @@ test("supports all-project, project, and episode drill-down in one Agent route",
     assert.match(source, /searchParams\.get\("episodeId"\)/);
     assert.match(source, /AgentProjectOverview/);
     assert.match(source, /AgentEpisodeOverview/);
-    assert.match(source, /AgentStageGates/);
+    assert.doesNotMatch(source, /AgentStageGates/);
+    assert.match(source, /if \(selectedEpisode\) return <EpisodeWorkflowWorkbench/);
 });
 
 test("keeps Zustand selectors referentially stable", () => {

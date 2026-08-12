@@ -1,13 +1,14 @@
 "use client";
 
 import type { AiConfig } from "@/stores/use-config-store";
-import type { Asset, AssetWriteInput } from "@/stores/use-asset-store";
+import type { Asset, AssetVariant, AssetWriteInput } from "@/stores/use-asset-store";
 import type { GeneratedImageResult } from "@/services/api/image";
 import type { UploadedImage } from "@/services/image-storage";
 import { buildAssetVersionedUpdatePatch } from "./asset-version-history.ts";
 
 export type WorkflowAssetInfo = {
     assetId: string;
+    description: string;
     logicalAssetId: string;
     libraryAssetId: string;
     episode: string;
@@ -16,11 +17,13 @@ export type WorkflowAssetInfo = {
     imagePrompt: string;
     prompt: string;
     projectSlug: string;
+    scriptEvidence: string;
     sourcePath: string;
     sourceEpisodeId: string;
     sourceProjectId: string;
     status: string;
     type: string;
+    variantName: string;
     version: string;
 };
 
@@ -32,6 +35,7 @@ export function workflowAssetInfo(asset: Asset | null | undefined): WorkflowAsse
     if (!importKey && !prompt) return null;
     return {
         assetId: readString(raw.assetId),
+        description: readString(raw.description),
         logicalAssetId: readString(raw.logicalAssetId) || readString(raw.assetId),
         libraryAssetId: readString(raw.libraryAssetId) || asset?.id || "",
         episode: readString(raw.episode),
@@ -40,13 +44,22 @@ export function workflowAssetInfo(asset: Asset | null | undefined): WorkflowAsse
         imagePrompt: prompt,
         prompt,
         projectSlug: readString(raw.projectSlug),
+        scriptEvidence: readString(raw.scriptEvidence),
         sourcePath: readString(raw.sourcePath),
         sourceEpisodeId: readString(raw.sourceEpisodeId),
         sourceProjectId: readString(raw.sourceProjectId),
         status: readString(raw.status) || (asset?.kind === "image" ? "image_generated" : "pending_image"),
         type: readString(raw.type),
+        variantName: readString(raw.variantName),
         version: readString(raw.version) || "v1",
     };
+}
+
+export function workflowAssetVariantId(asset: Asset | null | undefined, variants: AssetVariant[]) {
+    const binding = asset?.assetBinding;
+    if (!binding) return "";
+    if (binding.variantId && variants.some((variant) => variant.id === binding.variantId && variant.subjectId === binding.subjectId)) return binding.variantId;
+    return variants.find((variant) => variant.subjectId === binding.subjectId && variant.name === binding.variantName)?.id || "";
 }
 
 export function workflowAssetCanGenerate(asset: Asset | null | undefined) {
@@ -55,6 +68,22 @@ export function workflowAssetCanGenerate(asset: Asset | null | undefined) {
 
 export function workflowAssetPrompt(asset: Asset | null | undefined) {
     return workflowAssetInfo(asset)?.prompt || "";
+}
+
+export function workflowAssetEditPatch(asset: Asset, input: { description: string; imagePrompt: string }): Partial<Asset> {
+    const description = input.description.trim();
+    const imagePrompt = input.imagePrompt.trim();
+    const workflow = workflowAssetRaw(asset);
+    const patch: Partial<Asset> = {
+        metadata: {
+            ...(asset.metadata || {}),
+            prompt: imagePrompt,
+            originalWorkflow: { ...workflow, description, imagePrompt, prompt: imagePrompt, manuallyEdited: true },
+        },
+        note: imagePrompt,
+    };
+    if (asset.kind === "text") patch.data = { content: imagePrompt };
+    return patch;
 }
 
 export function workflowAssetSummary(asset: Asset) {

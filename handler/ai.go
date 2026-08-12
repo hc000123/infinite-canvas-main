@@ -236,7 +236,8 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 		Fail(w, "AI 接口请求失败")
 		return
 	}
-	credits, err = multiplyAICredits(credits, readAIRequestUsageForModel(path, r.Header.Get("X-Infinite-Canvas-Request-Kind"), body, contentType, modelName, channel.Protocol))
+	usageCount := readAIRequestUsageForModel(path, r.Header.Get("X-Infinite-Canvas-Request-Kind"), body, contentType, modelName, channel.Protocol)
+	credits, err = multiplyAICredits(credits, usageCount)
 	if err != nil {
 		Fail(w, "AI 接口请求失败")
 		return
@@ -246,7 +247,7 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 	upstreamContentType := contentType
 	isGeekNowVideoTask := service.IsGeekNowVideoChannel(channel) && path == "/videos"
 	if isGeekNowVideoTask {
-		upstreamBody, upstreamContentType, err = service.BuildGeekNowVideoCreateRequest(body, contentType)
+		upstreamBody, upstreamContentType, err = service.BuildGeekNowVideoCreateRequestForChannel(r.Context(), channel, body, contentType)
 		if err != nil {
 			log.Printf("GeekNow video request invalid: model=%s err=%v", modelName, err)
 			Fail(w, err.Error())
@@ -287,19 +288,27 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 		Fail(w, "AI 接口请求失败")
 		return
 	}
+	generatedSeconds := 0
+	if path == "/videos" {
+		generatedSeconds = readAIRequestInt(upstreamBody, upstreamContentType, "duration", "seconds")
+		if generatedSeconds < 1 {
+			generatedSeconds = usageCount
+		}
+	}
 	isJimengVideoTask := service.IsJimengCLIProtocol(channel.Protocol) && path == "/videos"
 	aiTask, err := service.CreateAITask(service.CreateAITaskInput{
-		UserID:        user.ID,
-		TaskType:      service.AITaskTypeForPath(path),
-		Provider:      channel.Name,
-		ChannelID:     channel.ID,
-		Protocol:      channel.Protocol,
-		Model:         modelName,
-		Path:          path,
-		Credits:       credits,
-		RequestBody:   upstreamBody,
-		ContentType:   upstreamContentType,
-		FrontendTrace: r.Header.Get("X-Infinite-Canvas-Trace"),
+		UserID:           user.ID,
+		TaskType:         service.AITaskTypeForPath(path),
+		Provider:         channel.Name,
+		ChannelID:        channel.ID,
+		Protocol:         channel.Protocol,
+		Model:            modelName,
+		Path:             path,
+		Credits:          credits,
+		GeneratedSeconds: generatedSeconds,
+		RequestBody:      upstreamBody,
+		ContentType:      upstreamContentType,
+		FrontendTrace:    r.Header.Get("X-Infinite-Canvas-Trace"),
 	})
 	if err != nil {
 		log.Printf("AI proxy create task failed: user=%s model=%s path=%s err=%v", user.ID, modelName, path, err)
@@ -579,6 +588,16 @@ func proxyGeekNowVideoGetRequest(w http.ResponseWriter, ctx context.Context, cha
 	defer response.Body.Close()
 	body, _ := io.ReadAll(response.Body)
 	if response.StatusCode >= http.StatusBadRequest {
+		if response.StatusCode == http.StatusNotFound && localAITaskID != "" && !contentRequest {
+			normalized, _ := json.Marshal(map[string]any{"id": taskID, "status": "queued", "raw_status": "pending_visibility"})
+			if err := syncSelectedVideoAITaskStatus(localAITaskID, userID, taskID, normalized, service.SyncArkVideoAITaskStatus); err != nil {
+				log.Printf("GeekNow transient video task sync failed: task=%s err=%v", taskID, err)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(normalized)
+			return
+		}
 		Fail(w, upstreamErrorMessage(body, "AI 接口请求失败"))
 		return
 	}
@@ -588,6 +607,13 @@ func proxyGeekNowVideoGetRequest(w http.ResponseWriter, ctx context.Context, cha
 		Fail(w, "AI 接口请求失败")
 		return
 	}
+	var normalizedPayload map[string]any
+	if err := json.Unmarshal(normalized, &normalizedPayload); err != nil {
+		Fail(w, "AI 接口请求失败")
+		return
+	}
+	normalizedPayload["id"] = taskID
+	normalized, _ = json.Marshal(normalizedPayload)
 	if err := syncSelectedVideoAITaskStatus(localAITaskID, userID, taskID, normalized, service.SyncArkVideoAITaskStatus); err != nil {
 		log.Printf("GeekNow video task sync failed: task=%s err=%v", taskID, err)
 	}

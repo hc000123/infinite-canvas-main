@@ -29,6 +29,17 @@ type DreaminaReferenceInput = DreaminaCapabilityInput & {
 };
 
 export function resolveDreaminaVideoCapability(input: DreaminaCapabilityInput): DreaminaVideoCapability | null {
+    if (input.protocol === "openai" && input.model.trim().toLowerCase() === "manxue-2.5") {
+        return {
+            label: "manxue 2.5 · 4–29s · 多模态",
+            notice: "",
+            duration: { min: 4, max: 29 },
+            resolutions: ["480", "720"],
+            fallbackResolution: "720",
+            references: { images: 30, videos: 10, audios: 10, total: 50, allowAudioOnly: true },
+            fixedModel: false,
+        };
+    }
     if (input.protocol === "xinglian-cloud") return resolveXinglianVideoCapability(input.model);
     if (input.protocol === "minimax") {
         return {

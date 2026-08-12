@@ -1,12 +1,34 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/basketikun/infinite-canvas/model"
 	"github.com/basketikun/infinite-canvas/repository"
 )
+
+func TestGetWorkflowAssetSlotsProjectsInvocationBackedStage(t *testing.T) {
+	setupVideoWorkflowTest(t)
+	seedWorkflowInvocationCredits(t)
+	detail := ensureVideoWorkflowTestRun(t)
+	stage, err := StartWorkflowStage("user-1", detail.Run.ID, WorkflowStageAssetExtraction, "workflow-slot-projection")
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog := `{"items":[{"assetId":"character-001","kind":"character","name":"阿宁","sourceEvidence":["阿宁进入房间"],"coreFacts":["年轻女性"]}]}`
+	worker := NewAgentRunWorker(AgentRunWorkerOptions{ID: "workflow-slot-worker", LeaseDuration: time.Minute, Executor: invocationFakeExecutor{result: agentRunCallResult{rawOutput: catalog, structuredJSON: catalog}}})
+	if err := worker.ProcessOne(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, err := GetWorkflowAssetSlots("user-1", stage.ID)
+	if err != nil || len(loaded.Slots) != 1 || loaded.Slots[0].Name != "阿宁" {
+		t.Fatalf("loaded=%#v err=%v", loaded, err)
+	}
+}
 
 func TestGetWorkflowAssetSlotsBuildsPlaceholdersFromApprovedCatalog(t *testing.T) {
 	setupVideoWorkflowTest(t)

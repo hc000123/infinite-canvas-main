@@ -7,7 +7,7 @@ import { Download } from "lucide-react";
 import { buildImportedVideoPackage } from "@/app/(user)/video/video-package-builders";
 import { useVideoPackageStore } from "@/app/(user)/video/use-video-package-store";
 import { applyWorkflowStage, type RemoteWorkflowArtifact, type RemoteWorkflowStageRun } from "@/services/api/workflow-runs";
-import { parseShotBreakdown, requireWorkflowShotReview } from "../workflow-shot-draft";
+import { parseShotBreakdown, prepareWorkflowShotPackage } from "../workflow-shot-draft";
 
 export function WorkflowStoryboardSync(props: { artifact: RemoteWorkflowArtifact; episodeId: string; onApplied: () => void | Promise<void>; projectId: string; stage: RemoteWorkflowStageRun }) {
     const { message, modal } = App.useApp();
@@ -18,7 +18,7 @@ export function WorkflowStoryboardSync(props: { artifact: RemoteWorkflowArtifact
         if (!shots.length || syncing) return;
         setSyncing(true);
         try {
-            const packages = shots.map((shot, index) => requireWorkflowShotReview(buildImportedVideoPackage({ duration: `${shot.shotDraft.durationSeconds}秒`, episode: props.episodeId, episodeId: props.episodeId, id: shot.shotId, order: index + 1, projectId: props.projectId, prompt: "", sceneKey: shot.sceneKey, segment: shot.shotDraft.action || `分镜 ${index + 1}`, sourcePath: `cloud-workflow/${props.artifact.id}`, sourceScript: shot.sourceScript, shotDraft: shot.shotDraft })));
+            const packages = shots.map((shot, index) => prepareWorkflowShotPackage(buildImportedVideoPackage({ duration: `${shot.shotDraft.durationSeconds}秒`, episode: props.episodeId, episodeId: props.episodeId, id: shot.shotId, order: index + 1, projectId: props.projectId, prompt: "", sceneKey: shot.sceneKey, segment: shot.shotDraft.action || `分镜 ${index + 1}`, sourcePath: `cloud-workflow/${props.artifact.id}`, sourceScript: shot.sourceScript, shotDraft: shot.shotDraft })));
             upsertPackages(packages);
             await applyWorkflowStage(props.stage.id, { appliedCount: packages.length, artifactHash: props.artifact.contentHash, skippedCount: 0, target: "video_package_store", targetIds: packages.map((item) => `${item.projectId}:${item.episodeId}:${item.id}`), version: String(props.artifact.version) });
             message.success(`已同步 ${packages.length} 条可编辑分镜，请逐条确认后生成提示词`);

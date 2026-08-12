@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/json"
 	"mime/multipart"
@@ -113,5 +114,26 @@ func TestProjectCachePackageDoesNotReturnPartialZipWhenMediaReadFails(t *testing
 	DownloadProjectCachePackage(response, request, "p1")
 	if response.Header().Get("Content-Type") == "application/zip" || !bytes.Contains(response.Body.Bytes(), []byte(`"code":1`)) {
 		t.Fatalf("headers=%v body=%q", response.Header(), response.Body.String())
+	}
+}
+
+func TestProjectCacheSelectionReturnsZipHeaders(t *testing.T) {
+	oldRoot := config.Cfg.ProjectCacheDir
+	config.Cfg.ProjectCacheDir = t.TempDir()
+	t.Cleanup(func() { config.Cfg.ProjectCacheDir = oldRoot })
+	archived, err := service.ArchiveProjectCacheFile(config.Cfg.ProjectCacheDir, "u1", service.ProjectCacheArchiveInput{Context: service.ProjectCacheContext{ProjectID: "p1", ProjectName: "A"}, Filename: "a.png", MIMEType: "image/png", Reader: strings.NewReader("a")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/project-cache/projects/p1/package/selection", strings.NewReader(`{"fileIds":["`+archived.File.ID+`"]}`))
+	request.Header.Set("Content-Type", "application/json")
+	request = request.WithContext(service.WithUser(request.Context(), model.AuthUser{ID: "u1"}))
+	response := httptest.NewRecorder()
+	DownloadProjectCacheSelection(response, request, "p1")
+	if response.Header().Get("Content-Type") != "application/zip" || !strings.Contains(response.Header().Get("Content-Disposition"), "attachment") {
+		t.Fatalf("headers=%v body=%s", response.Header(), response.Body.String())
+	}
+	if _, err := zip.NewReader(bytes.NewReader(response.Body.Bytes()), int64(response.Body.Len())); err != nil {
+		t.Fatalf("invalid zip: %v", err)
 	}
 }

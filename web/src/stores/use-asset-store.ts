@@ -40,6 +40,7 @@ export type AssetSubject = {
     name: string;
     tags: string[];
     note?: string;
+    voiceAssetId?: string;
     createdAt: string;
     updatedAt: string;
 };
@@ -111,7 +112,7 @@ type AssetStore = {
     updateFolder: (id: string, name: string) => void;
     removeFolder: (id: string) => void;
     ensureSubject: (input: Omit<AssetSubject, "code" | "createdAt" | "id" | "updatedAt"> & { code?: string }) => string;
-    updateSubject: (id: string, patch: Partial<Pick<AssetSubject, "name" | "tags" | "note">>) => void;
+    updateSubject: (id: string, patch: Partial<Pick<AssetSubject, "name" | "tags" | "note" | "voiceAssetId">>) => void;
     removeSubject: (id: string) => void;
     ensureVariant: (input: Omit<AssetVariant, "createdAt" | "id" | "updatedAt">) => string;
     updateVariant: (id: string, patch: Partial<Pick<AssetVariant, "config" | "currentAssetId" | "name" | "prompt" | "referenceImageIds">>) => void;
