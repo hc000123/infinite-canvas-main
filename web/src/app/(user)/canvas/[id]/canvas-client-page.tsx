@@ -689,10 +689,6 @@ function InfiniteCanvasPage() {
         handleUploadRequest,
         deleteSelection,
         deselectCanvas,
-        openEpisodeWorkbench,
-        setClearConfirmOpen,
-        setAssetPickerTab,
-        setAssetPickerOpen,
     });
 
     const { copySelectedNodes, pasteCopiedNodes, pasteSystemClipboard, pasteClipboardEvent } = useCanvasClipboardActions({

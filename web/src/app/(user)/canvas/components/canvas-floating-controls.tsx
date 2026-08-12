@@ -4,6 +4,7 @@ import type { Dispatch, SetStateAction } from "react";
 
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
 import type { CanvasNodeData, ContextMenuState, ViewportTransform } from "../types";
+import { CanvasCreateRail, type CanvasCreateRailActions } from "./canvas-create-rail";
 import { CanvasNodeContextMenu } from "./canvas-context-menu";
 import { CanvasNodeHoverToolbar, type CanvasNodeHoverToolbarActions } from "./canvas-node-hover-toolbar";
 import { Minimap } from "./canvas-mini-map";
@@ -41,7 +42,7 @@ type Props = {
     showImageInfo: boolean;
     size: { width: number; height: number };
     submittingReviewNodeId: string | null;
-    toolbarActions: Omit<CanvasToolbarActions, "onUndo" | "onRedo" | "onBackgroundModeChange" | "onShowImageInfoChange">;
+    toolbarActions: CanvasCreateRailActions & Pick<CanvasToolbarActions, "onDelete">;
     toolbarNode: CanvasNodeData | null;
     viewport: ViewportTransform;
 };
@@ -96,9 +97,12 @@ export function CanvasFloatingControls({
                 }}
             />
 
+            <CanvasCreateRail actions={toolbarActions} />
+
             <CanvasToolbar
                 actions={{
-                    ...toolbarActions,
+                    onDelete: toolbarActions.onDelete,
+                    onDeselect: toolbarActions.onDeselect,
                     onUndo,
                     onRedo,
                     onBackgroundModeChange: setBackgroundMode,

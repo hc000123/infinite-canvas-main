@@ -126,12 +126,7 @@ export function CanvasTopBar({
                                             onClick: onCreateProject,
                                         },
                                         ...(childMenuItems || []),
-                                        { key: "save", icon: <Save className="size-4" />, label: "保存画布", onClick: onSaveProject },
                                         { key: "delete", danger: true, icon: <Trash2 className="size-4" />, label: "删除当前画布", onClick: onDeleteProject },
-                                        { type: "divider" },
-                                        { key: "import", icon: <Upload className="size-4" />, label: "导入图片", onClick: onImportImage },
-                                        { key: "assets", icon: <FolderOpen className="size-4" />, label: "打开素材", onClick: onOpenAssets },
-                                        { key: "organize", icon: <LayoutGrid className="size-4" />, label: "整理画布", onClick: onOrganizeCanvas },
                                         { type: "divider" },
                                         { key: "undo", disabled: !canUndo, icon: <Undo2 className="size-4" />, label: <MenuLabel text="撤销" shortcut="⌘ Z" />, onClick: onUndo },
                                         { key: "redo", disabled: !canRedo, icon: <Redo2 className="size-4" />, label: <MenuLabel text="重做" shortcut="⌘ ⇧ Z / ⌘ Y" />, onClick: onRedo },
@@ -186,9 +181,10 @@ export function CanvasTopBar({
                 <div className="pointer-events-auto flex shrink-0 items-center gap-1">
                     <CanvasCapacityIndicator capacity={capacity} />
                     <div className="hidden items-center gap-1 md:flex">
-                        <TopAction icon={<Upload className="size-4" />} label="导入" onClick={onImportImage} />
-                        <TopAction icon={<FolderOpen className="size-4" />} label="素材" onClick={onOpenAssets} />
-                        <TopAction icon={<LayoutGrid className="size-4" />} label="整理画布" onClick={onOrganizeCanvas} />
+                        <TopAction label="导入" icon={<Upload className="size-4" />} onClick={onImportImage} />
+                        <TopAction label="素材" icon={<FolderOpen className="size-4" />} onClick={onOpenAssets} />
+                        <TopAction label="整理画布" icon={<LayoutGrid className="size-4" />} onClick={onOrganizeCanvas} />
+                        <TopAction label="保存" icon={<Save className="size-4" />} onClick={onSaveProject} />
                     </div>
                 </div>
             </div>

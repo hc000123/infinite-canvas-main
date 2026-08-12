@@ -65,21 +65,12 @@ export function CanvasToolbar({ actions, state }: { actions: CanvasToolbarAction
 }
 
 export type CanvasToolbarActions = {
-    onAddImage: () => void;
-    onAddVideo: () => void;
-    onAddAudio: () => void;
-    onAddText: () => void;
-    onAddConfig: () => void;
     onUndo: () => void;
     onRedo: () => void;
-    onUpload: () => void;
     onDelete: () => void;
-    onClear: () => void;
     onDeselect: () => void;
     onBackgroundModeChange: (mode: CanvasBackgroundMode) => void;
     onShowImageInfoChange: (show: boolean) => void;
-    onOpenAssets: () => void;
-    onOpenEpisodeWorkbench: () => void;
 };
 
 export type CanvasToolbarState = {
