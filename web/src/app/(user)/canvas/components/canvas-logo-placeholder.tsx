@@ -5,10 +5,15 @@ import { useThemeStore } from "@/stores/use-theme-store";
 
 export function CanvasLogoPlaceholder({ label = "等待媒体内容" }: { label?: string }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const logoMask = "url('/logo.svg')";
 
     return (
         <div className="flex h-full w-full items-center justify-center" style={{ background: theme.surfaceRaised }} role="img" aria-label={label}>
-            <img src="/logo.svg" alt="" draggable={false} className="pointer-events-none size-14 select-none opacity-25 grayscale" />
+            <span
+                aria-hidden
+                className="pointer-events-none size-14 opacity-65"
+                style={{ backgroundColor: theme.node.placeholder, maskImage: logoMask, WebkitMaskImage: logoMask, maskPosition: "center", WebkitMaskPosition: "center", maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat", maskSize: "contain", WebkitMaskSize: "contain" }}
+            />
         </div>
     );
 }

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { canvasThemes } from "../../../../lib/canvas-theme.ts";
+
 function readCanvasFile(path: string) {
     return readFileSync(new URL(path, import.meta.url), "utf8");
 }
@@ -46,24 +48,30 @@ test("empty images use the logo while retaining baseline quick actions", () => {
     assert.match(content, /onImageQuickAction\?\.\(node, "upscale"\)/);
 });
 
-test("canvas logo placeholder is accessible and contains no clapperboard", () => {
+test("canvas logo placeholder uses a theme-colored mask", () => {
     const logo = readCanvasFile("../components/canvas-logo-placeholder.tsx");
 
     assert.equal((logo.match(/\/logo\.svg/g) || []).length, 1);
     assert.match(logo, /aria-label=/);
-    assert.match(logo, /alt=""/);
+    assert.match(logo, /maskImage/);
+    assert.match(logo, /WebkitMaskImage/);
+    assert.match(logo, /theme\.node\.placeholder/);
+    assert.match(logo, /aria-hidden/);
+    assert.doesNotMatch(logo, /<img/);
     assert.doesNotMatch(logo, /Clapperboard|clapper|场记板/i);
 });
 
 test("editorial canvas theme exposes warm surface, accent, and focus tokens", () => {
-    const theme = readCanvasFile("../../../../lib/canvas-theme.ts");
-
-    for (const token of ["accent", "surfaceRaised", "surfaceOverlay", "focusRing"]) assert.equal((theme.match(new RegExp(`${token}:`, "g")) || []).length, 2);
-    assert.match(theme, /background: "#171512"/);
-    assert.match(theme, /fill: "#24211B"/);
-    assert.match(theme, /panel: "#2A261F"/);
-    assert.match(theme, /accent: "#DF593B"/);
-    assert.match(theme, /accent: "#C94D34"/);
+    assert.deepEqual(
+        { accent: canvasThemes.light.accent, surfaceRaised: canvasThemes.light.surfaceRaised, focusRing: canvasThemes.light.focusRing },
+        { accent: "#C94D34", surfaceRaised: "#EEEAE2", focusRing: "rgba(201,77,52,.38)" },
+    );
+    assert.deepEqual(
+        { accent: canvasThemes.dark.accent, surfaceRaised: canvasThemes.dark.surfaceRaised, focusRing: canvasThemes.dark.focusRing, canvas: canvasThemes.dark.canvas.background, fill: canvasThemes.dark.node.fill, panel: canvasThemes.dark.node.panel },
+        { accent: "#DF593B", surfaceRaised: "#24211B", focusRing: "rgba(223,89,59,.42)", canvas: "#171512", fill: "#24211B", panel: "#2A261F" },
+    );
+    assert.equal("surfaceOverlay" in canvasThemes.light, false);
+    assert.equal("surfaceOverlay" in canvasThemes.dark, false);
 });
 
 test("node and connection styling uses thin editorial accents without glow", () => {

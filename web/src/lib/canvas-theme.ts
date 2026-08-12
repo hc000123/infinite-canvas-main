@@ -5,7 +5,6 @@ export const canvasThemes = {
     light: {
         accent: "#C94D34",
         surfaceRaised: "#EEEAE2",
-        surfaceOverlay: "rgba(255,252,246,.88)",
         focusRing: "rgba(201,77,52,.38)",
         canvas: {
             background: "#F5F1E9",
@@ -37,7 +36,6 @@ export const canvasThemes = {
     dark: {
         accent: "#DF593B",
         surfaceRaised: "#24211B",
-        surfaceOverlay: "rgba(42,38,31,.9)",
         focusRing: "rgba(223,89,59,.42)",
         canvas: {
             background: "#171512",
