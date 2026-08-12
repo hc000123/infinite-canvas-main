@@ -1018,7 +1018,6 @@ function InfiniteCanvasPage() {
                 </InfiniteCanvas>
 
                 <CanvasFloatingControls
-                    activeTimelineShotId={activeTimelineShotId}
                     backgroundMode={backgroundMode}
                     canRedo={historyState.canRedo}
                     canUndo={historyState.canUndo}
@@ -1033,11 +1032,9 @@ function InfiniteCanvasPage() {
                     nodeImageSettingsOpen={nodeImageSettingsOpen}
                     nodeToolActions={nodeToolActions}
                     nodes={nodes}
-                    onOpenEpisodeWorkbench={openEpisodeWorkbench}
                     onCreateVideoFromImages={createVideoFromImages}
                     onRedo={redoCanvas}
                     onResetViewport={resetViewport}
-                    onSelectShot={handleTimelineShotSelect}
                     onSetZoomScale={setZoomScale}
                     onToggleMiniMap={renderActions.toggleMiniMap}
                     onUndo={undoCanvas}
@@ -1048,8 +1045,6 @@ function InfiniteCanvasPage() {
                     setContextMenu={setContextMenu}
                     setShowImageInfo={setShowImageInfo}
                     setViewport={setViewport}
-                    shotGroups={timelineShotGroups}
-                    shots={timelineShots}
                     showImageInfo={showImageInfo}
                     size={size}
                     submittingReviewNodeId={submittingReviewNodeId}

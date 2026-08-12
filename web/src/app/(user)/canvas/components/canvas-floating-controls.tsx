@@ -3,17 +3,14 @@
 import type { Dispatch, SetStateAction } from "react";
 
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
-import type { ShotGroup, StoryboardTableShot } from "../utils/storyboard-management";
 import type { CanvasNodeData, ContextMenuState, ViewportTransform } from "../types";
 import { CanvasNodeContextMenu } from "./canvas-context-menu";
 import { CanvasNodeHoverToolbar, type CanvasNodeHoverToolbarActions } from "./canvas-node-hover-toolbar";
 import { Minimap } from "./canvas-mini-map";
-import { CanvasStoryboardTimeline } from "./canvas-storyboard-timeline";
 import { CanvasToolbar, type CanvasToolbarActions } from "./canvas-toolbar";
 import { CanvasZoomControls } from "./canvas-zoom-controls";
 
 type Props = {
-    activeTimelineShotId: string;
     backgroundMode: CanvasBackgroundMode;
     canRedo: boolean;
     canUndo: boolean;
@@ -28,11 +25,9 @@ type Props = {
     nodeImageSettingsOpen: boolean;
     nodeToolActions: CanvasNodeHoverToolbarActions;
     nodes: CanvasNodeData[];
-    onOpenEpisodeWorkbench: () => void;
     onCreateVideoFromImages: (nodes: CanvasNodeData[]) => void;
     onRedo: () => void;
     onResetViewport: () => void;
-    onSelectShot: (shot: StoryboardTableShot, nodeId?: string) => void;
     onSetZoomScale: (scale: number) => void;
     onToggleMiniMap: () => void;
     onUndo: () => void;
@@ -43,8 +38,6 @@ type Props = {
     setContextMenu: Dispatch<SetStateAction<ContextMenuState | null>>;
     setShowImageInfo: (show: boolean) => void;
     setViewport: (viewport: ViewportTransform) => void;
-    shotGroups: ShotGroup[];
-    shots: StoryboardTableShot[];
     showImageInfo: boolean;
     size: { width: number; height: number };
     submittingReviewNodeId: string | null;
@@ -54,7 +47,6 @@ type Props = {
 };
 
 export function CanvasFloatingControls({
-    activeTimelineShotId,
     backgroundMode,
     canRedo,
     canUndo,
@@ -69,11 +61,9 @@ export function CanvasFloatingControls({
     nodeImageSettingsOpen,
     nodeToolActions,
     nodes,
-    onOpenEpisodeWorkbench,
     onCreateVideoFromImages,
     onRedo,
     onResetViewport,
-    onSelectShot,
     onSetZoomScale,
     onToggleMiniMap,
     onUndo,
@@ -84,8 +74,6 @@ export function CanvasFloatingControls({
     setContextMenu,
     setShowImageInfo,
     setViewport,
-    shotGroups,
-    shots,
     showImageInfo,
     size,
     submittingReviewNodeId,
@@ -124,8 +112,6 @@ export function CanvasFloatingControls({
                     showImageInfo,
                 }}
             />
-
-            <CanvasStoryboardTimeline shots={shots} shotGroups={shotGroups} nodes={nodes} activeShotId={activeTimelineShotId} onOpenWorkbench={onOpenEpisodeWorkbench} onSelectShot={onSelectShot} />
 
             {isMiniMapOpen ? <Minimap nodes={nodes} viewport={viewport} viewportSize={size} onViewportChange={setViewport} /> : null}
 
