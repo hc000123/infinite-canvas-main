@@ -46,6 +46,8 @@ test("empty videos preserve frame reference previews and task refresh actions", 
     assert.match(content, /props\.node\.type === CanvasNodeType\.Video && Boolean\(props\.frameReferenceNodes\?\.first \|\| props\.frameReferenceNodes\?\.last\)/);
     assert.match(content, /hasVideoFramePreview \? <Renderer \{\.\.\.props\} \/>/);
     assert.match(content, /<NodeStatusOverlay[\s\S]*onRefreshVideoTask=\{props\.onRefreshVideoTask\}/);
+    assert.match(content, /node\.type === CanvasNodeType\.Video && node\.metadata\?\.taskId/);
+    assert.doesNotMatch(content, /node\.metadata\?\.taskId \|\| node\.metadata\?\.aiTaskId/);
     assert.match(content, /onRefreshVideoTask\?\.\(node\)/);
     assert.match(content, /刷新状态/);
 });

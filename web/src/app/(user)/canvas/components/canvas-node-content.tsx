@@ -97,7 +97,7 @@ function NodeStatusOverlay({ node, theme, status, onRetry, onRefreshVideoTask }:
             <div className="pointer-events-auto inline-flex max-w-full items-center gap-2 rounded-[4px] border px-2.5 py-2 text-xs backdrop-blur-md" style={{ background: theme.surfaceOverlay, borderColor: status === "error" ? "var(--studio-danger)" : theme.focusRing, color: status === "error" ? "var(--studio-danger)" : theme.node.text }}>
                 {status === "loading" ? <span className="size-3.5 shrink-0 animate-spin rounded-full border" style={{ borderColor: theme.node.stroke, borderTopColor: theme.accent }} /> : <AlertTriangle className="size-3.5 shrink-0" />}
                 <span className="truncate">{status === "loading" ? loadingLabel : node.metadata?.errorDetails || "生成失败"}</span>
-                {node.type === CanvasNodeType.Video && (node.metadata?.taskId || node.metadata?.aiTaskId) ? (
+                {node.type === CanvasNodeType.Video && node.metadata?.taskId ? (
                     <button
                         type="button"
                         className="inline-flex shrink-0 items-center gap-1 rounded-[3px] px-1.5 py-1 font-medium"
