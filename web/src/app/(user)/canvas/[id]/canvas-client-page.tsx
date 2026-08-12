@@ -689,6 +689,7 @@ function InfiniteCanvasPage() {
         handleUploadRequest,
         deleteSelection,
         deselectCanvas,
+        setClearConfirmOpen,
     });
 
     const { copySelectedNodes, pasteCopiedNodes, pasteSystemClipboard, pasteClipboardEvent } = useCanvasClipboardActions({
@@ -926,6 +927,7 @@ function InfiniteCanvasPage() {
                     onCreateProject={createAndOpenCanvas}
                     onOpenChildCanvas={(id) => navigateCanvasPage(`/canvas/${id}`)}
                     onDeleteProject={deleteCurrentProject}
+                    onClearCanvas={toolbarActions.onClear}
                     onSaveProject={saveCurrentProject}
                     onImportImage={() => handleUploadRequest()}
                     onOpenAssets={inspectorPanelActions.openAssetPicker}

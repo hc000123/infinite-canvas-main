@@ -28,6 +28,7 @@ export function CanvasTopBar({
     childCanvases,
     onOpenChildCanvas,
     onDeleteProject,
+    onClearCanvas,
     onSaveProject,
     onImportImage,
     onOpenAssets,
@@ -55,6 +56,7 @@ export function CanvasTopBar({
     childCanvases: Array<{ id: string; title: string }>;
     onOpenChildCanvas: (canvasId: string) => void;
     onDeleteProject: () => void;
+    onClearCanvas: () => void;
     onSaveProject: () => void;
     onImportImage: () => void;
     onOpenAssets: () => void;
@@ -127,6 +129,7 @@ export function CanvasTopBar({
                                             onClick: onCreateProject,
                                         },
                                         ...(childMenuItems || []),
+                                        { key: "clear", danger: true, icon: <Trash2 className="size-4" />, label: "清空画布", onClick: onClearCanvas },
                                         { key: "delete", danger: true, icon: <Trash2 className="size-4" />, label: "删除当前画布", onClick: onDeleteProject },
                                         { type: "divider" },
                                         { key: "undo", disabled: !canUndo, icon: <Undo2 className="size-4" />, label: <MenuLabel text="撤销" shortcut="⌘ Z" />, onClick: onUndo },

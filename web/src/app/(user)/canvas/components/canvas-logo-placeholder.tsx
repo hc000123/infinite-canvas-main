@@ -11,7 +11,7 @@ export function CanvasLogoPlaceholder({ label = "等待媒体内容" }: { label?
         <div className="flex h-full w-full items-center justify-center" style={{ background: theme.surfaceRaised }} role="img" aria-label={label}>
             <span
                 aria-hidden
-                className="pointer-events-none size-14 opacity-65"
+                className="pointer-events-none size-14"
                 style={{ backgroundColor: theme.node.placeholder, maskImage: logoMask, WebkitMaskImage: logoMask, maskPosition: "center", WebkitMaskPosition: "center", maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat", maskSize: "contain", WebkitMaskSize: "contain" }}
             />
         </div>

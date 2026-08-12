@@ -57,6 +57,7 @@ test("canvas logo placeholder uses a theme-colored mask", () => {
     assert.match(logo, /WebkitMaskImage/);
     assert.match(logo, /theme\.node\.placeholder/);
     assert.match(logo, /aria-hidden/);
+    assert.doesNotMatch(logo, /opacity-(?:[0-7]\d?|80)\b|opacity:\s*0\.[0-8]\b/);
     assert.doesNotMatch(logo, /<img/);
     assert.doesNotMatch(logo, /Clapperboard|clapper|场记板/i);
 });
