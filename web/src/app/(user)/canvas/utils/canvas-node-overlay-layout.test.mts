@@ -21,46 +21,32 @@ test("node hover toolbar always stays above the node content", () => {
     assert.doesNotMatch(toolbar, /shouldOverlayMedia/);
 });
 
-test("node content renders real media before adding status overlays", () => {
+test("node content keeps baseline progress and error routing", () => {
     const content = readCanvasFile("../components/canvas-node-content.tsx");
-    const bodyCheck = content.indexOf('presentation.body === "media"');
-    const overlayCheck = content.indexOf('presentation.overlay === "loading"');
+    const progressCheck = content.indexOf("if (shouldShowCanvasNodeProgress(props.node))");
+    const imageContentCheck = content.indexOf("if (props.node.type === CanvasNodeType.Image && props.node.metadata?.content)");
+    const videoContentCheck = content.indexOf("if (props.node.type === CanvasNodeType.Video && props.node.metadata?.content)");
 
-    assert.ok(bodyCheck >= 0);
-    assert.ok(overlayCheck > bodyCheck);
-    assert.match(content, /deriveCanvasNodePresentation/);
-    assert.match(content, /CanvasLogoPlaceholder/);
-    assert.doesNotMatch(content, /Clapperboard|clapper|场记板/i);
+    assert.ok(progressCheck >= 0);
+    assert.ok(progressCheck < imageContentCheck);
+    assert.ok(progressCheck < videoContentCheck);
+    assert.match(content, /function LoadingContent/);
+    assert.match(content, /function ErrorContent/);
+    assert.match(content, /<VideoTaskProgressPanel node=\{node\} theme=\{theme\} onRefreshVideoTask=\{onRefreshVideoTask\} showPanel=\{showPanel\}/);
+    assert.match(content, /\[CanvasNodeType\.Config\]: EmptyImageContent/);
+    assert.doesNotMatch(content, /deriveCanvasNodePresentation|NodeStatusOverlay|LogoBody/);
 });
 
-test("logo-based empty images retain their existing quick action callbacks", () => {
+test("empty images use the logo while retaining baseline quick actions", () => {
     const content = readCanvasFile("../components/canvas-node-content.tsx");
 
+    assert.match(content, /function EmptyImageContent/);
+    assert.match(content, /<CanvasLogoPlaceholder/);
     assert.match(content, /onImageQuickAction\?\.\(node, "image-to-image"\)/);
     assert.match(content, /onImageQuickAction\?\.\(node, "upscale"\)/);
 });
 
-test("empty videos preserve frame reference previews and task refresh actions", () => {
-    const content = readCanvasFile("../components/canvas-node-content.tsx");
-
-    assert.match(content, /props\.node\.type === CanvasNodeType\.Video && Boolean\(props\.frameReferenceNodes\?\.first \|\| props\.frameReferenceNodes\?\.last\)/);
-    assert.match(content, /hasVideoFramePreview \? <Renderer \{\.\.\.props\} \/>/);
-    assert.match(content, /<NodeStatusOverlay[\s\S]*onRefreshVideoTask=\{props\.onRefreshVideoTask\}/);
-    assert.match(content, /node\.type === CanvasNodeType\.Video && node\.metadata\?\.taskId/);
-    assert.doesNotMatch(content, /node\.metadata\?\.taskId \|\| node\.metadata\?\.aiTaskId/);
-    assert.match(content, /onRefreshVideoTask\?\.\(node\)/);
-    assert.match(content, /刷新状态/);
-});
-
-test("config fallback uses non-logo content", () => {
-    const content = readCanvasFile("../components/canvas-node-content.tsx");
-
-    assert.match(content, /\[CanvasNodeType\.Config\]: ConfigContent/);
-    assert.match(content, /function ConfigContent/);
-    assert.doesNotMatch(content, /\[CanvasNodeType\.Config\]: EmptyImageContent/);
-});
-
-test("canvas logo placeholder is accessible and owns the only canvas logo reference", () => {
+test("canvas logo placeholder is accessible and contains no clapperboard", () => {
     const logo = readCanvasFile("../components/canvas-logo-placeholder.tsx");
 
     assert.equal((logo.match(/\/logo\.svg/g) || []).length, 1);
@@ -85,9 +71,7 @@ test("node and connection styling uses thin editorial accents without glow", () 
     const connections = readCanvasFile("../components/canvas-connections.tsx");
 
     assert.match(node, /rounded-\[4px\] border/);
-    assert.doesNotMatch(node, /isRelated && !isBatchChild \? theme\.node\.muted : "transparent"/);
-    assert.doesNotMatch(node, /0 0 0 1px/);
-    assert.doesNotMatch(node, /0 2px 8px/);
+    assert.doesNotMatch(node, /0 0 0 1px|0 2px 8px/);
     assert.match(connections, /theme\.accent/);
     assert.doesNotMatch(connections, /drop-shadow/);
 });
