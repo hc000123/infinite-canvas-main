@@ -34,6 +34,29 @@ export type CanvasVideoEditType = "replace" | "add" | "remove" | "inpaint";
 export type CanvasVideoExtendDirection = "forward" | "backward";
 export type CanvasProductionPackageRole = "script" | "asset" | "prompt" | "video_config" | "video_result" | "reference" | "manual";
 
+export type CanvasImageUpscaleMetadata = {
+    jobId: string;
+    provider: string;
+    providerRequestId?: string;
+    scale: 2 | 4;
+    status: "queued" | "processing" | "downloading" | "succeeded" | "failed";
+    progress: number;
+    attempt: number;
+    sourceNodeId: string;
+    sourceAssetId?: string;
+    inputWidth: number;
+    inputHeight: number;
+    outputWidth?: number;
+    outputHeight?: number;
+    model?: string;
+    strategy?: string;
+    cloudProcessing: true;
+    startedAt?: string;
+    completedAt?: string;
+    durationMs?: number;
+    errorCode?: string;
+};
+
 export type CanvasMediaVersion = {
     id: string;
     versionNumber: number;
@@ -65,6 +88,7 @@ export type CanvasNodeMetadata = {
     pendingMediaVersion?: CanvasPendingMediaVersion;
     status?: CanvasNodeStatus;
     errorDetails?: string;
+    imageUpscale?: CanvasImageUpscaleMetadata;
     fontSize?: number;
     generationMode?: CanvasGenerationMode;
     generationType?: CanvasImageGenerationType;

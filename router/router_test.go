@@ -62,6 +62,23 @@ func TestXinglianDirectUploadRoutesRequireAuth(t *testing.T) {
 	}
 }
 
+func TestImageUpscaleRoutesRequireAuth(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := New()
+	for _, item := range []struct{ method, path string }{
+		{http.MethodGet, "/api/v1/image-upscale/capabilities"},
+		{http.MethodPost, "/api/v1/image-upscale/jobs"},
+		{http.MethodGet, "/api/v1/image-upscale/jobs/job-1"},
+		{http.MethodPost, "/api/v1/image-upscale/jobs/job-1/retry"},
+	} {
+		recorder := httptest.NewRecorder()
+		app.ServeHTTP(recorder, httptest.NewRequest(item.method, item.path, nil))
+		if recorder.Code == http.StatusNotFound || !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+			t.Fatalf("image upscale route missing auth: %s %s body=%s", item.method, item.path, recorder.Body.String())
+		}
+	}
+}
+
 func TestProjectCacheSelectionRouteRequiresAuth(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	app := New()

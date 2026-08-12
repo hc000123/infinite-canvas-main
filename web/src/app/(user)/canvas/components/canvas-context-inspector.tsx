@@ -65,6 +65,7 @@ type CanvasContextInspectorProps = {
     onContinueVideo: (node: CanvasNodeData) => void;
     onCrop: (node: CanvasNodeData) => void;
     onAngle: (node: CanvasNodeData) => void;
+    onUpscale: (node: CanvasNodeData) => void;
     onViewImage: (node: CanvasNodeData) => void;
 };
 
@@ -115,6 +116,7 @@ export function CanvasContextInspector({
     onContinueVideo,
     onCrop,
     onAngle,
+    onUpscale,
     onViewImage,
 }: CanvasContextInspectorProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
@@ -226,6 +228,7 @@ export function CanvasContextInspector({
                     onContinueVideo={onContinueVideo}
                     onCrop={onCrop}
                     onAngle={onAngle}
+                    onUpscale={onUpscale}
                     onViewImage={onViewImage}
                 />
             ) : selectedProductionPackage ? (

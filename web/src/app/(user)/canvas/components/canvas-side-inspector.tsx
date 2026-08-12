@@ -194,6 +194,7 @@ export function CanvasSideInspector({
             onContinueVideo={nodeToolActions.onContinueVideo}
             onCrop={nodeToolActions.onCrop}
             onAngle={nodeToolActions.onAngle}
+            onUpscale={nodeToolActions.onUpscale}
             onViewImage={nodeToolActions.onViewImage}
         />
     );

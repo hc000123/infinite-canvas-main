@@ -36,6 +36,7 @@ export type CanvasNodeHoverToolbarActions = {
     onRefreshReview: (node: CanvasNodeData) => void;
     onCrop: (node: CanvasNodeData) => void;
     onAngle: (node: CanvasNodeData) => void;
+    onUpscale: (node: CanvasNodeData) => void;
     onViewImage: (node: CanvasNodeData) => void;
     onRetry: (node: CanvasNodeData) => void;
     onToggleFreeResize: (node: CanvasNodeData) => void;
@@ -246,6 +247,7 @@ function appendMediaManagementActions(items: NodeToolbarAction[], context: NodeT
             active: node.metadata?.freeResize,
         });
     if (hasImage) items.push({ type: "button", key: "crop", title: "裁剪并生成新节点", label: "裁剪", icon: <Scissors className="size-4" />, onClick: () => actions.onCrop(node) });
+    if (hasImage) items.push({ type: "button", key: "upscale", title: "使用云端服务放大图片", label: "超分", icon: <Sparkles className="size-4" />, onClick: () => actions.onUpscale(node) });
     if (hasImage) items.push({ type: "button", key: "angle", title: "生成角度", label: "多角度", icon: <Camera className="size-4" />, onClick: () => actions.onAngle(node) });
     if (hasImage) items.push({ type: "button", key: "view-image", title: "查看图片详情", label: "查看大图", icon: <Maximize2 className="size-4" />, onClick: () => actions.onViewImage(node) });
 }

@@ -14,6 +14,8 @@ import { ImageBriefWorkbenchDrawer } from "./image-brief-workbench-drawer";
 import { ScriptManagerDrawer } from "./script-manager-drawer";
 import { StoryboardManagerDrawer } from "./storyboard-manager-drawer";
 import { CanvasTextEditorModal } from "./canvas-text-editor-modal";
+import { CanvasImageUpscaleModal } from "./canvas-image-upscale-modal";
+import type { ImageUpscaleCapabilities } from "@/services/api/image-upscale";
 
 type Props = {
     angleNode: CanvasNodeData | null;
@@ -29,6 +31,9 @@ type Props = {
     infoNode: CanvasNodeData | null;
     expandedTextNode: CanvasNodeData | null;
     previewNode: CanvasNodeData | null;
+    upscaleNode: CanvasNodeData | null;
+    upscaleCapabilities: ImageUpscaleCapabilities | null;
+    upscaleSubmitting: boolean;
     projectId: string;
     projectTitle: string;
     episodeId?: string;
@@ -49,12 +54,14 @@ type Props = {
     onCloseInfo: () => void;
     onCloseTextEditor: () => void;
     onClosePreview: () => void;
+    onCloseUpscale: () => void;
     onCloseScriptManager: () => void;
     onCloseStoryboardManager: () => void;
     onCreateBriefImageConfig: (brief: ImageBrief, canvasId?: string) => void;
     onCropImageNode: (node: CanvasNodeData, crop: CanvasImageCropRect, mode?: "single" | "grid") => void;
     onGenerateAngleNode: (node: CanvasNodeData, params: CanvasImageAngleParams) => void;
     onImageInputChange: (event: ChangeEvent<HTMLInputElement>) => void;
+    onUpscaleImageNode: (node: CanvasNodeData, scale: 2 | 4) => void;
     onOpenStoryboardGroup: (groupId: string) => void;
     onSaveTextNode: (nodeId: string, content: string) => void;
 };
@@ -73,6 +80,9 @@ export function CanvasPageOverlays({
     infoNode,
     expandedTextNode,
     previewNode,
+    upscaleNode,
+    upscaleCapabilities,
+    upscaleSubmitting,
     projectId,
     projectTitle,
     episodeId,
@@ -93,12 +103,14 @@ export function CanvasPageOverlays({
     onCloseInfo,
     onCloseTextEditor,
     onClosePreview,
+    onCloseUpscale,
     onCloseScriptManager,
     onCloseStoryboardManager,
     onCreateBriefImageConfig,
     onCropImageNode,
     onGenerateAngleNode,
     onImageInputChange,
+    onUpscaleImageNode,
     onOpenStoryboardGroup,
     onSaveTextNode,
 }: Props) {
@@ -123,6 +135,8 @@ export function CanvasPageOverlays({
             {angleNode?.metadata?.content ? <CanvasNodeAngleDialog dataUrl={angleNode.metadata.content} open={Boolean(angleNode)} onClose={onCloseAngle} onConfirm={(params) => onGenerateAngleNode(angleNode, params)} /> : null}
 
             <CanvasMediaPreviewModal node={previewNode || undefined} onClose={onClosePreview} />
+
+            <CanvasImageUpscaleModal node={upscaleNode} capabilities={upscaleCapabilities} loading={upscaleSubmitting} onClose={onCloseUpscale} onSubmit={onUpscaleImageNode} />
 
             <ClearCanvasConfirmModal open={clearConfirmOpen} onCancel={onCloseClearConfirm} onConfirm={onClearCanvas} />
 

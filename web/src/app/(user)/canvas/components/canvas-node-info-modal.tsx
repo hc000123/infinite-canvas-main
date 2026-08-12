@@ -34,6 +34,7 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
     const isVideoNode = node?.type === CanvasNodeType.Video;
     const videoParams = isVideoNode ? videoParamLabel(node) : "";
     const arkParams = isVideoNode ? arkParamLabel(node) : "";
+    const upscale = node?.metadata?.imageUpscale;
 
     const title = (
         <div className="flex items-center justify-between gap-4 pr-12">
@@ -68,6 +69,15 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
                             {node.metadata?.aiTaskStatus ? <InfoRow label="账本状态" value={node.metadata.aiTaskStatus} /> : null}
                             {node.metadata?.aiTaskCredits || node.metadata?.creditsRefunded ? <InfoRow label="扣费 / 返还" value={`${node.metadata.aiTaskCredits || 0} / ${node.metadata.creditsRefunded || 0}`} /> : null}
                             {node.metadata?.creditLogId ? <InfoRow label="Credit Log" value={node.metadata.creditLogId} /> : null}
+                            {upscale ? <InfoRow label="超分任务" value={upscale.jobId} /> : null}
+                            {upscale ? <InfoRow label="超分状态" value={`${upscaleStatusLabel(upscale.status)} · ${upscale.progress}% · 第 ${upscale.attempt} 次`} /> : null}
+                            {upscale ? <InfoRow label="倍率 / 服务商" value={`${upscale.scale}× · ${upscale.provider}`} /> : null}
+                            {upscale ? <InfoRow label="云端处理" value="是，图片会进入云端服务基础设施" /> : null}
+                            {upscale ? <InfoRow label="输入尺寸" value={`${upscale.inputWidth} × ${upscale.inputHeight}`} /> : null}
+                            {upscale?.outputWidth && upscale.outputHeight ? <InfoRow label="输出尺寸" value={`${upscale.outputWidth} × ${upscale.outputHeight}`} /> : null}
+                            {upscale?.providerRequestId ? <InfoRow label="服务商请求" value={upscale.providerRequestId} /> : null}
+                            {upscale?.durationMs !== undefined ? <InfoRow label="处理耗时" value={formatSecondSpan(Math.round(upscale.durationMs / 1000))} /> : null}
+                            {upscale?.errorCode ? <InfoRow label="超分错误码" value={upscale.errorCode} /> : null}
                             {isVideoNode && node.metadata?.model ? <InfoRow label="模型" value={node.metadata.model} /> : null}
                             {isVideoNode && videoParams ? <InfoRow label="视频参数" value={videoParams} /> : null}
                             {isVideoNode && arkParams ? <InfoRow label="Ark 参数" value={arkParams} /> : null}
@@ -125,6 +135,14 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
             ) : null}
         </Modal>
     );
+}
+
+function upscaleStatusLabel(status: string) {
+    if (status === "queued") return "排队中";
+    if (status === "processing") return "云端处理中";
+    if (status === "downloading") return "保存结果中";
+    if (status === "succeeded") return "已完成";
+    return "失败";
 }
 
 function volcengineStatusLabel(status?: string) {

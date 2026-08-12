@@ -100,6 +100,7 @@ func DB() (*gorm.DB, error) {
 			&model.WorkflowMediaBatch{},
 			&model.WorkflowMediaItem{},
 			&model.Prompt{},
+			&model.ImageUpscaleJob{},
 			&model.Setting{},
 		)
 		if dbErr != nil {

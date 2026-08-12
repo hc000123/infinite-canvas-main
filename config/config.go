@@ -28,6 +28,11 @@ type Config struct {
 	WorkflowWorkerPollMS          int      `env:"WORKFLOW_WORKER_POLL_MS" envDefault:"2000"`
 	WorkflowWorkerLeaseSeconds    int      `env:"WORKFLOW_WORKER_LEASE_SECONDS" envDefault:"60"`
 	WorkflowLocalMediaDir         string   `env:"WORKFLOW_LOCAL_MEDIA_DIR" envDefault:"data/workflow-media"`
+	ImageUpscaleProvider          string   `env:"IMAGE_UPSCALE_PROVIDER" envDefault:"aliyun"`
+	ImageUpscaleWorkDir           string   `env:"IMAGE_UPSCALE_WORK_DIR" envDefault:"data/image-upscale"`
+	AlibabaCloudAccessKeyID       string   `env:"ALIBABA_CLOUD_ACCESS_KEY_ID"`
+	AlibabaCloudAccessKeySecret   string   `env:"ALIBABA_CLOUD_ACCESS_KEY_SECRET"`
+	AlibabaCloudSecurityToken     string   `env:"ALIBABA_CLOUD_SECURITY_TOKEN"`
 	LinuxDoAuthorizeURL           string   `env:"LINUX_DO_AUTHORIZE_URL" envDefault:"https://connect.linux.do/oauth2/authorize"`
 	LinuxDoTokenURL               string   `env:"LINUX_DO_TOKEN_URL" envDefault:"https://connect.linux.do/oauth2/token"`
 	LinuxDoUserInfoURL            string   `env:"LINUX_DO_USERINFO_URL" envDefault:"https://connect.linux.do/api/user"`
@@ -70,6 +75,17 @@ func Load() error {
 	Cfg.WorkflowLocalMediaDir = strings.TrimSpace(Cfg.WorkflowLocalMediaDir)
 	if Cfg.WorkflowLocalMediaDir == "" {
 		Cfg.WorkflowLocalMediaDir = "data/workflow-media"
+	}
+	Cfg.ImageUpscaleProvider = strings.ToLower(strings.TrimSpace(Cfg.ImageUpscaleProvider))
+	Cfg.ImageUpscaleWorkDir = strings.TrimSpace(Cfg.ImageUpscaleWorkDir)
+	Cfg.AlibabaCloudAccessKeyID = strings.TrimSpace(Cfg.AlibabaCloudAccessKeyID)
+	Cfg.AlibabaCloudAccessKeySecret = strings.TrimSpace(Cfg.AlibabaCloudAccessKeySecret)
+	Cfg.AlibabaCloudSecurityToken = strings.TrimSpace(Cfg.AlibabaCloudSecurityToken)
+	if Cfg.ImageUpscaleProvider == "" {
+		Cfg.ImageUpscaleProvider = "aliyun"
+	}
+	if Cfg.ImageUpscaleWorkDir == "" {
+		Cfg.ImageUpscaleWorkDir = "data/image-upscale"
 	}
 	return nil
 }
