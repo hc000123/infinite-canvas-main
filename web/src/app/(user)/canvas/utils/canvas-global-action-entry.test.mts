@@ -6,6 +6,7 @@ const componentUrl = (name: string) => new URL(`../components/${name}`, import.m
 const topBar = readFileSync(componentUrl("canvas-top-bar.tsx"), "utf8");
 const toolbar = readFileSync(componentUrl("canvas-toolbar.tsx"), "utf8");
 const floatingControls = readFileSync(componentUrl("canvas-floating-controls.tsx"), "utf8");
+const miniMap = readFileSync(componentUrl("canvas-mini-map.tsx"), "utf8");
 const createRailUrl = componentUrl("canvas-create-rail.tsx");
 const createRail = existsSync(createRailUrl) ? readFileSync(createRailUrl, "utf8") : "";
 
@@ -58,9 +59,16 @@ test("create rail more menu is a controlled accessible dropdown", () => {
     assert.match(createRail, /onOpenChange=\{setMoreOpen\}/);
     assert.match(createRail, /aria-haspopup="menu"/);
     assert.match(createRail, /aria-expanded=\{moreOpen\}/);
+    assert.match(createRail, /focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-\[var\(--studio-focus-ring\)\]/);
     assert.match(createRail, /menu=\{\{ items: moreItems \}\}/);
     assert.match(createRail, /key:\s*"config"[^\n]+actions\.onAddConfig\(\)[^\n]+setMoreOpen\(false\)/);
     assert.match(createRail, /key:\s*"upload"[^\n]+actions\.onUpload\(\)[^\n]+setMoreOpen\(false\)/);
+});
+
+test("create rail and minimap use separate canvas edges", () => {
+    assert.match(createRail, /\bleft-4\b/);
+    assert.match(miniMap, /\bright-6\b/);
+    assert.doesNotMatch(miniMap, /\bleft-6\b/);
 });
 
 test("bottom toolbar public actions stay focused on selection, history, and appearance", () => {

@@ -37,7 +37,7 @@ export function CanvasCreateRail({ actions }: { actions: CanvasCreateRailActions
                 <Dropdown trigger={["click"]} placement="bottomLeft" open={moreOpen} onOpenChange={setMoreOpen} menu={{ items: moreItems }}>
                     <button
                         type="button"
-                        className="group relative grid h-8 w-8 place-items-center transition"
+                        className="group relative grid h-8 w-8 place-items-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
                         style={{ color: moreOpen ? theme.accent : theme.toolbar.item }}
                         aria-label="更多"
                         aria-haspopup="menu"
