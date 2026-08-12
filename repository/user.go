@@ -246,6 +246,25 @@ func SaveUser(user model.User) (model.User, error) {
 	return user, db.Save(&user).Error
 }
 
+func UpdateUserLoginState(id, lastLoginAt, updatedAt string) (model.User, error) {
+	db, err := DB()
+	if err != nil {
+		return model.User{}, err
+	}
+	result := db.Model(&model.User{}).Where("id = ?", id).Updates(map[string]any{"last_login_at": lastLoginAt, "updated_at": updatedAt})
+	if result.Error != nil {
+		return model.User{}, result.Error
+	}
+	user, ok, err := GetUserByID(id)
+	if err != nil {
+		return model.User{}, err
+	}
+	if !ok {
+		return model.User{}, gorm.ErrRecordNotFound
+	}
+	return user, nil
+}
+
 func ConsumeUserCredits(id string, credits int, now string) (model.User, bool, error) {
 	db, err := DB()
 	if err != nil {

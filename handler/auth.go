@@ -37,7 +37,7 @@ type adjustUserCreditsRequest struct {
 func Register(w http.ResponseWriter, r *http.Request) {
 	var request registerRequest
 	_ = json.NewDecoder(r.Body).Decode(&request)
-	session, err := service.Register(request.Username, request.Password)
+	session, err := service.Register(r.Context(), request.Username, request.Password)
 	if err != nil {
 		FailError(w, err)
 		return

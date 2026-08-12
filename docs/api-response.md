@@ -18,6 +18,30 @@
 
 接口连接失败、服务不可达、返回体不是约定 JSON 时，前端按网络或接口异常处理。
 
+## 登录会话与失效码
+
+所有角色均使用服务端单会话校验。新登录成功后，旧设备在下一次接口请求时收到稳定失效码；前端统一清除当前账号凭证并跳转登录页，但不会删除浏览器本地保存的项目、画布、素材或生成记录。
+
+| `code` | 含义 | 前端提示 |
+| ---- | ---- | ---- |
+| `1001` | 会话不存在、凭证无效、账号不可用或安全信息已变更 | 登录状态无效，请重新登录 |
+| `1002` | 当前账号已在其他设备重新登录 | 账号已在其他设备登录，请重新登录 |
+| `1003` | 当前会话被管理员强制下线 | 账号已被管理员下线，并可显示服务端返回的安全原因 |
+| `1004` | 连续 7 天无活动，会话已过期 | 登录状态已过期，请重新登录 |
+| `1005` | 会话已达到 30 天最长有效期 | 为保障账号安全，请重新登录 |
+
+会话接口：
+
+| 接口 | 权限与请求 | 响应 |
+| ---- | ---- | ---- |
+| `POST /api/auth/logout` | 当前登录账号；无请求字段 | 服务端注销当前会话，返回 `true` |
+| `GET /api/admin/users/:id/session` | `admin` 或 `superadmin` 查看普通用户 | 当前会话摘要 |
+| `POST /api/admin/users/:id/force-logout` | `admin` 或 `superadmin` 强制普通用户下线；请求 `{ "reason": "2–200 字符" }` | 下线后的会话摘要 |
+| `GET /api/admin/admins/:id/session` | 仅 `superadmin`；可查看管理员或超级管理员 | 当前会话摘要 |
+| `POST /api/admin/admins/:id/force-logout` | 仅 `superadmin` 强制普通管理员下线；不能操作超级管理员；请求 `{ "reason": "2–200 字符" }` | 下线后的会话摘要 |
+
+会话摘要字段为 `online`、`status`、`ipAddress`、`deviceName`、`createdAt`、`lastActiveAt` 和 `absoluteExpiresAt`。目标当前没有会话时返回这些字段的空值和 `online: false`，不会暴露 JWT 或内部会话 ID。
+
 ## Artifact 与 Invocation Runtime 接口
 
 下列 15 个接口均位于 `/api/v1`，必须携带 `Authorization: Bearer <token>`，并且只能读写 JWT 用户自己的 Artifact 和 Invocation。所有 JSON 写入请求都使用严格字段解码和大小上限；未知字段、`null`、追加 JSON 或超限请求会失败。

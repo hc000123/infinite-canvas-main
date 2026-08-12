@@ -297,7 +297,6 @@ APP_ENV=production
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=<非默认强密码>
 JWT_SECRET=<稳定随机密钥>
-JWT_EXPIRE_HOURS=168
 
 STORAGE_DRIVER=sqlite
 DATABASE_DSN=/app/data/infinite-canvas.db

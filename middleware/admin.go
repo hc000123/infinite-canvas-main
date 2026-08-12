@@ -11,7 +11,9 @@ import (
 )
 
 func RequestMeta(c *gin.Context) {
-	meta := service.RequestMeta{IPAddress: c.ClientIP(), UserAgent: c.Request.UserAgent(), IPAllowed: true}
+	deviceName := strings.TrimSpace(strings.Join([]string{strings.Trim(strings.TrimSpace(c.GetHeader("Sec-CH-UA-Platform")), `"`), strings.TrimSpace(c.GetHeader("Sec-CH-UA"))}, " · "))
+	deviceName = strings.Trim(deviceName, " ·")
+	meta := service.RequestMeta{IPAddress: c.ClientIP(), UserAgent: c.Request.UserAgent(), DeviceName: deviceName, IPAllowed: true}
 	c.Request = c.Request.WithContext(service.WithRequestMeta(c.Request.Context(), meta))
 	c.Next()
 }
@@ -27,8 +29,12 @@ func AuditAIToolUse(c *gin.Context) {
 }
 
 func AdminAuth(c *gin.Context) {
-	user, ok := authUser(c)
-	if !ok || !model.IsAdminRole(user.Role) {
+	user, failure := authUser(c)
+	if failure != nil {
+		failAuth(c, failure)
+		return
+	}
+	if !model.IsAdminRole(user.Role) {
 		handler.Fail(c.Writer, "未登录或权限不足")
 		c.Abort()
 		return
@@ -38,8 +44,12 @@ func AdminAuth(c *gin.Context) {
 }
 
 func SuperAdminAuth(c *gin.Context) {
-	user, ok := authUser(c)
-	if !ok || !model.IsSuperAdminRole(user.Role) {
+	user, failure := authUser(c)
+	if failure != nil {
+		failAuth(c, failure)
+		return
+	}
+	if !model.IsSuperAdminRole(user.Role) {
 		handler.Fail(c.Writer, "未登录或权限不足")
 		c.Abort()
 		return
@@ -49,8 +59,12 @@ func SuperAdminAuth(c *gin.Context) {
 }
 
 func UserAuth(c *gin.Context) {
-	user, ok := authUser(c)
-	if !ok || user.Role == model.UserRoleGuest {
+	user, failure := authUser(c)
+	if failure != nil {
+		failAuth(c, failure)
+		return
+	}
+	if user.Role == model.UserRoleGuest {
 		handler.Fail(c.Writer, "未登录或权限不足")
 		c.Abort()
 		return
@@ -60,9 +74,16 @@ func UserAuth(c *gin.Context) {
 }
 
 func OptionalAuth(c *gin.Context) {
-	if user, ok := authUser(c); ok {
-		c.Request = c.Request.WithContext(service.WithUser(c.Request.Context(), user))
+	if strings.TrimSpace(strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")) == "" {
+		c.Next()
+		return
 	}
+	user, failure := authUser(c)
+	if failure != nil {
+		failAuth(c, failure)
+		return
+	}
+	c.Request = c.Request.WithContext(service.WithUser(c.Request.Context(), user))
 	c.Next()
 }
 
@@ -70,18 +91,27 @@ func NotFoundJSON(c *gin.Context) {
 	c.JSON(http.StatusNotFound, gin.H{"code": 1, "data": nil, "msg": "接口不存在"})
 }
 
-func authUser(c *gin.Context) (model.AuthUser, bool) {
+func authUser(c *gin.Context) (model.AuthUser, *service.AuthFailure) {
 	token := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
 	if strings.TrimSpace(token) == "" {
-		return model.AuthUser{}, false
+		return model.AuthUser{}, &service.AuthFailure{Code: model.AuthCodeSessionInvalid, Msg: "请先登录"}
 	}
-	user, ok := service.CurrentAuthUserForRequest(token, c.ClientIP())
-	if ok {
-		if claims, err := service.ParseToken(token); err == nil && claims.IPAddress != "" {
-			meta := service.RequestMetaFromContext(c.Request.Context())
-			meta.IPAllowed = claims.IPAllowed
-			c.Request = c.Request.WithContext(service.WithRequestMeta(c.Request.Context(), meta))
-		}
+	authenticated, failure := service.AuthenticateSession(token, c.ClientIP())
+	if failure != nil {
+		return model.AuthUser{}, failure
 	}
-	return user, ok
+	meta := service.RequestMetaFromContext(c.Request.Context())
+	meta.SessionID = authenticated.Session.ID
+	meta.IPAllowed = authenticated.IPAllowed
+	c.Request = c.Request.WithContext(service.WithRequestMeta(c.Request.Context(), meta))
+	return authenticated.User, nil
+}
+
+func failAuth(c *gin.Context, failure *service.AuthFailure) {
+	data := map[string]string{}
+	if failure.Reason != "" {
+		data["reason"] = failure.Reason
+	}
+	handler.FailCode(c.Writer, failure.Code, data, failure.Msg)
+	c.Abort()
 }

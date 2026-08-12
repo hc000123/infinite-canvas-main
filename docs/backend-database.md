@@ -15,6 +15,7 @@
 当前启动时执行 `AutoMigrate`，自动维护以下表：
 
 - `users`
+- `login_sessions`
 - `credit_logs`
 - `ai_tasks`
 - `user_activity_logs`
@@ -156,8 +157,25 @@ Workflow Adapter 不新增数据库表，也不调用模型。Adapter 定义保�
 | `created_at`    | string | 创建时间                                             |
 | `updated_at`    | string | 更新时间                                             |
 | `ip_approval_enabled` | bool | 普通用户是否启用登录 IP 审批；管理员角色不受此限制 |
+| `active_session_id` | string | 当前唯一有效登录会话 ID；仅供服务端校验，不返回前端 |
 
 `superadmin` 可管理管理员账号；普通 `admin` 只能管理 `user`。超级管理员可执行 `user → admin` 和 `admin → user` 角色转换；转换事务只更新 `role` 与 `updated_at`，账号 ID、密码哈希、资料、算力余额、IP 策略以及关联的用量、流水、操作和登录记录全部保留，并在同一事务写入 `security.admin_role_changed` 安全审计。系统禁止超级管理员修改或删除自己，也禁止降级、禁用或删除最后一个有效超级管理员。只有 `superadmin` 调用 AI 时不校验或扣减 `credits`，任务仍保留本次折算用量；普通 `admin` 与 `user` 均持有并消耗真实余额。
+
+### login_sessions
+
+服务端登录会话表。所有角色均只允许一个有效会话，新登录会把 `users.active_session_id` 原子切换到新会话，并将旧会话标记为 `replaced`。JWT 只携带签名后的 `sessionId` 等声明，数据库不保存 JWT 明文。
+
+| 字段 | 说明 |
+| ---- | ---- |
+| `id`、`user_id` | 会话主键与账号 ID |
+| `status` | `active`、`replaced`、`logged_out`、`admin_revoked`、`idle_expired`、`absolute_expired` 或 `account_changed` |
+| `ip_address`、`user_agent`、`device_name` | 登录 IP、截断后的原始 User-Agent 和前台展示设备信息 |
+| `created_at`、`last_active_at` | 登录时间与最近活动时间；活跃会话最多每 5 分钟更新一次活动时间 |
+| `absolute_expires_at` | 最长有效期截止时间；当前固定为登录后 30 天 |
+| `revoked_at`、`revoked_by`、`revoke_reason` | 下线时间、操作管理员和原因；主动退出与自动过期也记录对应原因 |
+| `updated_at` | 更新时间 |
+
+会话连续 7 天无活动会标记为 `idle_expired`，达到 30 天最长有效期会标记为 `absolute_expired`。账号密码、角色或状态发生安全变更时，当前会话会标记为 `account_changed`。普通管理员只能查看和强制下线普通用户；超级管理员可查看普通用户、管理员和超级管理员会话，但只能强制下线普通用户和管理员，不能强制下线其他超级管理员。
 
 ### user_activity_logs
 

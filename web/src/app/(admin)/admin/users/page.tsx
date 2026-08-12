@@ -90,6 +90,18 @@ export default function AdminUsersPage() {
             render: (_, item) => <Typography.Text>{item.credits}</Typography.Text>,
         },
         {
+            title: "登录状态",
+            key: "loginStatus",
+            width: 100,
+            render: (_, item) => <Tag color={item.session?.online ? "success" : "default"}>{item.session?.online ? "在线" : "离线"}</Tag>,
+        },
+        {
+            title: "最后活跃",
+            key: "lastActiveAt",
+            width: 180,
+            render: (_, item) => <Typography.Text type="secondary">{item.session?.lastActiveAt ? dayjs(item.session.lastActiveAt).format("YYYY-MM-DD HH:mm:ss") : "-"}</Typography.Text>,
+        },
+        {
             title: "最近登录",
             dataIndex: "lastLoginAt",
             width: 180,

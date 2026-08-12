@@ -10,6 +10,16 @@ export type AdminPromptCategory = {
     remote: boolean;
 };
 
+export type AdminLoginSession = {
+    online: boolean;
+    status: "active" | "replaced" | "logged_out" | "admin_revoked" | "idle_expired" | "absolute_expired" | "account_changed" | "";
+    ipAddress: string;
+    deviceName: string;
+    createdAt: string;
+    lastActiveAt: string;
+    absoluteExpiresAt: string;
+};
+
 export type AdminUser = {
     id: string;
     username: string;
@@ -27,6 +37,7 @@ export type AdminUser = {
     createdAt: string;
     updatedAt: string;
     ipApprovalEnabled: boolean;
+    session: AdminLoginSession;
 };
 
 export type AdminUserListResponse = {
@@ -193,6 +204,18 @@ export type AdminAITaskQuery = AdminUserQuery & {
 
 export async function fetchAdminUsers(token: string, query: AdminUserQuery = {}) {
     return apiGet<AdminUserListResponse>("/api/admin/users", compactApiParams(query), token);
+}
+
+export function fetchAdminUserSession(token: string, userId: string) {
+    return apiGet<AdminLoginSession>(`/api/admin/users/${encodeURIComponent(userId)}/session`, undefined, token);
+}
+
+export function forceLogoutAdminUser(token: string, userId: string, reason: string) {
+    return apiPost<AdminLoginSession>(`/api/admin/users/${encodeURIComponent(userId)}/force-logout`, { reason }, token);
+}
+
+export function forceLogoutAdminAccount(token: string, id: string, reason: string) {
+    return apiPost<AdminLoginSession>(`/api/admin/admins/${encodeURIComponent(id)}/force-logout`, { reason }, token);
 }
 
 export type AdminUserOverview = {

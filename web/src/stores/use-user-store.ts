@@ -3,7 +3,9 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-import { AUTH_TOKEN_KEY, fetchCurrentUser, login as requestLogin, register, type AuthPayload, type AuthUser, type LoginResult } from "@/services/api/auth";
+import { AUTH_TOKEN_KEY, fetchCurrentUser, login as requestLogin, logout as requestLogout, register, type AuthPayload, type AuthUser, type LoginResult } from "@/services/api/auth";
+import { ApiError } from "@/services/api/request";
+import { resetAuthSessionInvalid } from "@/services/auth-session-events";
 import { clearActiveUserStorageScope } from "@/lib/localforage-storage";
 
 type UserStore = {
@@ -14,6 +16,7 @@ type UserStore = {
     setSession: (token: string, user: AuthUser) => void;
     updateCredits: (credits: number) => void;
     clearSession: () => void;
+    logout: () => Promise<void>;
     hydrateUser: () => Promise<void>;
     login: (payload: AuthPayload) => Promise<LoginResult>;
     register: (payload: AuthPayload) => Promise<AuthUser>;
@@ -33,11 +36,23 @@ export const useUserStore = create<UserStore>()(
             user: null,
             isReady: false,
             isLoading: false,
-            setSession: (token, user) => set({ token, user, isReady: true }),
+            setSession: (token, user) => {
+                resetAuthSessionInvalid();
+                set({ token, user, isReady: true });
+            },
             updateCredits: (credits) => set((state) => ({ user: state.user ? { ...state.user, credits } : null })),
             clearSession: () => {
                 clearActiveUserStorageScope();
                 set({ token: "", user: null, isReady: true });
+            },
+            logout: async () => {
+                const token = get().token;
+                try {
+                    if (token) await requestLogout(token);
+                } finally {
+                    clearActiveUserStorageScope();
+                    set({ token: "", user: null, isReady: true });
+                }
             },
             hydrateUser: async () => {
                 const tryDevLogin = async () => {
@@ -51,6 +66,7 @@ export const useUserStore = create<UserStore>()(
                             return false;
                         }
                         const session = result.session;
+                        resetAuthSessionInvalid();
                         set({ token: session.token, user: session.user, isReady: true, isLoading: false });
                         return true;
                     } catch {
@@ -73,8 +89,9 @@ export const useUserStore = create<UserStore>()(
                         return;
                     }
                     set({ user, isReady: true, isLoading: false });
-                } catch {
-                    if (await tryDevLogin()) return;
+                } catch (error) {
+                    const sessionInvalid = error instanceof ApiError && error.code >= 1001 && error.code <= 1005;
+                    if (!sessionInvalid && (await tryDevLogin())) return;
                     set({ token: "", user: null, isReady: true, isLoading: false });
                 }
             },
@@ -82,8 +99,10 @@ export const useUserStore = create<UserStore>()(
                 set({ isLoading: true });
                 try {
                     const result = await requestLogin(payload);
-                    if (result.status === "authenticated" && result.session) set({ token: result.session.token, user: result.session.user, isReady: true, isLoading: false });
-                    else set({ isLoading: false });
+                    if (result.status === "authenticated" && result.session) {
+                        resetAuthSessionInvalid();
+                        set({ token: result.session.token, user: result.session.user, isReady: true, isLoading: false });
+                    } else set({ isLoading: false });
                     return result;
                 } catch (error) {
                     set({ isLoading: false });
@@ -94,6 +113,7 @@ export const useUserStore = create<UserStore>()(
                 set({ isLoading: true });
                 try {
                     const session = await register(payload);
+                    resetAuthSessionInvalid();
                     set({ token: session.token, user: session.user, isReady: true, isLoading: false });
                     return session.user;
                 } catch (error) {

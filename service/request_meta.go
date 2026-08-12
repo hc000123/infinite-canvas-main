@@ -4,8 +4,8 @@ import "context"
 
 type requestMetaContextKey struct{}
 type RequestMeta struct {
-	IPAddress, UserAgent, SessionID, LoginApprovalID string
-	IPAllowed                                        bool
+	IPAddress, UserAgent, DeviceName, SessionID, LoginApprovalID string
+	IPAllowed                                                    bool
 }
 
 func WithRequestMeta(ctx context.Context, meta RequestMeta) context.Context {

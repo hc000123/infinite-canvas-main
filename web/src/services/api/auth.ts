@@ -43,6 +43,10 @@ export async function register(payload: AuthPayload) {
     return apiPost<AuthSession>("/api/auth/register", payload);
 }
 
+export function logout(token: string) {
+    return apiPost<boolean>("/api/auth/logout", undefined, token);
+}
+
 export async function fetchCurrentUser(token?: string) {
     return apiGet<AuthUser>("/api/auth/me", undefined, token);
 }

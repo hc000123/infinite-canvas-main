@@ -304,7 +304,6 @@ func setupInvocationHTTPRouter(t *testing.T) http.Handler {
 	config.Cfg.StorageDriver = "sqlite"
 	config.Cfg.DatabaseDSN = filepath.Join(t.TempDir(), "invocation-http.db")
 	config.Cfg.JWTSecret = "invocation-http-test-secret"
-	config.Cfg.JWTExpireHours = 1
 	config.Cfg.TrustedProxies = nil
 	config.Cfg.PublicAssetDir = t.TempDir()
 	repository.ResetForTest()

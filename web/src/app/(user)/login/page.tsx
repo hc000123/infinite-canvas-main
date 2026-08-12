@@ -42,6 +42,19 @@ function LoginContent() {
     const isAdminRedirect = redirect.startsWith("/admin");
 
     useEffect(() => {
+        const code = searchParams.get("reason");
+        const detail = searchParams.get("detail")?.trim();
+        const text: Record<string, string> = {
+            "1001": "登录状态无效，请重新登录",
+            "1002": "账号已在其他设备登录，请重新登录",
+            "1003": detail ? `账号已被管理员下线：${detail}` : "账号已被管理员下线，请重新登录",
+            "1004": "登录状态已过期，请重新登录",
+            "1005": "为保障账号安全，请重新登录",
+        };
+        if (code && text[code]) message.warning(text[code]);
+    }, [message, searchParams]);
+
+    useEffect(() => {
         const token = searchParams.get("token");
         const error = searchParams.get("error");
         if (error) message.error(error);
@@ -55,7 +68,7 @@ function LoginContent() {
     }, [message, redirect, searchParams, setSession]);
 
     useEffect(() => {
-        if (searchParams.get("token") || searchParams.get("error")) return;
+        if (searchParams.get("token") || searchParams.get("error") || searchParams.get("reason")) return;
         if (isAdminRedirect) return;
         if (process.env.NODE_ENV !== "development" || process.env.NEXT_PUBLIC_DEV_AUTO_LOGIN === "false") return;
         void hydrateUser();

@@ -11,6 +11,7 @@ import {
     deleteAdminAccount,
     fetchAdminAccounts,
     fetchAdminUsers,
+    forceLogoutAdminAccount,
     resetAdminAccountPassword,
     updateAdminAccount,
     type AdminAccountQuery,
@@ -80,6 +81,14 @@ export function useAdminAccounts(candidateOpen = false, candidateKeyword = "") {
         },
         onError: showError(message.error),
     });
+    const forceLogoutMutation = useMutation({
+        mutationFn: ({ id, reason }: { id: string; reason: string }) => forceLogoutAdminAccount(token, id, reason),
+        onSuccess: async () => {
+            await invalidate();
+            message.success("管理员已强制下线");
+        },
+        onError: showError(message.error),
+    });
     const updateFilters = (next: Partial<AdminAccountQuery>) =>
         setFilters((current) => ({ ...current, ...next, page: next.page ?? (next.keyword !== undefined || next.role !== undefined || next.status !== undefined || next.pageSize !== undefined ? 1 : current.page) }));
 
@@ -88,7 +97,7 @@ export function useAdminAccounts(candidateOpen = false, candidateKeyword = "") {
         promotionCandidates: candidateQuery.data?.items || [],
         total: query.data?.total || 0,
         filters,
-        isLoading: query.isFetching || createMutation.isPending || updateMutation.isPending || passwordMutation.isPending || deleteMutation.isPending || creditMutation.isPending || roleMutation.isPending,
+        isLoading: query.isFetching || createMutation.isPending || updateMutation.isPending || passwordMutation.isPending || deleteMutation.isPending || creditMutation.isPending || roleMutation.isPending || forceLogoutMutation.isPending,
         candidateLoading: candidateQuery.isFetching,
         isChangingRole: roleMutation.isPending,
         updateFilters,
@@ -99,6 +108,7 @@ export function useAdminAccounts(candidateOpen = false, candidateKeyword = "") {
         adjustCredits: (id: string, credits: number) => creditMutation.mutateAsync({ id, credits }),
         changeRole: (id: string, role: "admin" | "user") => roleMutation.mutateAsync({ id, role }),
         deleteAccount: deleteMutation.mutateAsync,
+        forceLogout: (id: string, reason: string) => forceLogoutMutation.mutateAsync({ id, reason }),
     };
 }
 

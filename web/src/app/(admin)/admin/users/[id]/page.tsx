@@ -2,7 +2,7 @@
 
 import { ArrowLeftOutlined } from "@ant-design/icons";
 import { ProTable, type ProColumns } from "@ant-design/pro-components";
-import { Avatar, Button, Card, Col, Descriptions, Flex, Input, Result, Row, Select, Space, Statistic, Switch, Tabs, Tag, Typography } from "antd";
+import { Avatar, Button, Card, Col, Descriptions, Flex, Input, Modal, Result, Row, Select, Space, Statistic, Switch, Tabs, Tag, Typography } from "antd";
 import dayjs from "dayjs";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -17,6 +17,8 @@ export default function AdminUserDetailPage() {
     const params = useParams<{ id: string }>();
     const userId = decodeURIComponent(params.id);
     const [newCIDR, setNewCIDR] = useState("");
+    const [forceLogoutOpen, setForceLogoutOpen] = useState(false);
+    const [forceLogoutReason, setForceLogoutReason] = useState("");
     const detail = useAdminUserDetail(userId);
     if (detail.error) return <Result status="404" title="用户不存在" extra={<Button onClick={() => router.push("/admin/users")}>返回用户列表</Button>} />;
     if (!detail.overview)
@@ -84,6 +86,28 @@ export default function AdminUserDetailPage() {
                             { key: "id", label: "用户 ID", children: <Typography.Text copyable>{overview.user.id}</Typography.Text> },
                             { key: "email", label: "邮箱", children: overview.user.email || "-" },
                             { key: "created", label: "注册时间", children: formatTime(overview.user.createdAt) },
+                        ]}
+                    />
+                </Card>
+                <Card
+                    variant="borderless"
+                    title="当前登录"
+                    extra={
+                        detail.session?.online ? (
+                            <Button danger onClick={() => setForceLogoutOpen(true)}>
+                                强制下线
+                            </Button>
+                        ) : null
+                    }
+                >
+                    <Descriptions
+                        items={[
+                            { key: "status", label: "状态", children: <Tag color={detail.session?.online ? "success" : "default"}>{detail.session?.online ? "在线" : "离线"}</Tag> },
+                            { key: "login", label: "登录时间", children: formatTime(detail.session?.createdAt) },
+                            { key: "active", label: "最后活跃", children: formatTime(detail.session?.lastActiveAt) },
+                            { key: "expires", label: "最长有效期", children: formatTime(detail.session?.absoluteExpiresAt) },
+                            { key: "ip", label: "登录 IP", children: detail.session?.ipAddress || "-" },
+                            { key: "device", label: "设备", children: detail.session?.deviceName || "-", span: 2 },
                         ]}
                     />
                 </Card>
@@ -221,6 +245,29 @@ export default function AdminUserDetailPage() {
                     />
                 </Card>
             </Flex>
+            <Modal
+                rootClassName="studio-modal"
+                title="强制账号下线"
+                open={forceLogoutOpen}
+                confirmLoading={detail.isLoading}
+                okButtonProps={{ danger: true, disabled: forceLogoutReason.trim().length < 2 || forceLogoutReason.trim().length > 200 }}
+                onCancel={() => {
+                    setForceLogoutOpen(false);
+                    setForceLogoutReason("");
+                }}
+                onOk={async () => {
+                    await detail.forceLogout(forceLogoutReason);
+                    setForceLogoutOpen(false);
+                    setForceLogoutReason("");
+                }}
+                okText="确认下线"
+                cancelText="取消"
+            >
+                <Flex vertical gap={8}>
+                    <Typography.Text type="secondary">用户会立即退出当前设备，重新登录后才能继续使用。</Typography.Text>
+                    <Input.TextArea value={forceLogoutReason} maxLength={200} showCount rows={4} placeholder="请输入下线原因（2–200 个字符）" onChange={(event) => setForceLogoutReason(event.target.value)} />
+                </Flex>
+            </Modal>
         </main>
     );
 }

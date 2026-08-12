@@ -21,6 +21,9 @@ func ListAdminAccounts(actor model.AuthUser, q model.AdminAccountQuery) (model.U
 		users[i].Password = ""
 		normalizeUserDefaults(&users[i])
 	}
+	if err := HydrateLoginSessionViews(users); err != nil {
+		return model.UserList{}, err
+	}
 	return model.UserList{Items: users, Total: int(total)}, nil
 }
 
@@ -73,6 +76,9 @@ func UpdateAdminAccount(actor model.AuthUser, id string, input model.AdminAccoun
 	target.UpdatedAt = now()
 	removesActiveSuper := input.Role != model.UserRoleSuperAdmin || input.Status != model.UserStatusActive
 	target, err = repository.UpdatePrivilegedUser(actor.ID, target, removesActiveSuper)
+	if err == nil && (saved.Role != input.Role || saved.Status != input.Status) {
+		err = RevokeSessionForAccountChange(context.Background(), saved.ID, "管理员账号权限或状态已变更")
+	}
 	target.Password = ""
 	return target, err
 }
@@ -126,6 +132,9 @@ func ChangeAdminAccountRole(ctx context.Context, actor model.AuthUser, id string
 			UserAgent: truncateBytes(requestMeta.UserAgent, 512), Metadata: string(metadata), CreatedAt: stamp,
 		},
 	})
+	if err == nil {
+		err = RevokeSessionForAccountChange(ctx, target.ID, "账号角色已变更")
+	}
 	updated.Password = ""
 	return updated, err
 }
@@ -144,10 +153,17 @@ func ResetAdminAccountPassword(actor model.AuthUser, id string, password string)
 	if !ok || !model.IsAdminRole(target.Role) {
 		return safeMessageError{message: "管理员不存在"}
 	}
-	target.Password, err = hashPassword(password)
+	if target.ID == actor.ID {
+		return safeMessageError{message: "不能重置自己的管理员密码"}
+	}
+	hashedPassword, err := hashPassword(password)
 	if err != nil {
 		return err
 	}
+	if err := RevokeSessionForAccountChange(context.Background(), target.ID, "管理员密码已重置"); err != nil {
+		return err
+	}
+	target.Password = hashedPassword
 	target.UpdatedAt = now()
 	_, err = repository.UpdatePrivilegedUser(actor.ID, target, false)
 	return err
@@ -156,6 +172,28 @@ func ResetAdminAccountPassword(actor model.AuthUser, id string, password string)
 func DeleteAdminAccount(actor model.AuthUser, id string) error {
 	if !model.IsSuperAdminRole(actor.Role) {
 		return safeMessageError{message: "需要超级管理员权限"}
+	}
+	target, ok, err := repository.GetUserByID(strings.TrimSpace(id))
+	if err != nil {
+		return err
+	}
+	if !ok || !model.IsAdminRole(target.Role) {
+		return safeMessageError{message: "管理员不存在"}
+	}
+	if target.ID == actor.ID {
+		return safeMessageError{message: "不能删除自己的管理员账号"}
+	}
+	if target.Role == model.UserRoleSuperAdmin && target.Status == model.UserStatusActive {
+		count, err := repository.CountActiveSuperAdmins()
+		if err != nil {
+			return err
+		}
+		if count <= 1 {
+			return safeMessageError{message: "必须保留至少一个有效超级管理员"}
+		}
+	}
+	if err := RevokeSessionForAccountChange(context.Background(), id, "管理员账号已删除"); err != nil {
+		return err
 	}
 	return repository.DeletePrivilegedUser(actor.ID, id)
 }

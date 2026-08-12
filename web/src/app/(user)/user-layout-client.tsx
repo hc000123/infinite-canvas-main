@@ -8,6 +8,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { AppTopNav } from "@/components/layout/app-top-nav";
 import { useProjectCacheQueueRunner } from "@/hooks/use-project-cache-queue-runner";
 import { activateUserStorageScope } from "@/lib/localforage-storage";
+import { subscribeAuthSessionInvalid } from "@/services/auth-session-events";
 import { useUserStore } from "@/stores/use-user-store";
 import { protectedUserRouteState, userLoginHref } from "./user-auth-route";
 
@@ -17,6 +18,7 @@ export function UserLayoutClient({ children }: { children: ReactNode }) {
     const token = useUserStore((state) => state.token);
     const user = useUserStore((state) => state.user);
     const isReady = useUserStore((state) => state.isReady);
+    const clearSession = useUserStore((state) => state.clearSession);
     const authState = protectedUserRouteState(pathname, isReady, token, Boolean(user));
     const [storageReady, setStorageReady] = useState(false);
     useProjectCacheQueueRunner(storageReady ? token : undefined);
@@ -24,6 +26,18 @@ export function UserLayoutClient({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (authState === "redirect") router.replace(userLoginHref(pathname));
     }, [authState, pathname, router]);
+
+    useEffect(
+        () =>
+            subscribeAuthSessionInvalid((payload) => {
+                clearSession();
+                const params = new URLSearchParams({ redirect: pathname });
+                params.set("reason", String(payload.code));
+                if (payload.reason) params.set("detail", payload.reason);
+                router.replace(`/login?${params.toString()}`);
+            }),
+        [clearSession, pathname, router],
+    );
 
     useEffect(() => {
         if (authState !== "authenticated" || !user) {

@@ -30,7 +30,7 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
     const theme = useThemeStore((state) => state.theme);
     const setTheme = useThemeStore((state) => state.setTheme);
     const user = useUserStore((state) => state.user);
-    const logout = useUserStore((state) => state.clearSession);
+    const logout = useUserStore((state) => state.logout);
     const reportActivity = useActivityAudit();
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const canvasTheme = canvasThemes[theme];
@@ -67,7 +67,7 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
                 try {
                     reportActivity("account.logout", { summary: "退出登录" });
                 } finally {
-                    logout();
+                    void logout();
                     window.location.replace("/login");
                 }
             },
