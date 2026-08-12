@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { Button, Card, Tag } from "antd";
 
 import { formatPromptDate, type Prompt } from "@/services/api/prompts";
-import { promptNodeGroupLabel, promptTypeLabel } from "./prompt-template";
+import { promptNodeGroupLabel, promptTypeLabel, uniquePromptLabels } from "./prompt-template";
 
 export function PromptCard({
     item,
@@ -50,7 +50,7 @@ export function PromptCard({
                         {item.metadata?.nodeGroup ? <Tag className="studio-tag text-[11px]">{promptNodeGroupLabel(item.metadata.nodeGroup)}</Tag> : null}
                         {item.metadata?.type ? <Tag className="studio-tag text-[11px]">{promptTypeLabel(item.metadata.type)}</Tag> : null}
                         {item.metadata?.favorite ? <Tag className="studio-tag text-[11px]">常用</Tag> : null}
-                        {item.tags.map((tag) => (
+                        {uniquePromptLabels(item.tags).map((tag) => (
                             <Tag key={tag} className="studio-tag text-[11px]">
                                 {tag}
                             </Tag>

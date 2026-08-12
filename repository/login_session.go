@@ -38,7 +38,13 @@ func ReplaceLoginSession(item model.LoginSession, replacedReason string) (model.
 		if err := tx.Create(&item).Error; err != nil {
 			return err
 		}
-		result := tx.Model(&model.User{}).Where("id = ? AND active_session_id = ?", user.ID, user.ActiveSessionID).Update("active_session_id", item.ID)
+		query := tx.Model(&model.User{}).Where("id = ?", user.ID)
+		if user.ActiveSessionID == "" {
+			query = query.Where("active_session_id IS NULL OR active_session_id = ''")
+		} else {
+			query = query.Where("active_session_id = ?", user.ActiveSessionID)
+		}
+		result := query.Update("active_session_id", item.ID)
 		if result.Error != nil {
 			return result.Error
 		}

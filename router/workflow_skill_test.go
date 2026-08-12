@@ -15,7 +15,7 @@ func TestSkillAdminEndpointsRejectAnonymousUser(t *testing.T) {
 		request := httptest.NewRequest(item.method, item.path, nil)
 		recorder := httptest.NewRecorder()
 		New().ServeHTTP(recorder, request)
-		if !strings.Contains(recorder.Body.String(), "未登录或权限不足") || strings.Contains(recorder.Body.String(), "接口不存在") {
+		if !strings.Contains(recorder.Body.String(), `"code":1001`) || strings.Contains(recorder.Body.String(), "接口不存在") {
 			t.Fatalf("%s %s body=%s", item.method, item.path, recorder.Body.String())
 		}
 	}

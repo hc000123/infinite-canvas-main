@@ -9,6 +9,12 @@ const releaseGuide = readFileSync(
 );
 
 test("production Docker builds verify the pinned Dreamina CLI", () => {
+    assert.doesNotMatch(dockerfile, /apt-get/);
+    assert.match(
+        dockerfile,
+        /COPY --from=api-build \/etc\/ssl\/certs\/ca-certificates\.crt \/etc\/ssl\/certs\/ca-certificates\.crt/,
+    );
+    assert.match(dockerfile, /fetch\(process\.argv\[1\]\)/);
     assert.match(dockerfile, /sha256sum -c -/);
     assert.match(dockerfile, /dreamina version/);
 });

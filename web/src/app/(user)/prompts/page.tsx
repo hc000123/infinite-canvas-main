@@ -6,7 +6,7 @@ import { Alert, App, Button, Dropdown, Empty, Form, Input, Modal, Segmented, Sel
 
 import { PromptDetailDialog } from "@/components/prompts/prompt-detail-dialog";
 import { promptCategoryOptions, type PromptBusinessCategory } from "@/components/prompts/prompt-category";
-import { promptNodeGroupLabel, promptTypeLabel, promptTypeOptions, promptTypesForNodeGroup } from "@/components/prompts/prompt-template";
+import { promptNodeGroupLabel, promptTypeLabel, promptTypeOptions, promptTypesForNodeGroup, uniquePromptLabels } from "@/components/prompts/prompt-template";
 import { usePromptList } from "@/components/prompts/use-prompt-list";
 import { useCopyText } from "@/hooks/use-copy-text";
 import { ALL_PROMPTS_OPTION, type Prompt, type PromptNodeGroup, type PromptTemplateType } from "@/services/api/prompts";
@@ -281,7 +281,7 @@ export default function PromptsPage() {
                                             key={`personal:${item.id}`}
                                             title={item.title}
                                             content={item.prompt}
-                                            tags={[promptNodeGroupLabel(item.nodeGroup), promptTypeLabel(item.type), ...item.tags]}
+                                            tags={uniquePromptLabels([promptNodeGroupLabel(item.nodeGroup), promptTypeLabel(item.type), ...item.tags])}
                                             source={folders.find((folder) => folder.id === item.folderId)?.name || "未分类"}
                                             onOpen={() => setDetailPrompt(personalPromptForDetail(item))}
                                             actions={
@@ -385,7 +385,7 @@ function normalizePromptType(value?: string): PromptTemplateType {
 }
 
 function promptDisplayTags(item: Prompt) {
-    return [item.metadata?.nodeGroup ? promptNodeGroupLabel(item.metadata.nodeGroup) : "", item.metadata?.type ? promptTypeLabel(item.metadata.type) : "", ...item.tags].filter(Boolean);
+    return uniquePromptLabels([item.metadata?.nodeGroup ? promptNodeGroupLabel(item.metadata.nodeGroup) : "", item.metadata?.type ? promptTypeLabel(item.metadata.type) : "", ...item.tags]);
 }
 
 function personalPromptForDetail(item: PersonalPrompt): Prompt {

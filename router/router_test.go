@@ -24,7 +24,7 @@ func TestAIUsageRoutesRequireCorrectRoles(t *testing.T) {
 		request := httptest.NewRequest(http.MethodGet, path, nil)
 		response := httptest.NewRecorder()
 		engine.ServeHTTP(response, request)
-		if !strings.Contains(response.Body.String(), "未登录或权限不足") {
+		if !strings.Contains(response.Body.String(), `"code":1001`) {
 			t.Fatalf("%s body = %s", path, response.Body.String())
 		}
 	}
@@ -41,7 +41,7 @@ func TestVolcengineVideoReviewRouteExists(t *testing.T) {
 	if recorder.Code == http.StatusNotFound {
 		t.Fatalf("video review route returned 404: %s", recorder.Body.String())
 	}
-	if !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+	if !strings.Contains(recorder.Body.String(), `"code":1001`) {
 		t.Fatalf("video review route did not reach auth middleware: status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 }
@@ -56,7 +56,7 @@ func TestXinglianDirectUploadRoutesRequireAuth(t *testing.T) {
 		if recorder.Code == http.StatusNotFound {
 			t.Fatalf("Xinglian upload route missing: %s", path)
 		}
-		if !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+		if !strings.Contains(recorder.Body.String(), `"code":1001`) {
 			t.Fatalf("Xinglian upload route did not reach auth: path=%s body=%s", path, recorder.Body.String())
 		}
 	}
@@ -73,7 +73,7 @@ func TestImageUpscaleRoutesRequireAuth(t *testing.T) {
 	} {
 		recorder := httptest.NewRecorder()
 		app.ServeHTTP(recorder, httptest.NewRequest(item.method, item.path, nil))
-		if recorder.Code == http.StatusNotFound || !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+		if recorder.Code == http.StatusNotFound || !strings.Contains(recorder.Body.String(), `"code":1001`) {
 			t.Fatalf("image upscale route missing auth: %s %s body=%s", item.method, item.path, recorder.Body.String())
 		}
 	}
@@ -88,7 +88,7 @@ func TestProjectCacheSelectionRouteRequiresAuth(t *testing.T) {
 	if recorder.Code == http.StatusNotFound {
 		t.Fatalf("project cache selection route missing: %s", recorder.Body.String())
 	}
-	if !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+	if !strings.Contains(recorder.Body.String(), `"code":1001`) {
 		t.Fatalf("project cache selection route did not reach auth: body=%s", recorder.Body.String())
 	}
 }
@@ -102,7 +102,7 @@ func TestUserJimengLoginRoutesRequireAuthAndAdminRoutesAreRemoved(t *testing.T) 
 		if recorder.Code == http.StatusNotFound {
 			t.Fatalf("user jimeng login route missing: %s", path)
 		}
-		if !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+		if !strings.Contains(recorder.Body.String(), `"code":1001`) {
 			t.Fatalf("user jimeng login route did not reach auth: path=%s body=%s", path, recorder.Body.String())
 		}
 	}
@@ -154,7 +154,7 @@ func TestWorkflowRoutesRequireAuth(t *testing.T) {
 		if recorder.Code == http.StatusNotFound {
 			t.Fatalf("workflow route missing: %s", path)
 		}
-		if !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+		if !strings.Contains(recorder.Body.String(), `"code":1001`) {
 			t.Fatalf("workflow route did not reach auth: path=%s body=%s", path, recorder.Body.String())
 		}
 	}
@@ -169,7 +169,7 @@ func TestWorkflowAssetSlotRoutesRequireAuth(t *testing.T) {
 	} {
 		recorder := httptest.NewRecorder()
 		app.ServeHTTP(recorder, httptest.NewRequest(item.method, item.path, strings.NewReader(`{}`)))
-		if recorder.Code == http.StatusNotFound || !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+		if recorder.Code == http.StatusNotFound || !strings.Contains(recorder.Body.String(), `"code":1001`) {
 			t.Fatalf("workflow asset-slot route missing auth: %s %s body=%s", item.method, item.path, recorder.Body.String())
 		}
 	}
@@ -202,7 +202,7 @@ func TestWorkflowRegistryRoutesRequireAuth(t *testing.T) {
 		if recorder.Code == http.StatusNotFound {
 			t.Fatalf("workflow registry route missing: %s %s", route.method, route.path)
 		}
-		if !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+		if !strings.Contains(recorder.Body.String(), `"code":1001`) {
 			t.Fatalf("workflow registry route did not reach auth: %s %s body=%s", route.method, route.path, recorder.Body.String())
 		}
 	}
@@ -252,7 +252,7 @@ func TestAdminSkillVersionDeleteAndArchiveRoutesRequireAdmin(t *testing.T) {
 	} {
 		recorder := httptest.NewRecorder()
 		app.ServeHTTP(recorder, httptest.NewRequest(route.method, route.path, nil))
-		if recorder.Code == http.StatusNotFound || !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+		if recorder.Code == http.StatusNotFound || !strings.Contains(recorder.Body.String(), `"code":1001`) {
 			t.Fatalf("admin Skill route did not reach auth: %s %s status=%d body=%s", route.method, route.path, recorder.Code, recorder.Body.String())
 		}
 	}
@@ -270,7 +270,7 @@ func TestSuperAdminRoutesRequireSuperAdmin(t *testing.T) {
 		if recorder.Code == http.StatusNotFound {
 			t.Fatalf("superadmin administrator route is missing: %s %s", item.method, item.path)
 		}
-		if !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+		if !strings.Contains(recorder.Body.String(), `"code":1001`) {
 			t.Fatalf("administrator route did not reach superadmin auth: %s", recorder.Body.String())
 		}
 	}

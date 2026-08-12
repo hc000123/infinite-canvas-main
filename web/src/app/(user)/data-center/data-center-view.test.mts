@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import dayjs from "dayjs";
 
 import { dataCenterCanExport, dataCenterDefaultScope, dataCenterDetailActions, dataCenterExportRange, dataCenterRecordColumnKeys, dataCenterSectionTitles, dataCenterScopeOptions } from "./data-center-view.ts";
+
+const overviewSource = readFileSync(new URL("./components/data-center-overview.tsx", import.meta.url), "utf8");
+const recordsSource = readFileSync(new URL("./components/data-center-records.tsx", import.meta.url), "utf8");
 
 test("ordinary users are fixed to their own usage", () => {
     assert.equal(dataCenterDefaultScope("user"), "mine");
@@ -29,6 +33,13 @@ test("default record columns stay business focused", () => {
 test("data center separates overview, distribution, and records", () => {
     assert.deepEqual(dataCenterSectionTitles, ["使用概览", "使用分布", "消费明细"]);
     assert.deepEqual(dataCenterDetailActions, []);
+});
+
+test("data center uses current Ant Design Statistic and Drawer props", () => {
+    assert.match(overviewSource, /styles=\{\{ content:/);
+    assert.doesNotMatch(overviewSource, /valueStyle=/);
+    assert.match(recordsSource, /<Drawer[^>]*size=\{520\}/);
+    assert.doesNotMatch(recordsSource, /<Drawer[^>]*width=/);
 });
 
 test("only administrators in all-user scope can export", () => {

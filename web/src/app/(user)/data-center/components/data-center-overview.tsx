@@ -48,7 +48,7 @@ export function DataCenterOverview({ balance, periods, period, loading, error, o
             <Row gutter={[12, 12]}>
                 <Col xs={24} sm={12} xl={6}>
                     <Card variant="borderless" style={{ height: "100%", background: token.colorPrimaryBg, outline: `1px solid ${token.colorPrimaryBorder}` }}>
-                        <Statistic title="当前算力余额" value={balance} suffix="点" valueStyle={{ color: token.colorPrimary }} />
+                        <Statistic title="当前算力余额" value={balance} suffix="点" styles={{ content: { color: token.colorPrimary } }} />
                         <Typography.Text type="secondary" className="mt-3 block">账户当前可用额度</Typography.Text>
                     </Card>
                 </Col>

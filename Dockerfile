@@ -42,19 +42,15 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # 下载并校验官方 Dreamina CLI。固定哈希可避免上游浮动文件被静默带入生产镜像。
 FROM node:22-bookworm-slim AS dreamina-build
 
+COPY --from=api-build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 ARG TARGETARCH
 ARG DREAMINA_CLI_BASE=https://lf3-static.bytednsdoc.com/obj/eden-cn/psj_hupthlyk/ljhwZthlaukjlkulzlp/dreamina_cli_beta
-RUN for attempt in 1 2 3 4 5; do \
-        if apt-get update && apt-get install -y --no-install-recommends ca-certificates curl; then break; fi; \
-        if [ "$attempt" = 5 ]; then exit 1; fi; \
-        sleep 2; \
-    done \
-    && case "$TARGETARCH" in \
+RUN case "$TARGETARCH" in \
         amd64) dreamina_file=dreamina_cli_linux_amd64; dreamina_sha=7c2817bc844e5a93cc5c6e57f876ccaea91d438e520ad50f665a515e816c7dc6 ;; \
         arm64) dreamina_file=dreamina_cli_linux_arm64; dreamina_sha=696216eee0fe55ba5e5d781429a3eb304cfdb539823397742a4d1a7575ab1202 ;; \
         *) echo "Unsupported Dreamina CLI architecture: $TARGETARCH" >&2; exit 1 ;; \
     esac \
-    && curl -fsSL "$DREAMINA_CLI_BASE/$dreamina_file" -o /usr/local/bin/dreamina \
+    && node -e 'const fs = require("node:fs"); (async () => { let lastError; for (let attempt = 1; attempt <= 5; attempt++) { try { const response = await fetch(process.argv[1]); if (!response.ok) throw new Error(`HTTP ${response.status}`); fs.writeFileSync(process.argv[2], Buffer.from(await response.arrayBuffer())); return; } catch (error) { lastError = error; if (attempt < 5) await new Promise((resolve) => setTimeout(resolve, 2000)); } } throw lastError; })().catch((error) => { console.error(error); process.exit(1); })' "$DREAMINA_CLI_BASE/$dreamina_file" /usr/local/bin/dreamina \
     && echo "$dreamina_sha  /usr/local/bin/dreamina" | sha256sum -c - \
     && chmod 0755 /usr/local/bin/dreamina \
     && /usr/local/bin/dreamina version

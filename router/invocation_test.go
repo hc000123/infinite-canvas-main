@@ -38,7 +38,7 @@ func TestArtifactInvocationRoutesRequireAuth(t *testing.T) {
 			if recorder.Code == http.StatusNotFound || strings.Contains(recorder.Body.String(), "接口不存在") {
 				t.Fatalf("route missing: status=%d body=%s", recorder.Code, recorder.Body.String())
 			}
-			if !strings.Contains(recorder.Body.String(), "未登录或权限不足") {
+			if !strings.Contains(recorder.Body.String(), `"code":1001`) {
 				t.Fatalf("route did not reach auth middleware: status=%d body=%s", recorder.Code, recorder.Body.String())
 			}
 		})

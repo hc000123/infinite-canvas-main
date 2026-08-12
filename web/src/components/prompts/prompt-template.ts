@@ -49,6 +49,10 @@ export function promptNodeGroupLabel(nodeGroup?: string) {
     return promptNodeGroupOptions.find((item) => item.value === nodeGroup)?.label || nodeGroup || "未分组";
 }
 
+export function uniquePromptLabels(labels: string[]) {
+    return [...new Set(labels.map((label) => label.trim()).filter(Boolean))];
+}
+
 export function promptKindLabel(kind?: string) {
     return promptKindOptions.find((item) => item.value === kind)?.label || kind || "普通模板";
 }

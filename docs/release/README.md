@@ -102,6 +102,8 @@ docker compose -f docker-compose.local.yml exec -T app sh -lc '! command -v code
 
 发布冒烟必须使用 `--no-cache`，确保 Dreamina CLI 浮动下载地址会重新下载并执行固定哈希与 `version` 校验；普通开发构建可以继续使用缓存。
 
+Dreamina 构建阶段使用 Node 内置 `fetch` 下载 CLI，并从固定的 Go Alpine 构建阶段复用 CA 证书；不要重新引入 `apt-get` / `curl`，避免 Debian 软件源波动阻断发布构建。下载仍保留 5 次有限重试，随后必须通过固定 SHA256 和 `dreamina version` 校验。
+
 `/api/health` 必须精确返回 `ok`。Docker 验收还要确认：
 
 - Next 页面和内部 Go API 同时可用。

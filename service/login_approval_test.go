@@ -57,7 +57,7 @@ func TestRestrictedSessionIsBoundToLoginIP(t *testing.T) {
 func savePasswordUserFixture(t *testing.T, username string, role model.UserRole) model.User {
 	t.Helper()
 	password, _ := hashPassword("password123")
-	user, err := repository.SaveUser(model.User{ID: "id-" + username, Username: username, Password: password, Role: role, Status: model.UserStatusActive, AffCode: testAffCode(username), CreatedAt: now(), UpdatedAt: now()})
+	user, err := repository.SaveUser(model.User{ID: "id-" + username, Username: username, Password: password, Role: role, Status: model.UserStatusActive, AffCode: "aff-" + username, CreatedAt: now(), UpdatedAt: now()})
 	if err != nil {
 		t.Fatal(err)
 	}

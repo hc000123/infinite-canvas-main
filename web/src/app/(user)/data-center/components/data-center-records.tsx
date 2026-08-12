@@ -96,7 +96,7 @@ export function DataCenterRecords({ scope, filters, data, loading, error, onFilt
 function UsageRecordDrawer({ record, onClose }: { record: AIUsageRecord | null; onClose: () => void }) {
     const trace = record?.frontendTrace;
     return (
-        <Drawer title="消费详情" open={Boolean(record)} onClose={onClose} width={520}>
+        <Drawer title="消费详情" open={Boolean(record)} onClose={onClose} size={520}>
             {record ? (
                 <Descriptions
                     column={1}

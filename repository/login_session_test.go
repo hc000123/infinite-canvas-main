@@ -30,6 +30,29 @@ func TestReplaceLoginSessionLeavesOnlyNewestPointer(t *testing.T) {
 	}
 }
 
+func TestReplaceLoginSessionAcceptsLegacyNullPointer(t *testing.T) {
+	setupRepositoryTestDB(t)
+	user := model.User{ID: "user-session-legacy", Username: "session-legacy", Role: model.UserRoleUser, Status: model.UserStatusActive, AffCode: "aff-session-legacy"}
+	if _, err := SaveUser(user); err != nil {
+		t.Fatal(err)
+	}
+	database, err := DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Exec("UPDATE users SET active_session_id = NULL WHERE id = ?", user.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	item := loginSessionFixture("session-legacy", user.ID)
+	if _, _, err := ReplaceLoginSession(item, ""); err != nil {
+		t.Fatal(err)
+	}
+	savedUser, ok, err := GetUserByID(user.ID)
+	if err != nil || !ok || savedUser.ActiveSessionID != item.ID {
+		t.Fatalf("user=%#v ok=%v err=%v", savedUser, ok, err)
+	}
+}
+
 func TestRevokeCurrentLoginSessionClearsMatchingPointer(t *testing.T) {
 	setupRepositoryTestDB(t)
 	user := model.User{ID: "user-revoke", Username: "revoke-user", Role: model.UserRoleUser, Status: model.UserStatusActive, AffCode: "aff-revoke"}

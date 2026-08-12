@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { formatPromptVariablesText, parsePromptVariablesText, productionBibleValueForVariable, promptTypeLabel, promptVariablesFromTemplate, renderPromptTemplate } from "./prompt-template.ts";
+import { formatPromptVariablesText, parsePromptVariablesText, productionBibleValueForVariable, promptTypeLabel, promptVariablesFromTemplate, renderPromptTemplate, uniquePromptLabels } from "./prompt-template.ts";
 
 test("extracts variables from template and metadata", () => {
     const variables = promptVariablesFromTemplate("让 {角色} 在 {场景} 完成 {镜头}", {
@@ -50,4 +50,8 @@ test("labels prompt types and fills variables from production bible items", () =
         }),
         "魏梁，穿学士袍，克制坚定，真实自然，服装和短发保持一致",
     );
+});
+
+test("prompt labels remove empty and duplicate metadata tags", () => {
+    assert.deepEqual(uniquePromptLabels(["图片节点", "正向词", " 正向词 ", "", "人物"]), ["图片节点", "正向词", "人物"]);
 });
