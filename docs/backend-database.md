@@ -59,6 +59,7 @@
 - `workflow_media_items`
 - `prompts`
 - `image_upscale_jobs`
+- `video_upscale_jobs`
 - `settings`
 
 后续新增表时再同步补充本文档，未实际使用的规划表不提前写入。
@@ -74,6 +75,20 @@
 | `status / progress / attempt / error_code / error_message` | `queued / processing / downloading / succeeded / failed` 生命周期、进度、重试次数和安全错误信息。 |
 | `input_width / input_height / input_mime_type / input_bytes / input_path` | 输入图片信息与服务端私有文件路径；`input_path` 不出现在 JSON 响应中。 |
 | `result_url / result_mime_type / result_bytes / output_width / output_height` | 已下载并持久化的结果地址、格式、大小和输出尺寸。 |
+| `cloud_processing / created_at / started_at / completed_at / updated_at` | 云端处理标记与任务时间线。 |
+
+### 画布视频超分任务
+
+`video_upscale_jobs` 保存登录用户发起的火山 VOD 视频超分任务，用于上传、场景式画质增强、结果下载、失败重试和服务重启恢复。任务复用系统设置中的火山 AK/SK，表内不保存任何密钥或签名请求信息。
+
+| 字段组 | 说明 |
+| ---- | ---- |
+| `id / user_id / project_id / canvas_id / source_node_id / source_asset_id` | 任务身份、用户所有权和画布来源坐标；查询接口按 `user_id` 隔离。 |
+| `provider / vod_space_name / vod_vid / run_id / provider_request_id` | 服务商、服务端私有 VOD 空间、已上传媒资 `Vid`、增强 `RunId` 和安全请求追踪；空间名不出现在 JSON 响应中。 |
+| `target / scenario / enhance_level` | 固化任务目标 `1080p / 2k`、`aigc` 场景和 `Standard` 档位。 |
+| `status / progress / attempt / error_code / error_message` | `queued / uploading / processing / downloading / succeeded / failed` 生命周期、进度、重试次数和安全错误信息。 |
+| `input_width / input_height / input_duration_seconds / input_mime_type / input_bytes / input_path` | 输入视频规格与服务端私有文件路径；`input_path` 不出现在 JSON 响应中。 |
+| `output_width / output_height / result_source_url / result_url / result_mime_type / result_bytes` | 等比目标尺寸、服务端私有上游结果地址、公开结果相对地址和输出文件信息；`result_source_url` 不出现在 JSON 响应中。 |
 | `cloud_processing / created_at / started_at / completed_at / updated_at` | 云端处理标记与任务时间线。 |
 
 ### Artifact 与 Invocation Runtime

@@ -29,6 +29,7 @@ type Config struct {
 	WorkflowLocalMediaDir         string   `env:"WORKFLOW_LOCAL_MEDIA_DIR" envDefault:"data/workflow-media"`
 	ImageUpscaleProvider          string   `env:"IMAGE_UPSCALE_PROVIDER" envDefault:"aliyun"`
 	ImageUpscaleWorkDir           string   `env:"IMAGE_UPSCALE_WORK_DIR" envDefault:"data/image-upscale"`
+	VideoUpscaleWorkDir           string   `env:"VIDEO_UPSCALE_WORK_DIR" envDefault:"data/video-upscale"`
 	AlibabaCloudAccessKeyID       string   `env:"ALIBABA_CLOUD_ACCESS_KEY_ID"`
 	AlibabaCloudAccessKeySecret   string   `env:"ALIBABA_CLOUD_ACCESS_KEY_SECRET"`
 	AlibabaCloudSecurityToken     string   `env:"ALIBABA_CLOUD_SECURITY_TOKEN"`
@@ -77,6 +78,7 @@ func Load() error {
 	}
 	Cfg.ImageUpscaleProvider = strings.ToLower(strings.TrimSpace(Cfg.ImageUpscaleProvider))
 	Cfg.ImageUpscaleWorkDir = strings.TrimSpace(Cfg.ImageUpscaleWorkDir)
+	Cfg.VideoUpscaleWorkDir = strings.TrimSpace(Cfg.VideoUpscaleWorkDir)
 	Cfg.AlibabaCloudAccessKeyID = strings.TrimSpace(Cfg.AlibabaCloudAccessKeyID)
 	Cfg.AlibabaCloudAccessKeySecret = strings.TrimSpace(Cfg.AlibabaCloudAccessKeySecret)
 	Cfg.AlibabaCloudSecurityToken = strings.TrimSpace(Cfg.AlibabaCloudSecurityToken)
@@ -85,6 +87,9 @@ func Load() error {
 	}
 	if Cfg.ImageUpscaleWorkDir == "" {
 		Cfg.ImageUpscaleWorkDir = "data/image-upscale"
+	}
+	if Cfg.VideoUpscaleWorkDir == "" {
+		Cfg.VideoUpscaleWorkDir = "data/video-upscale"
 	}
 	return nil
 }

@@ -102,6 +102,7 @@ func DB() (*gorm.DB, error) {
 			&model.WorkflowMediaItem{},
 			&model.Prompt{},
 			&model.ImageUpscaleJob{},
+			&model.VideoUpscaleJob{},
 			&model.Setting{},
 		)
 		if dbErr != nil {
