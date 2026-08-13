@@ -233,6 +233,7 @@ function nodeTypeLabel(node: CanvasNodeData) {
 }
 
 function nodeStatusLabel(node: CanvasNodeData) {
+    if (node.metadata?.videoUpscale && node.metadata.status === "loading") return `视频超分 ${node.metadata.videoUpscale.progress}%`;
     if (node.metadata?.imageUpscale && node.metadata.status === "loading") return `超分 ${node.metadata.imageUpscale.progress}%`;
     if (node.metadata?.content && (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio)) return "成功";
     const status = node.metadata?.status || "idle";

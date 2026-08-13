@@ -35,6 +35,7 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
     const videoParams = isVideoNode ? videoParamLabel(node) : "";
     const arkParams = isVideoNode ? arkParamLabel(node) : "";
     const upscale = node?.metadata?.imageUpscale;
+    const videoUpscale = node?.metadata?.videoUpscale;
 
     const title = (
         <div className="flex items-center justify-between gap-4 pr-12">
@@ -78,6 +79,16 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
                             {upscale?.providerRequestId ? <InfoRow label="服务商请求" value={upscale.providerRequestId} /> : null}
                             {upscale?.durationMs !== undefined ? <InfoRow label="处理耗时" value={formatSecondSpan(Math.round(upscale.durationMs / 1000))} /> : null}
                             {upscale?.errorCode ? <InfoRow label="超分错误码" value={upscale.errorCode} /> : null}
+                            {videoUpscale ? <InfoRow label="视频超分任务" value={videoUpscale.jobId} /> : null}
+                            {videoUpscale ? <InfoRow label="视频超分状态" value={`${upscaleStatusLabel(videoUpscale.status)} · ${videoUpscale.progress}% · 第 ${videoUpscale.attempt} 次`} /> : null}
+                            {videoUpscale ? <InfoRow label="目标 / 服务商" value={`${videoUpscale.target === "2k" ? "2K" : "1080p"} · ${videoUpscale.provider}`} /> : null}
+                            {videoUpscale ? <InfoRow label="云端处理" value="是，视频会进入火山引擎基础设施" /> : null}
+                            {videoUpscale ? <InfoRow label="输入规格" value={`${videoUpscale.inputWidth} × ${videoUpscale.inputHeight} · ${videoUpscale.inputDurationSeconds}s`} /> : null}
+                            {videoUpscale?.outputWidth && videoUpscale.outputHeight ? <InfoRow label="输出规格" value={`${videoUpscale.outputWidth} × ${videoUpscale.outputHeight}`} /> : null}
+                            {videoUpscale?.runId ? <InfoRow label="火山 RunId" value={videoUpscale.runId} /> : null}
+                            {videoUpscale?.providerRequestId ? <InfoRow label="服务商请求" value={videoUpscale.providerRequestId} /> : null}
+                            {videoUpscale?.durationMs !== undefined ? <InfoRow label="处理耗时" value={formatSecondSpan(Math.round(videoUpscale.durationMs / 1000))} /> : null}
+                            {videoUpscale?.errorCode ? <InfoRow label="超分错误码" value={videoUpscale.errorCode} /> : null}
                             {isVideoNode && node.metadata?.model ? <InfoRow label="模型" value={node.metadata.model} /> : null}
                             {isVideoNode && videoParams ? <InfoRow label="视频参数" value={videoParams} /> : null}
                             {isVideoNode && arkParams ? <InfoRow label="Ark 参数" value={arkParams} /> : null}
@@ -139,6 +150,7 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
 
 function upscaleStatusLabel(status: string) {
     if (status === "queued") return "排队中";
+    if (status === "uploading") return "上传中";
     if (status === "processing") return "云端处理中";
     if (status === "downloading") return "保存结果中";
     if (status === "succeeded") return "已完成";

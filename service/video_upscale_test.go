@@ -91,6 +91,34 @@ func TestCreateVideoUpscaleJobRejectsUnsupportedInputAndTarget(t *testing.T) {
 	}
 }
 
+func TestRecoverInterruptedVideoUpscaleJobsOnlyResumesSubmittedRuns(t *testing.T) {
+	setupVideoUpscaleTest(t)
+	jobs := []model.VideoUpscaleJob{
+		{ID: "submitted", UserID: "user-a", Status: model.VideoUpscaleJobStatusProcessing, RunID: "run-1", CreatedAt: now(), UpdatedAt: now()},
+		{ID: "not-submitted", UserID: "user-a", Status: model.VideoUpscaleJobStatusUploading, VODVid: "vid-1", CreatedAt: now(), UpdatedAt: now()},
+	}
+	for _, job := range jobs {
+		if _, err := repository.SaveVideoUpscaleJob(job); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var resumed []string
+	videoUpscaleJobStarter = func(id string) { resumed = append(resumed, id) }
+	if err := RecoverInterruptedVideoUpscaleJobs(); err != nil {
+		t.Fatal(err)
+	}
+	if len(resumed) != 1 || resumed[0] != "submitted" {
+		t.Fatalf("startup must only poll already submitted runs, resumed=%v", resumed)
+	}
+	interrupted, ok, err := repository.GetVideoUpscaleJob("not-submitted")
+	if err != nil || !ok {
+		t.Fatalf("load interrupted job: ok=%v err=%v", ok, err)
+	}
+	if interrupted.Status != model.VideoUpscaleJobStatusFailed || interrupted.ErrorCode != "server_restarted" || interrupted.VODVid != "vid-1" {
+		t.Fatalf("non-submitted job should become retryable without losing Vid: %+v", interrupted)
+	}
+}
+
 func setupVideoUpscaleTest(t *testing.T) {
 	t.Helper()
 	tmp := t.TempDir()

@@ -136,6 +136,28 @@ func RetryVideoUpscaleJob(ctx context.Context, userID, jobID string) (model.Vide
 	return job, nil
 }
 
+func RecoverInterruptedVideoUpscaleJobs() error {
+	jobs, err := repository.ListActiveVideoUpscaleJobs()
+	if err != nil {
+		return err
+	}
+	for _, job := range jobs {
+		if strings.TrimSpace(job.RunID) != "" {
+			videoUpscaleJobStarter(job.ID)
+			continue
+		}
+		job.Status = model.VideoUpscaleJobStatusFailed
+		job.ErrorCode = "server_restarted"
+		job.ErrorMessage = "视频超分任务因服务重启中断，请重试"
+		job.CompletedAt = now()
+		job.UpdatedAt = job.CompletedAt
+		if _, err := repository.SaveVideoUpscaleJob(job); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 type VideoUpscaleCapabilitiesResult struct {
 	Enabled         bool     `json:"enabled"`
 	Provider        string   `json:"provider"`

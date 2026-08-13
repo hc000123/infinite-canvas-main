@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { applyVideoUpscaleJobToNode, buildVideoUpscaleDraft, videoUpscaleJobActive } from "./canvas-video-upscale.ts";
+import { buildCanvasVideoProgress } from "./canvas-video-progress.ts";
 import type { CanvasNodeData } from "../types.ts";
 
 const source: CanvasNodeData = { id: "video-source", type: "video" as CanvasNodeData["type"], title: "原视频", position: { x: 20, y: 30 }, width: 320, height: 180, metadata: { content: "blob:source", storageKey: "video:source", sourceAssetId: "asset-1", naturalWidth: 1280, naturalHeight: 720 } };
@@ -33,4 +34,16 @@ test("updates progress failure and success in place", () => {
 test("recognizes uploading processing and downloading as active", () => {
     for (const status of ["queued", "uploading", "processing", "downloading"] as const) assert.equal(videoUpscaleJobActive(status), true);
     for (const status of ["succeeded", "failed"] as const) assert.equal(videoUpscaleJobActive(status), false);
+});
+
+test("video node progress uses the video upscale lifecycle", () => {
+    for (const [status, label, percent] of [
+        ["uploading", "上传原视频", 15],
+        ["processing", "云端增强中", 65],
+        ["downloading", "保存结果中", 80],
+    ] as const) {
+        const progress = buildCanvasVideoProgress({ status: "loading", videoUpscale: { ...buildVideoUpscaleDraft(source, "child", queuedJob, [source]).node.metadata!.videoUpscale!, status, progress: percent } }, "loading");
+        assert.equal(progress.label, label);
+        assert.equal(progress.percent, percent);
+    }
 });

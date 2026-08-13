@@ -45,6 +45,7 @@ type volcengineVideoUpscaleProvider struct {
 }
 
 var videoUpscaleRunning sync.Map
+var videoUpscalePollInterval = 3 * time.Second
 
 func init() {
 	videoUpscaleJobStarter = func(jobID string) {
@@ -54,8 +55,33 @@ func init() {
 				_ = failVideoUpscaleJob(jobID, "provider_unavailable", "服务端视频超分配置不可用")
 				return
 			}
-			_ = processVideoUpscaleJob(context.Background(), jobID, provider, downloadVideoUpscaleResult)
+			_ = runVideoUpscaleJob(context.Background(), jobID, provider, downloadVideoUpscaleResult, videoUpscalePollInterval)
 		}()
+	}
+}
+
+func runVideoUpscaleJob(ctx context.Context, jobID string, provider VideoUpscaleProvider, downloader videoUpscaleResultDownloader, pollInterval time.Duration) error {
+	for {
+		if err := processVideoUpscaleJob(ctx, jobID, provider, downloader); err != nil {
+			return err
+		}
+		job, ok, err := repository.GetVideoUpscaleJob(jobID)
+		if err != nil || !ok {
+			return firstVideoUpscaleError(err, errors.New("video upscale job not found"))
+		}
+		if job.Status != model.VideoUpscaleJobStatusProcessing {
+			return nil
+		}
+		if pollInterval <= 0 {
+			continue
+		}
+		timer := time.NewTimer(pollInterval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
 	}
 }
 
