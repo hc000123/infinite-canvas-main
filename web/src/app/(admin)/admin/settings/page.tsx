@@ -21,6 +21,7 @@ import {
     fetchChannelModels,
     saveAdminSettings,
     testAdminImageUpscale,
+    testAdminVideoUpscale,
     testChannelModel,
     type AdminModelChannel,
     type AdminModelCost,
@@ -122,7 +123,7 @@ export default function AdminSettingsPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [isTestingImageUpscale, setIsTestingImageUpscale] = useState(false);
-    const [isTestingVideoUpscale] = useState(false);
+    const [isTestingVideoUpscale, setIsTestingVideoUpscale] = useState(false);
     const [isDeletingChannel, setIsDeletingChannel] = useState(false);
     const [isEnterpriseVideoFocus, setIsEnterpriseVideoFocus] = useState(false);
     const [modelCosts, setModelCosts] = useState<AdminModelCost[]>([]);
@@ -227,6 +228,20 @@ export default function AdminSettingsPage() {
             message.error(error instanceof Error ? error.message : "图片超分连接测试失败");
         } finally {
             setIsTestingImageUpscale(false);
+        }
+    };
+
+    const testVideoUpscale = async () => {
+        if (!token) return;
+        const setting = normalizePrivateVideoUpscaleSetting(form.getFieldValue(["private", "videoUpscale"]));
+        setIsTestingVideoUpscale(true);
+        try {
+            const result = await testAdminVideoUpscale(token, setting);
+            message.success(result.message);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "视频超分连接测试失败");
+        } finally {
+            setIsTestingVideoUpscale(false);
         }
     };
 
@@ -653,7 +668,7 @@ export default function AdminSettingsPage() {
                         <Form form={form} layout="vertical" initialValues={emptySettings} requiredMark={false}>
                             <Flex vertical gap={12}>
                                 <ImageUpscaleSettingsSection form={form} setting={privateImageUpscale} testing={isTestingImageUpscale} onTest={testImageUpscale} />
-                                <VideoUpscaleSettingsSection setting={privateVideoUpscale} credentials={privateVolcengineAsset} testing={isTestingVideoUpscale} onTest={() => message.info("保存设置后即可进行只读 VOD 连接测试")} />
+                                <VideoUpscaleSettingsSection setting={privateVideoUpscale} credentials={privateVolcengineAsset} testing={isTestingVideoUpscale} onTest={testVideoUpscale} />
                                 <Collapse
                                     defaultActiveKey={[]}
                                     items={[{

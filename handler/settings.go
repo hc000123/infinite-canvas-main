@@ -82,6 +82,17 @@ func AdminTestImageUpscale(w http.ResponseWriter, r *http.Request) {
 	OK(w, result)
 }
 
+func AdminTestVideoUpscale(w http.ResponseWriter, r *http.Request) {
+	var setting model.VideoUpscaleSetting
+	_ = json.NewDecoder(r.Body).Decode(&setting)
+	result, err := service.AdminTestVideoUpscale(r.Context(), setting)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
 func UserStartJimengLogin(w http.ResponseWriter, r *http.Request) {
 	user, ok := service.UserFromContext(r.Context())
 	if !ok {
