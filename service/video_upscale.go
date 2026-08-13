@@ -107,6 +107,52 @@ func GetUserVideoUpscaleJob(userID, jobID string) (model.VideoUpscaleJob, bool, 
 	return job, true, nil
 }
 
+func RetryVideoUpscaleJob(ctx context.Context, userID, jobID string) (model.VideoUpscaleJob, error) {
+	if _, err := currentVideoUpscaleSetting(); err != nil {
+		return model.VideoUpscaleJob{}, err
+	}
+	job, _, err := GetUserVideoUpscaleJob(userID, jobID)
+	if err != nil {
+		return model.VideoUpscaleJob{}, err
+	}
+	if job.Status != model.VideoUpscaleJobStatusFailed {
+		return model.VideoUpscaleJob{}, safeMessageError{message: "当前视频超分任务不能重试"}
+	}
+	if err := ctx.Err(); err != nil {
+		return model.VideoUpscaleJob{}, err
+	}
+	if job.VODVid == "" {
+		if info, statErr := os.Stat(job.InputPath); statErr != nil || info.IsDir() {
+			return model.VideoUpscaleJob{}, safeMessageError{message: "原始视频已不存在，请重新发起超分"}
+		}
+	}
+	job.Status, job.Progress, job.Attempt = model.VideoUpscaleJobStatusQueued, 5, job.Attempt+1
+	job.ErrorCode, job.ErrorMessage, job.CompletedAt, job.UpdatedAt = "", "", "", now()
+	job, err = repository.SaveVideoUpscaleJob(job)
+	if err != nil {
+		return model.VideoUpscaleJob{}, err
+	}
+	videoUpscaleJobStarter(job.ID)
+	return job, nil
+}
+
+type VideoUpscaleCapabilitiesResult struct {
+	Enabled         bool     `json:"enabled"`
+	Provider        string   `json:"provider"`
+	Targets         []string `json:"targets"`
+	MaxInputBytes   int64    `json:"maxInputBytes"`
+	CloudProcessing bool     `json:"cloudProcessing"`
+}
+
+func VideoUpscaleCapabilities() VideoUpscaleCapabilitiesResult {
+	setting, err := currentVideoUpscaleSetting()
+	provider := "volcengine"
+	if setting.Provider != "" {
+		provider = setting.Provider
+	}
+	return VideoUpscaleCapabilitiesResult{Enabled: err == nil, Provider: provider, Targets: []string{"1080p", "2k"}, MaxInputBytes: videoUpscaleMaxInputBytes, CloudProcessing: true}
+}
+
 func currentVideoUpscaleSetting() (model.VideoUpscaleSetting, error) {
 	settings, err := repository.GetSettings()
 	if err != nil {
