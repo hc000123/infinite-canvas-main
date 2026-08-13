@@ -123,12 +123,35 @@ type VolcengineAssetSetting struct {
 	PublicAssetBaseURL  string `json:"publicAssetBaseUrl"`
 }
 
+type ImageUpscaleSetting struct {
+	Managed                   bool   `json:"managed"`
+	Enabled                   bool   `json:"enabled"`
+	Provider                  string `json:"provider"`
+	AccessKeyID               string `json:"accessKeyId"`
+	AccessKeySecret           string `json:"accessKeySecret"`
+	SecurityToken             string `json:"securityToken"`
+	AccessKeyIDConfigured     bool   `json:"accessKeyIdConfigured"`
+	AccessKeySecretConfigured bool   `json:"accessKeySecretConfigured"`
+	SecurityTokenConfigured   bool   `json:"securityTokenConfigured"`
+}
+
+type VideoUpscaleSetting struct {
+	Enabled      bool   `json:"enabled"`
+	Provider     string `json:"provider"`
+	SpaceName    string `json:"spaceName"`
+	Scenario     string `json:"scenario"`
+	EnhanceLevel string `json:"enhanceLevel"`
+	MaxTarget    string `json:"maxTarget"`
+}
+
 // PrivateSetting 私有配置。
 type PrivateSetting struct {
 	Channels        []ModelChannel         `json:"channels"`
 	PromptSync      PromptSyncSetting      `json:"promptSync"`
 	Auth            PrivateAuthSetting     `json:"auth"`
 	VolcengineAsset VolcengineAssetSetting `json:"volcengineAsset"`
+	ImageUpscale    ImageUpscaleSetting    `json:"imageUpscale"`
+	VideoUpscale    VideoUpscaleSetting    `json:"videoUpscale"`
 }
 
 // PromptSyncSetting 提示词定时同步配置。

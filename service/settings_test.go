@@ -127,6 +127,44 @@ func TestNormalizePrivateSettingAllocatesGloballyUniqueChannelIDs(t *testing.T) 
 	}
 }
 
+func TestNormalizeVideoUpscaleSettingDefaults(t *testing.T) {
+	result := normalizePrivateSetting(model.PrivateSetting{VideoUpscale: model.VideoUpscaleSetting{
+		SpaceName: "  short-drama-vod  ",
+	}}).VideoUpscale
+
+	if result.Provider != "volcengine" || result.SpaceName != "short-drama-vod" || result.Scenario != "aigc" || result.EnhanceLevel != "Standard" || result.MaxTarget != "2k" {
+		t.Fatalf("normalized video upscale setting = %#v", result)
+	}
+}
+
+func TestSaveSettingsPersistsVideoUpscaleWithoutCopyingVolcengineSecrets(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := repository.SaveSettings(model.Settings{Private: model.PrivateSetting{VolcengineAsset: model.VolcengineAssetSetting{
+		AccessKey: "shared-ak", SecretKey: "shared-sk",
+	}}}, now())
+	if err != nil {
+		t.Fatalf("seed settings: %v", err)
+	}
+
+	_, err = SaveSettings(model.Settings{Private: model.PrivateSetting{VideoUpscale: model.VideoUpscaleSetting{
+		Enabled: true, Provider: " volcengine ", SpaceName: " video-space ", Scenario: " aigc ", EnhanceLevel: " Standard ", MaxTarget: " 2k ",
+	}}})
+	if err != nil {
+		t.Fatalf("SaveSettings returned error: %v", err)
+	}
+	saved, err := repository.GetSettings()
+	if err != nil {
+		t.Fatalf("GetSettings returned error: %v", err)
+	}
+	upscale := saved.Private.VideoUpscale
+	if !upscale.Enabled || upscale.Provider != "volcengine" || upscale.SpaceName != "video-space" || upscale.Scenario != "aigc" || upscale.EnhanceLevel != "Standard" || upscale.MaxTarget != "2k" {
+		t.Fatalf("saved video upscale setting = %#v", upscale)
+	}
+	if saved.Private.VolcengineAsset.AccessKey != "shared-ak" || saved.Private.VolcengineAsset.SecretKey != "shared-sk" {
+		t.Fatalf("shared Volcengine credentials changed: %#v", saved.Private.VolcengineAsset)
+	}
+}
+
 func TestKeepPrivateAPIKeysLeavesJimengNoSecretChannelEmpty(t *testing.T) {
 	saved := model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{
 		{ID: "first", Name: "Jimeng", Protocol: modelProtocolJimengCLI},
@@ -207,6 +245,53 @@ func TestAdminSettingsMasksSavedChannelAPIKey(t *testing.T) {
 	}
 	if strings.Contains(settings.Private.Channels[0].APIKey, "sk-real-admin") {
 		t.Fatalf("admin settings leaked api key: %q", settings.Private.Channels[0].APIKey)
+	}
+}
+
+func TestAdminSettingsHidesImageUpscaleSecrets(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := repository.SaveSettings(model.Settings{Private: model.PrivateSetting{ImageUpscale: model.ImageUpscaleSetting{
+		Managed: true, Enabled: true, Provider: "aliyun", AccessKeyID: "ak-id", AccessKeySecret: "ak-secret", SecurityToken: "sts-token",
+	}}}, now())
+	if err != nil {
+		t.Fatalf("seed settings: %v", err)
+	}
+
+	settings, err := AdminSettings()
+	if err != nil {
+		t.Fatalf("AdminSettings returned error: %v", err)
+	}
+	upscale := settings.Private.ImageUpscale
+	if upscale.AccessKeyID != "" || upscale.AccessKeySecret != "" || upscale.SecurityToken != "" {
+		t.Fatalf("admin settings leaked image upscale secrets: %#v", upscale)
+	}
+	if !upscale.AccessKeyIDConfigured || !upscale.AccessKeySecretConfigured || !upscale.SecurityTokenConfigured {
+		t.Fatalf("configured flags = %#v, want all true", upscale)
+	}
+}
+
+func TestSaveSettingsKeepsAndIndividuallyReplacesImageUpscaleSecrets(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := repository.SaveSettings(model.Settings{Private: model.PrivateSetting{ImageUpscale: model.ImageUpscaleSetting{
+		Managed: true, Enabled: true, Provider: "aliyun", AccessKeyID: "old-id", AccessKeySecret: "old-secret", SecurityToken: "old-token",
+	}}}, now())
+	if err != nil {
+		t.Fatalf("seed settings: %v", err)
+	}
+
+	_, err = SaveSettings(model.Settings{Private: model.PrivateSetting{ImageUpscale: model.ImageUpscaleSetting{
+		Enabled: true, Provider: "aliyun", AccessKeySecret: "new-secret",
+	}}})
+	if err != nil {
+		t.Fatalf("SaveSettings returned error: %v", err)
+	}
+	saved, err := repository.GetSettings()
+	if err != nil {
+		t.Fatalf("GetSettings returned error: %v", err)
+	}
+	upscale := saved.Private.ImageUpscale
+	if !upscale.Managed || upscale.AccessKeyID != "old-id" || upscale.AccessKeySecret != "new-secret" || upscale.SecurityToken != "old-token" {
+		t.Fatalf("saved image upscale setting = %#v", upscale)
 	}
 }
 

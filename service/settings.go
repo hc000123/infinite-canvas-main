@@ -55,6 +55,8 @@ func SaveSettings(settings model.Settings) (model.Settings, error) {
 	}
 	keepPrivateAuthSecrets(&settings, normalizedSaved)
 	keepPrivateVolcengineAssetSecrets(&settings, normalizedSaved)
+	keepPrivateImageUpscaleSecrets(&settings, normalizedSaved)
+	settings.Private.ImageUpscale.Managed = true
 	settings = normalizeSettings(settings)
 	if err := validateModelProtocolConflicts(settings.Private.Channels); err != nil {
 		return model.Settings{}, err
@@ -675,6 +677,8 @@ func normalizePrivateSetting(setting model.PrivateSetting) model.PrivateSetting 
 	}
 	setting.PromptSync = normalizePromptSyncSetting(setting.PromptSync)
 	setting.VolcengineAsset = normalizeVolcengineAssetSetting(setting.VolcengineAsset)
+	setting.ImageUpscale = normalizeImageUpscaleSetting(setting.ImageUpscale)
+	setting.VideoUpscale = normalizeVideoUpscaleSetting(setting.VideoUpscale)
 	for i := range setting.Channels {
 		setting.Channels[i] = normalizeModelChannel(setting.Channels[i])
 	}
@@ -711,6 +715,12 @@ func hidePrivateAPIKeys(settings model.Settings) model.Settings {
 	settings.Private.VolcengineAsset.SecretKeyConfigured = strings.TrimSpace(settings.Private.VolcengineAsset.SecretKey) != ""
 	settings.Private.VolcengineAsset.AccessKey = ""
 	settings.Private.VolcengineAsset.SecretKey = ""
+	settings.Private.ImageUpscale.AccessKeyIDConfigured = strings.TrimSpace(settings.Private.ImageUpscale.AccessKeyID) != ""
+	settings.Private.ImageUpscale.AccessKeySecretConfigured = strings.TrimSpace(settings.Private.ImageUpscale.AccessKeySecret) != ""
+	settings.Private.ImageUpscale.SecurityTokenConfigured = strings.TrimSpace(settings.Private.ImageUpscale.SecurityToken) != ""
+	settings.Private.ImageUpscale.AccessKeyID = ""
+	settings.Private.ImageUpscale.AccessKeySecret = ""
+	settings.Private.ImageUpscale.SecurityToken = ""
 	return settings
 }
 
@@ -774,6 +784,18 @@ func keepPrivateVolcengineAssetSecrets(settings *model.Settings, saved model.Set
 	}
 }
 
+func keepPrivateImageUpscaleSecrets(settings *model.Settings, saved model.Settings) {
+	if value := strings.TrimSpace(settings.Private.ImageUpscale.AccessKeyID); value == "" || isMaskedAPIKey(value) {
+		settings.Private.ImageUpscale.AccessKeyID = saved.Private.ImageUpscale.AccessKeyID
+	}
+	if value := strings.TrimSpace(settings.Private.ImageUpscale.AccessKeySecret); value == "" || isMaskedAPIKey(value) {
+		settings.Private.ImageUpscale.AccessKeySecret = saved.Private.ImageUpscale.AccessKeySecret
+	}
+	if value := strings.TrimSpace(settings.Private.ImageUpscale.SecurityToken); value == "" || isMaskedAPIKey(value) {
+		settings.Private.ImageUpscale.SecurityToken = saved.Private.ImageUpscale.SecurityToken
+	}
+}
+
 func normalizeVolcengineAssetSetting(setting model.VolcengineAssetSetting) model.VolcengineAssetSetting {
 	setting.AccessKey = strings.TrimSpace(setting.AccessKey)
 	setting.SecretKey = strings.TrimSpace(setting.SecretKey)
@@ -789,6 +811,38 @@ func normalizeVolcengineAssetSetting(setting model.VolcengineAssetSetting) model
 	}
 	setting.AssetGroupID = strings.TrimSpace(setting.AssetGroupID)
 	setting.PublicAssetBaseURL = strings.TrimRight(strings.TrimSpace(setting.PublicAssetBaseURL), "/")
+	return setting
+}
+
+func normalizeImageUpscaleSetting(setting model.ImageUpscaleSetting) model.ImageUpscaleSetting {
+	setting.Provider = imageUpscaleProviderName(setting.Provider)
+	setting.AccessKeyID = strings.TrimSpace(setting.AccessKeyID)
+	setting.AccessKeySecret = strings.TrimSpace(setting.AccessKeySecret)
+	setting.SecurityToken = strings.TrimSpace(setting.SecurityToken)
+	setting.AccessKeyIDConfigured = setting.AccessKeyIDConfigured || setting.AccessKeyID != ""
+	setting.AccessKeySecretConfigured = setting.AccessKeySecretConfigured || setting.AccessKeySecret != ""
+	setting.SecurityTokenConfigured = setting.SecurityTokenConfigured || setting.SecurityToken != ""
+	return setting
+}
+
+func normalizeVideoUpscaleSetting(setting model.VideoUpscaleSetting) model.VideoUpscaleSetting {
+	setting.Provider = strings.TrimSpace(setting.Provider)
+	if setting.Provider == "" {
+		setting.Provider = "volcengine"
+	}
+	setting.SpaceName = strings.TrimSpace(setting.SpaceName)
+	setting.Scenario = strings.TrimSpace(setting.Scenario)
+	if setting.Scenario == "" {
+		setting.Scenario = "aigc"
+	}
+	setting.EnhanceLevel = strings.TrimSpace(setting.EnhanceLevel)
+	if setting.EnhanceLevel == "" {
+		setting.EnhanceLevel = "Standard"
+	}
+	setting.MaxTarget = strings.TrimSpace(setting.MaxTarget)
+	if setting.MaxTarget == "" {
+		setting.MaxTarget = "2k"
+	}
 	return setting
 }
 

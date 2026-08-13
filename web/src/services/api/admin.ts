@@ -456,6 +456,27 @@ export type AdminPrivateVolcengineAssetSettings = {
     publicAssetBaseUrl: string;
 };
 
+export type AdminPrivateImageUpscaleSettings = {
+    managed: boolean;
+    enabled: boolean;
+    provider: "aliyun";
+    accessKeyId: string;
+    accessKeySecret: string;
+    securityToken: string;
+    accessKeyIdConfigured: boolean;
+    accessKeySecretConfigured: boolean;
+    securityTokenConfigured: boolean;
+};
+
+export type AdminPrivateVideoUpscaleSettings = {
+    enabled: boolean;
+    provider: "volcengine";
+    spaceName: string;
+    scenario: "aigc";
+    enhanceLevel: "Standard";
+    maxTarget: "2k";
+};
+
 export type AdminPublicSettings = {
     modelChannel: AdminPublicModelChannelSettings;
     auth: {
@@ -472,6 +493,8 @@ export type AdminPrivateSettings = {
     };
     auth: Record<string, never>;
     volcengineAsset: AdminPrivateVolcengineAssetSettings;
+    imageUpscale: AdminPrivateImageUpscaleSettings;
+    videoUpscale: AdminPrivateVideoUpscaleSettings;
 };
 
 export type AdminSettings = {
@@ -485,6 +508,14 @@ export async function fetchAdminSettings(token: string) {
 
 export async function saveAdminSettings(token: string, settings: AdminSettings) {
     return apiPost<AdminSettings>("/api/admin/settings", settings, token);
+}
+
+export async function testAdminImageUpscale(token: string, setting: AdminPrivateImageUpscaleSettings) {
+    return apiPost<{ provider: "aliyun"; message: string }>("/api/admin/settings/image-upscale-test", setting, token);
+}
+
+export async function testAdminVideoUpscale(token: string, setting: AdminPrivateVideoUpscaleSettings) {
+    return apiPost<{ provider: "volcengine"; message: string }>("/api/admin/settings/video-upscale-test", setting, token);
 }
 
 export type AdminChannelActionRequest = {
