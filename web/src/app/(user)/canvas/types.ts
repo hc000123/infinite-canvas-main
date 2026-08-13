@@ -57,6 +57,31 @@ export type CanvasImageUpscaleMetadata = {
     errorCode?: string;
 };
 
+export type CanvasVideoUpscaleMetadata = {
+    jobId: string;
+    provider: string;
+    vid?: string;
+    runId?: string;
+    providerRequestId?: string;
+    target: "1080p" | "2k";
+    status: "queued" | "uploading" | "processing" | "downloading" | "succeeded" | "failed";
+    progress: number;
+    attempt: number;
+    sourceNodeId: string;
+    sourceAssetId?: string;
+    inputWidth: number;
+    inputHeight: number;
+    inputDurationSeconds: number;
+    outputWidth?: number;
+    outputHeight?: number;
+    outputDurationSeconds?: number;
+    cloudProcessing: true;
+    startedAt?: string;
+    completedAt?: string;
+    durationMs?: number;
+    errorCode?: string;
+};
+
 export type CanvasMediaVersion = {
     id: string;
     versionNumber: number;
@@ -89,6 +114,7 @@ export type CanvasNodeMetadata = {
     status?: CanvasNodeStatus;
     errorDetails?: string;
     imageUpscale?: CanvasImageUpscaleMetadata;
+    videoUpscale?: CanvasVideoUpscaleMetadata;
     fontSize?: number;
     generationMode?: CanvasGenerationMode;
     generationType?: CanvasImageGenerationType;

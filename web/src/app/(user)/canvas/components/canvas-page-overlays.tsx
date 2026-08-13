@@ -16,6 +16,8 @@ import { StoryboardManagerDrawer } from "./storyboard-manager-drawer";
 import { CanvasTextEditorModal } from "./canvas-text-editor-modal";
 import { CanvasImageUpscaleModal } from "./canvas-image-upscale-modal";
 import type { ImageUpscaleCapabilities } from "@/services/api/image-upscale";
+import type { VideoUpscaleCapabilities } from "@/services/api/video-upscale";
+import { CanvasVideoUpscaleModal } from "./canvas-video-upscale-modal";
 
 type Props = {
     angleNode: CanvasNodeData | null;
@@ -34,6 +36,9 @@ type Props = {
     upscaleNode: CanvasNodeData | null;
     upscaleCapabilities: ImageUpscaleCapabilities | null;
     upscaleSubmitting: boolean;
+    videoUpscaleNode: CanvasNodeData | null;
+    videoUpscaleCapabilities: VideoUpscaleCapabilities | null;
+    videoUpscaleSubmitting: boolean;
     projectId: string;
     projectTitle: string;
     episodeId?: string;
@@ -55,6 +60,7 @@ type Props = {
     onCloseTextEditor: () => void;
     onClosePreview: () => void;
     onCloseUpscale: () => void;
+    onCloseVideoUpscale: () => void;
     onCloseScriptManager: () => void;
     onCloseStoryboardManager: () => void;
     onCreateBriefImageConfig: (brief: ImageBrief, canvasId?: string) => void;
@@ -62,6 +68,7 @@ type Props = {
     onGenerateAngleNode: (node: CanvasNodeData, params: CanvasImageAngleParams) => void;
     onImageInputChange: (event: ChangeEvent<HTMLInputElement>) => void;
     onUpscaleImageNode: (node: CanvasNodeData, scale: 2 | 4) => void;
+    onUpscaleVideoNode: (node: CanvasNodeData, target: "1080p" | "2k") => void;
     onOpenStoryboardGroup: (groupId: string) => void;
     onSaveTextNode: (nodeId: string, content: string) => void;
 };
@@ -83,6 +90,9 @@ export function CanvasPageOverlays({
     upscaleNode,
     upscaleCapabilities,
     upscaleSubmitting,
+    videoUpscaleNode,
+    videoUpscaleCapabilities,
+    videoUpscaleSubmitting,
     projectId,
     projectTitle,
     episodeId,
@@ -104,6 +114,7 @@ export function CanvasPageOverlays({
     onCloseTextEditor,
     onClosePreview,
     onCloseUpscale,
+    onCloseVideoUpscale,
     onCloseScriptManager,
     onCloseStoryboardManager,
     onCreateBriefImageConfig,
@@ -111,6 +122,7 @@ export function CanvasPageOverlays({
     onGenerateAngleNode,
     onImageInputChange,
     onUpscaleImageNode,
+    onUpscaleVideoNode,
     onOpenStoryboardGroup,
     onSaveTextNode,
 }: Props) {
@@ -137,6 +149,8 @@ export function CanvasPageOverlays({
             <CanvasMediaPreviewModal node={previewNode || undefined} onClose={onClosePreview} />
 
             <CanvasImageUpscaleModal node={upscaleNode} capabilities={upscaleCapabilities} loading={upscaleSubmitting} onClose={onCloseUpscale} onSubmit={onUpscaleImageNode} />
+
+            <CanvasVideoUpscaleModal node={videoUpscaleNode} capabilities={videoUpscaleCapabilities} loading={videoUpscaleSubmitting} onClose={onCloseVideoUpscale} onSubmit={onUpscaleVideoNode} />
 
             <ClearCanvasConfirmModal open={clearConfirmOpen} onCancel={onCloseClearConfirm} onConfirm={onClearCanvas} />
 

@@ -105,6 +105,7 @@ export function NodeInspector({
                 ) : null}
                 {node.type === CanvasNodeType.Image && hasMedia ? <InspectorAction icon={<Scissors className="size-4" />} label="裁剪" onClick={() => onCrop(node)} theme={theme} /> : null}
                 {node.type === CanvasNodeType.Image && hasMedia ? <InspectorAction icon={<Sparkles className="size-4" />} label="超分" onClick={() => onUpscale(node)} theme={theme} /> : null}
+                {node.type === CanvasNodeType.Video && hasMedia ? <InspectorAction icon={<Sparkles className="size-4" />} label="视频超分" onClick={() => onUpscale(node)} theme={theme} /> : null}
                 {node.type === CanvasNodeType.Image && hasMedia ? <InspectorAction icon={<Camera className="size-4" />} label="多角度" onClick={() => onAngle(node)} theme={theme} /> : null}
                 {node.type === CanvasNodeType.Image && hasMedia ? <InspectorAction icon={<Maximize2 className="size-4" />} label="查看大图" onClick={() => onViewImage(node)} theme={theme} /> : null}
                 {node.type === CanvasNodeType.Video && node.metadata?.lastFrameUrl ? <InspectorAction icon={<Video className="size-4" />} label="续写下一段" onClick={() => onContinueVideo(node)} theme={theme} /> : null}
