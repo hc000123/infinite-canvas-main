@@ -31,7 +31,10 @@ require (
 	github.com/alibabacloud-go/debug v1.0.1 // indirect
 	github.com/alibabacloud-go/tea-utils/v2 v2.0.7 // indirect
 	github.com/aliyun/credentials-go v1.4.5 // indirect
+	github.com/avast/retry-go v3.0.0+incompatible // indirect
 	github.com/clbanning/mxj/v2 v2.7.0 // indirect
+	github.com/golang/protobuf v1.5.4 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.4 // indirect
 	github.com/rogpeppe/go-internal v1.15.0 // indirect
