@@ -50,17 +50,17 @@ test("project Agent center has an explicit return-to-project action", () => {
     assert.match(page, /`\/projects\/\$\{project\.id\}`/);
 });
 
-test("project production navigation exposes production control and project cache", () => {
+test("project production navigation keeps episode production and project cache", () => {
     const board = readProjectFile("./[id]/components/project-episode-board.tsx");
     const page = readProjectFile("./[id]/page.tsx");
-    assert.match(board, /生产总控/);
-    assert.match(board, /<Button type="primary"[\s\S]*?onClick=\{onOpenAgentWorkspace\}>\s*进入生产总控/s);
+    assert.match(board, /制作本集/);
+    assert.doesNotMatch(board, /项目总控|进入生产总控|onOpenAgentWorkspace/);
     assert.doesNotMatch(board, />项目 Agent</);
     assert.doesNotMatch(board, /Skill 管理|onOpenSkillManagement/);
     assert.match(board, /查看项目缓存/);
     assert.doesNotMatch(board, /Workflow 中心/);
     assert.doesNotMatch(board, /Agent 中心/);
-    assert.match(page, /onOpenAgentWorkspace=\{\(\) => router\.push\(agentWorkspaceHref\(\{ projectId: project\.id \}\)\)\}/);
+    assert.doesNotMatch(page, /agentWorkspaceHref|onOpenAgentWorkspace/);
     assert.doesNotMatch(page, /onOpenSkillManagement|\/skills`/);
     assert.doesNotMatch(page, /onOpenAgentSettings|\/agents`|onOpenWorkflowCenter/);
 });

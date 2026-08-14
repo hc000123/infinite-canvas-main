@@ -13,8 +13,9 @@ test("mounts the existing episode workflow from explicit Agent route ids", () =>
     assert.doesNotMatch(workbench, /useParams/);
 });
 
-test("keeps route changes inside the Agent URL", () => {
+test("keeps route changes inside the nested episode Workflow URL", () => {
     const hook = read("../projects/[id]/episodes/[episodeId]/workflow/use-workflow-workbench.ts");
-    assert.match(hook, /agentWorkspaceHref/);
-    assert.doesNotMatch(hook, /window\.location\.pathname/);
+    assert.match(hook, /workflowRouteHref/);
+    assert.match(hook, /window\.location\.pathname/);
+    assert.doesNotMatch(hook, /agentWorkspaceHref/);
 });

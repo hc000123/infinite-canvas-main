@@ -13,8 +13,8 @@ test("builds a project-level Agent route without empty values", () => {
     assert.equal(agentWorkspaceHref({ projectId: "project-1" }), "/agent?projectId=project-1");
 });
 
-test("routes the existing project production helper into Agent", () => {
-    assert.equal(videoWorkflowHref(1, "project-1", "episode-1"), "/agent?projectId=project-1&episodeId=episode-1&stage=script");
+test("routes the existing project production helper into the episode workflow", () => {
+    assert.equal(videoWorkflowHref(1, "project-1", "episode-1"), "/projects/project-1/episodes/episode-1/workflow?stage=script");
 });
 
 test("removes direct Workflow links from the episode production entry", () => {
