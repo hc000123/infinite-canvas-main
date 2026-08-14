@@ -21,6 +21,7 @@ import {
     fetchChannelModels,
     saveAdminSettings,
     testAdminImageUpscale,
+    testAdminTencentMPSVideo,
     testAdminVideoUpscale,
     testChannelModel,
     type AdminModelChannel,
@@ -68,6 +69,7 @@ const emptySettings: AdminSettings = {
         volcengineAsset: { enabled: false, accessKey: "", secretKey: "", accessKeyConfigured: false, secretKeyConfigured: false, projectName: "default", region: "cn-beijing", assetGroupId: "", publicAssetBaseUrl: "" },
         imageUpscale: { managed: false, enabled: false, provider: "aliyun", accessKeyId: "", accessKeySecret: "", securityToken: "", accessKeyIdConfigured: false, accessKeySecretConfigured: false, securityTokenConfigured: false },
         videoUpscale: { enabled: false, subtitleEraseEnabled: false, provider: "volcengine-las", apiKey: "", apiKeyConfigured: false, outputTosPath: "", outputQualityMode: "compatible", preserveAudio: true, maxTarget: "2k" },
+        tencentMpsVideo: { enabled: false, secretId: "", secretKey: "", secretIdConfigured: false, secretKeyConfigured: false, cosBucket: "", cosRegion: "ap-beijing", inputPrefix: "video-upscale/input/", outputPrefix: "video-upscale/output/", defaultScene: "comic" },
     },
 };
 const emptyChannel: AdminModelChannel = {
@@ -124,6 +126,7 @@ export default function AdminSettingsPage() {
     const [isSaving, setIsSaving] = useState(false);
     const [isTestingImageUpscale, setIsTestingImageUpscale] = useState(false);
     const [isTestingVideoUpscale, setIsTestingVideoUpscale] = useState(false);
+    const [isTestingTencentMPSVideo, setIsTestingTencentMPSVideo] = useState(false);
     const [isDeletingChannel, setIsDeletingChannel] = useState(false);
     const [isEnterpriseVideoFocus, setIsEnterpriseVideoFocus] = useState(false);
     const [modelCosts, setModelCosts] = useState<AdminModelCost[]>([]);
@@ -134,6 +137,7 @@ export default function AdminSettingsPage() {
     const privateVolcengineAsset = Form.useWatch(["private", "volcengineAsset"], form) || emptySettings.private.volcengineAsset;
     const privateImageUpscale = Form.useWatch(["private", "imageUpscale"], form) || emptySettings.private.imageUpscale;
     const privateVideoUpscale = Form.useWatch(["private", "videoUpscale"], form) || emptySettings.private.videoUpscale;
+    const privateTencentMPSVideo = Form.useWatch(["private", "tencentMpsVideo"], form) || emptySettings.private.tencentMpsVideo;
     const publicImageModelOptions = useMemo(() => buildCapabilityModelOptions(publicModels, channels, "image"), [channels, publicModels]);
     const publicVideoModelOptions = useMemo(() => buildCapabilityModelOptions(publicModels, channels, "video"), [channels, publicModels]);
     const publicTextModels = useMemo(() => filterModelsByCapability(publicModels, channels, "text"), [channels, publicModels]);
@@ -145,7 +149,7 @@ export default function AdminSettingsPage() {
     const activeJsonText = jsonText[activeTab];
     const jsonError = activeMode === "json" ? getJsonError(activeJsonText) : "";
     const publicConfigWarnings = useMemo(() => buildPublicConfigWarnings(publicModelChannel, channels), [channels, publicModelChannel]);
-    const privateConfigWarnings = useMemo(() => buildPrivateConfigWarnings(channels, privateVolcengineAsset, privateImageUpscale, privateVideoUpscale), [channels, privateImageUpscale, privateVideoUpscale, privateVolcengineAsset]);
+    const privateConfigWarnings = useMemo(() => buildPrivateConfigWarnings(channels, privateVolcengineAsset, privateImageUpscale, privateVideoUpscale, privateTencentMPSVideo), [channels, privateImageUpscale, privateTencentMPSVideo, privateVideoUpscale, privateVolcengineAsset]);
     const activeWarnings = activeTab === "public" ? publicConfigWarnings : privateConfigWarnings;
     const isSettingsBusy = isLoading || isSaving || isApplyingProviderPreset || isSavingChannelWizard || isDeletingChannel;
 
@@ -242,6 +246,20 @@ export default function AdminSettingsPage() {
             message.error(error instanceof Error ? error.message : "视频超分连接测试失败");
         } finally {
             setIsTestingVideoUpscale(false);
+        }
+    };
+
+    const testTencentMPSVideo = async () => {
+        if (!token) return;
+        const setting = normalizePrivateTencentMPSVideoSetting(form.getFieldValue(["private", "tencentMpsVideo"]));
+        setIsTestingTencentMPSVideo(true);
+        try {
+            const result = await testAdminTencentMPSVideo(token, setting);
+            message.success(result.message);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "腾讯 MPS 连接测试失败");
+        } finally {
+            setIsTestingTencentMPSVideo(false);
         }
     };
 
@@ -668,7 +686,7 @@ export default function AdminSettingsPage() {
                         <Form form={form} layout="vertical" initialValues={emptySettings} requiredMark={false}>
                             <Flex vertical gap={12}>
                                 <ImageUpscaleSettingsSection form={form} setting={privateImageUpscale} testing={isTestingImageUpscale} onTest={testImageUpscale} />
-                                <VideoUpscaleSettingsSection setting={privateVideoUpscale} credentials={privateVolcengineAsset} testing={isTestingVideoUpscale} onTest={testVideoUpscale} />
+                                <VideoUpscaleSettingsSection setting={privateVideoUpscale} tencentSetting={privateTencentMPSVideo} credentials={privateVolcengineAsset} testing={isTestingVideoUpscale} testingTencent={isTestingTencentMPSVideo} onTest={testVideoUpscale} onTestTencent={testTencentMPSVideo} />
                                 <Collapse
                                     defaultActiveKey={[]}
                                     items={[{
@@ -1033,6 +1051,7 @@ function normalizePrivateSetting(setting: Partial<AdminSettings["private"]> = {}
         volcengineAsset: normalizePrivateVolcengineAssetSetting(setting.volcengineAsset),
         imageUpscale: normalizePrivateImageUpscaleSetting(setting.imageUpscale),
         videoUpscale: normalizePrivateVideoUpscaleSetting(setting.videoUpscale),
+        tencentMpsVideo: normalizePrivateTencentMPSVideoSetting(setting.tencentMpsVideo),
     };
 }
 
@@ -1085,6 +1104,27 @@ function normalizePrivateVideoUpscaleSetting(setting: Partial<AdminSettings["pri
         preserveAudio: true,
         maxTarget: "2k",
     };
+}
+
+function normalizePrivateTencentMPSVideoSetting(setting: Partial<AdminSettings["private"]["tencentMpsVideo"]> = {}): AdminSettings["private"]["tencentMpsVideo"] {
+    const scene = setting.defaultScene;
+    return {
+        enabled: setting.enabled === true,
+        secretId: setting.secretId || "",
+        secretKey: setting.secretKey || "",
+        secretIdConfigured: setting.secretIdConfigured === true,
+        secretKeyConfigured: setting.secretKeyConfigured === true,
+        cosBucket: setting.cosBucket?.trim() || "",
+        cosRegion: setting.cosRegion?.trim() || "ap-beijing",
+        inputPrefix: normalizedObjectPrefix(setting.inputPrefix, "video-upscale/input/"),
+        outputPrefix: normalizedObjectPrefix(setting.outputPrefix, "video-upscale/output/"),
+        defaultScene: scene === "live" || scene === "restore" ? scene : "comic",
+    };
+}
+
+function normalizedObjectPrefix(value: string | undefined, fallback: string) {
+    const trimmed = value?.trim().replace(/^\/+|\/+$/g, "") || "";
+    return trimmed ? `${trimmed}/` : fallback;
 }
 
 function normalizeChannel(item: Partial<AdminModelChannel> = {}): AdminModelChannel {
@@ -1237,6 +1277,11 @@ function mergePrivateSecrets(input: AdminSettings, saved: AdminSettings): AdminS
                 secretKey: input.private.volcengineAsset.secretKey || saved.private.volcengineAsset.secretKey,
             },
             imageUpscale: saved.private.imageUpscale,
+            tencentMpsVideo: {
+                ...saved.private.tencentMpsVideo,
+                secretId: input.private.tencentMpsVideo.secretId || saved.private.tencentMpsVideo.secretId,
+                secretKey: input.private.tencentMpsVideo.secretKey || saved.private.tencentMpsVideo.secretKey,
+            },
         },
     };
 }
@@ -1293,7 +1338,7 @@ function buildPublicConfigWarnings(modelChannel: AdminSettings["public"]["modelC
     return warnings;
 }
 
-function buildPrivateConfigWarnings(channels: AdminModelChannel[], volcengineAsset: AdminSettings["private"]["volcengineAsset"], imageUpscale: AdminSettings["private"]["imageUpscale"], videoUpscale: AdminSettings["private"]["videoUpscale"]) {
+function buildPrivateConfigWarnings(channels: AdminModelChannel[], volcengineAsset: AdminSettings["private"]["volcengineAsset"], imageUpscale: AdminSettings["private"]["imageUpscale"], videoUpscale: AdminSettings["private"]["videoUpscale"], tencentMpsVideo: AdminSettings["private"]["tencentMpsVideo"]) {
     const warnings: string[] = [];
     if (!channels.length) {
         warnings.push("还没有模型渠道。请点击“新增渠道”，填写接口地址、API Key，并配置至少一个模型。");
@@ -1324,6 +1369,12 @@ function buildPrivateConfigWarnings(channels: AdminModelChannel[], volcengineAss
         if (!videoUpscale.outputTosPath.trim()) warnings.push("视频超分已开启，但北京地域 TOS 输出目录未配置。");
     }
     if (videoUpscale.subtitleEraseEnabled && !videoUpscale.enabled) warnings.push("字幕擦除已开启，但视频 LAS 处理尚未启用。");
+    if (tencentMpsVideo.enabled) {
+        if (!tencentMpsVideo.secretIdConfigured && !tencentMpsVideo.secretId.trim()) warnings.push("腾讯 MPS 已开启，但 SecretId 未配置。");
+        if (!tencentMpsVideo.secretKeyConfigured && !tencentMpsVideo.secretKey.trim()) warnings.push("腾讯 MPS 已开启，但 SecretKey 未配置。");
+        if (!tencentMpsVideo.cosBucket.trim()) warnings.push("腾讯 MPS 已开启，但 COS Bucket 未配置。");
+        if (!tencentMpsVideo.cosRegion.trim()) warnings.push("腾讯 MPS 已开启，但 COS 地域未配置。");
+    }
     return warnings;
 }
 

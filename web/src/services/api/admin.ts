@@ -480,6 +480,19 @@ export type AdminPrivateVideoUpscaleSettings = {
     maxTarget: "2k";
 };
 
+export type AdminPrivateTencentMPSVideoSettings = {
+    enabled: boolean;
+    secretId: string;
+    secretKey: string;
+    secretIdConfigured: boolean;
+    secretKeyConfigured: boolean;
+    cosBucket: string;
+    cosRegion: string;
+    inputPrefix: string;
+    outputPrefix: string;
+    defaultScene: "comic" | "live" | "restore";
+};
+
 export type AdminPublicSettings = {
     modelChannel: AdminPublicModelChannelSettings;
     auth: {
@@ -498,6 +511,7 @@ export type AdminPrivateSettings = {
     volcengineAsset: AdminPrivateVolcengineAssetSettings;
     imageUpscale: AdminPrivateImageUpscaleSettings;
     videoUpscale: AdminPrivateVideoUpscaleSettings;
+    tencentMpsVideo: AdminPrivateTencentMPSVideoSettings;
 };
 
 export type AdminSettings = {
@@ -519,6 +533,10 @@ export async function testAdminImageUpscale(token: string, setting: AdminPrivate
 
 export async function testAdminVideoUpscale(token: string, setting: AdminPrivateVideoUpscaleSettings) {
     return apiPost<{ provider: "volcengine-las"; message: string }>("/api/admin/settings/video-upscale-test", setting, token);
+}
+
+export async function testAdminTencentMPSVideo(token: string, setting: AdminPrivateTencentMPSVideoSettings) {
+    return apiPost<{ provider: "tencent-mps"; message: string }>("/api/admin/settings/tencent-mps-video-test", setting, token);
 }
 
 export type AdminChannelActionRequest = {

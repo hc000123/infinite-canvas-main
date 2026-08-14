@@ -38,3 +38,18 @@ test("LAS video processing exposes an independent subtitle erase switch on the s
 	assert.match(component, /启用字幕擦除/);
 	assert.match(component, /视频超分、智能插帧和字幕擦除共用同一 LAS API Key/);
 });
+
+test("video settings expose isolated Tencent MPS credentials and COS storage", () => {
+	assert.match(component, /腾讯 MPS 视频增强/);
+	assert.match(component, /tencentMpsVideo/);
+	assert.match(component, /secretIdConfigured/);
+	assert.match(component, /secretKeyConfigured/);
+	assert.match(component, /cosBucket/);
+	assert.match(component, /cosRegion/);
+	assert.match(component, /inputPrefix/);
+	assert.match(component, /outputPrefix/);
+	assert.match(component, /defaultScene/);
+	assert.match(page, /testAdminTencentMPSVideo/);
+	assert.match(api, /AdminPrivateTencentMPSVideoSettings/);
+	assert.match(api, /\/api\/admin\/settings\/tencent-mps-video-test/);
+});
