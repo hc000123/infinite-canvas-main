@@ -1,6 +1,7 @@
 import type { WorkflowRunListItem } from "@/services/api/workflow-runs-contract";
 import type { ScriptEpisode } from "../canvas/utils/script-management";
 import type { CreativeProject } from "../projects/creative-projects";
+import { workflowRouteHref } from "../projects/[id]/episodes/[episodeId]/workflow/workflow-route-state.ts";
 import { productionStageComplete, projectProductionStages, type ProductionStageKey, type ProductionStageStatus, type ProductionStageView } from "../projects/production-stage-projection.ts";
 
 export type AgentStageKey = ProductionStageKey;
@@ -122,8 +123,9 @@ export function buildAgentProjectViews(input: { projects: CreativeProject[]; epi
 }
 
 export function agentEpisodeHref(episode: AgentEpisodeView) {
-    const params = new URLSearchParams({ projectId: episode.projectId, episodeId: episode.id, stage: episode.currentStageKey });
-    return `/agent?${params.toString()}`;
+    const returnTo = `/agent?projectId=${encodeURIComponent(episode.projectId)}`;
+    const params = new URLSearchParams({ returnTo, returnLabel: "返回生产总控" });
+    return workflowRouteHref(episode.projectId, episode.id, { shot: "", stage: episode.currentStageKey }, params.toString());
 }
 
 export function filterAgentProjectViews(projects: AgentProjectView[], input: { keyword?: string; status?: AgentAttentionStatus }) {

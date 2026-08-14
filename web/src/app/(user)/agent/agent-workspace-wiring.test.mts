@@ -51,14 +51,15 @@ test("keeps local projects visible while remote progress reports an error", () =
     assert.doesNotMatch(source, /ensureWorkflowRun/);
 });
 
-test("supports all-project, project, and episode drill-down in one Agent route", () => {
+test("keeps all-project and project drill-down in Agent while redirecting episodes", () => {
     const source = read("./agent-workspace.tsx");
     assert.match(source, /searchParams\.get\("projectId"\)/);
     assert.match(source, /searchParams\.get\("episodeId"\)/);
     assert.match(source, /AgentProjectOverview/);
     assert.match(source, /AgentEpisodeOverview/);
     assert.doesNotMatch(source, /AgentStageGates/);
-    assert.match(source, /if \(selectedEpisode\) return <EpisodeWorkflowWorkbench/);
+    assert.match(source, /router\.replace\(agentEpisodeHref\(selectedEpisode\)\)/);
+    assert.doesNotMatch(source, /<EpisodeWorkflowWorkbench/);
 });
 
 test("keeps Zustand selectors referentially stable", () => {

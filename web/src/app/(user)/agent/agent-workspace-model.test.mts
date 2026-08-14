@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { buildAgentEpisodeView, buildAgentProjectViews, filterAgentProjectViews } from "./agent-workspace-model.ts";
+import { agentEpisodeHref, buildAgentEpisodeView, buildAgentProjectViews, filterAgentProjectViews, type AgentEpisodeView } from "./agent-workspace-model.ts";
 
 const project = { id: "project-1", title: "清道夫", description: "", status: "active" as const, canvasIds: [], createdAt: "2026-08-08T08:00:00Z", updatedAt: "2026-08-08T08:00:00Z" };
 const episode = { id: "episode-1", projectId: project.id, code: "EP01", order: 1, title: "雨夜", summary: "阿宁进入房间。", hook: "", turningPoint: "", cliffhanger: "", sceneIds: [], createdAt: "2026-08-08T08:00:00Z", updatedAt: "2026-08-08T08:00:00Z" };
@@ -72,6 +72,15 @@ test("routes an episode to its exact current six-stage gate", () => {
     });
 
     assert.equal(view.currentStageKey, "prompt");
+});
+
+test("production control task opens canonical workflow and returns to control", () => {
+    const href = agentEpisodeHref({ id: "e1", projectId: "p1", currentStageKey: "storyboard" } as AgentEpisodeView);
+    const url = new URL(href, "https://workspace.test");
+    assert.equal(url.pathname, "/projects/p1/episodes/e1/workflow");
+    assert.equal(url.searchParams.get("stage"), "storyboard");
+    assert.equal(url.searchParams.get("returnTo"), "/agent?projectId=p1");
+    assert.equal(url.searchParams.get("returnLabel"), "返回生产总控");
 });
 
 test("merges local video packages into episode and project progress", () => {

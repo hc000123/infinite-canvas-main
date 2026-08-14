@@ -10,8 +10,7 @@ import { useUserStore } from "@/stores/use-user-store";
 import { useScriptStore } from "../canvas/stores/use-script-store";
 import { useCreativeProjectStore } from "../projects/use-creative-project-store";
 import { useVideoPackageStore } from "../video/use-video-package-store";
-import { EpisodeWorkflowWorkbench } from "../projects/[id]/episodes/[episodeId]/workflow/episode-workflow-workbench";
-import { buildAgentProjectViews, filterAgentProjectViews, type AgentAttentionStatus } from "./agent-workspace-model";
+import { agentEpisodeHref, buildAgentProjectViews, filterAgentProjectViews, type AgentAttentionStatus } from "./agent-workspace-model";
 import { AgentEpisodeOverview } from "./components/agent-episode-overview";
 import { AgentProjectOverview } from "./components/agent-project-overview";
 
@@ -62,8 +61,13 @@ export function AgentWorkspace() {
     const visibleProjects = useMemo(() => filterAgentProjectViews(views, { keyword, status }), [keyword, status, views]);
     const selectedProject = views.find((project) => project.id === projectId);
     const selectedEpisode = selectedProject?.episodes.find((episode) => episode.id === episodeId);
+
+    useEffect(() => {
+        if (selectedEpisode) router.replace(agentEpisodeHref(selectedEpisode));
+    }, [router, selectedEpisode]);
+
     if (!projectsHydrated || !scriptsHydrated) return <main className="studio-shell grid min-h-[calc(100dvh-3.5rem)] place-items-center"><Spin description="正在读取生产总控" /></main>;
-    if (selectedEpisode) return <EpisodeWorkflowWorkbench episodeId={episodeId} projectId={projectId} />;
+    if (selectedEpisode) return <main className="studio-shell grid h-full place-items-center"><Spin description="正在打开本集制作" /></main>;
 
     return (
         <main className="studio-shell h-full min-h-0 overflow-y-auto text-[var(--studio-text-primary)]">

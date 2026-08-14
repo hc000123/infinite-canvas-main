@@ -33,7 +33,7 @@ import { promptInputHash, updateReferenceBindings } from "./workflow-production-
 import { limitShotReferences } from "./workflow-reference-bindings";
 import { workflowReferenceBlob, workflowReferenceImages, type WorkflowReferenceImage } from "./workflow-reference-images";
 
-export function EpisodeWorkflowWorkbench({ episodeId, projectId }: { episodeId: string; projectId: string }) {
+export function EpisodeWorkflowWorkbench({ episodeId, projectId, returnHref, returnLabel }: { episodeId: string; projectId: string; returnHref: string; returnLabel: string }) {
     const { message, modal } = App.useApp();
     const [queueOpen, setQueueOpen] = useState(false);
     const [consoleOpen, setConsoleOpen] = useState(false);
@@ -123,7 +123,7 @@ export function EpisodeWorkflowWorkbench({ episodeId, projectId }: { episodeId: 
     };
 
     return <main className="studio-shell flex h-full min-w-0 flex-col overflow-hidden text-[var(--studio-text-primary)]">
-        <WorkflowHeader blockerCount={workbench.blockerCount} episodeTitle={`第 ${String(workbench.episode.order).padStart(2, "0")} 集 · ${workbench.episode.title}`} loading={workbench.remoteLoading} modelSummary={`${executorLabel} · ${workbench.modelSummary}`} onContinue={workbench.continueNext} onRefresh={workbench.refreshRemote} progress={workbench.progress} projectId={workbench.project.id} projectTitle={workbench.project.title} workerReady={Boolean(workbench.health?.ready)} />
+        <WorkflowHeader blockerCount={workbench.blockerCount} episodeTitle={`第 ${String(workbench.episode.order).padStart(2, "0")} 集 · ${workbench.episode.title}`} loading={workbench.remoteLoading} modelSummary={`${executorLabel} · ${workbench.modelSummary}`} onContinue={workbench.continueNext} onRefresh={workbench.refreshRemote} progress={workbench.progress} projectTitle={workbench.project.title} returnHref={returnHref} returnLabel={returnLabel} workerReady={Boolean(workbench.health?.ready)} />
         {workbench.remoteError ? <Alert className="mx-5 mt-3 shrink-0 xl:mx-7" showIcon closable type="warning" title="运行状态暂不可用" description={`${workbench.remoteError}。本地剧本、资产和视频生产包仍可继续查看。`} /> : null}
         <div className={cn("grid min-h-0 flex-1 grid-cols-1", showsQueue ? "xl:grid-cols-[168px_252px_minmax(460px,1fr)_320px]" : "xl:grid-cols-[168px_minmax(0,1fr)]") }>
             <WorkflowStageRail active={workbench.routeState.stage} onSelect={workbench.selectRoute} stages={workbench.stageViews} />

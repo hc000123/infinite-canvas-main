@@ -4,12 +4,13 @@ import test from "node:test";
 
 const read = (relative: string) => readFileSync(new URL(relative, import.meta.url), "utf8");
 
-test("mounts the existing episode workflow from explicit Agent route ids", () => {
+test("redirects explicit legacy Agent route ids to the episode workflow", () => {
     const workspace = read("./agent-workspace.tsx");
     const workbench = read("../projects/[id]/episodes/[episodeId]/workflow/episode-workflow-workbench.tsx");
-    assert.match(workspace, /<EpisodeWorkflowWorkbench episodeId=\{episodeId\} projectId=\{projectId\}/);
+    assert.match(workspace, /router\.replace\(agentEpisodeHref\(selectedEpisode\)\)/);
+    assert.doesNotMatch(workspace, /<EpisodeWorkflowWorkbench/);
     assert.match(workbench, /export function EpisodeWorkflowWorkbench/);
-    assert.match(workbench, /episodeId: string; projectId: string/);
+    assert.match(workbench, /episodeId: string; projectId: string; returnHref: string; returnLabel: string/);
     assert.doesNotMatch(workbench, /useParams/);
 });
 
