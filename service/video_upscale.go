@@ -135,6 +135,7 @@ func CreateVideoUpscaleJob(ctx context.Context, userID string, reader io.Reader,
 		}
 		job.CloudBucket, job.CloudRegion = tencentSetting.COSBucket, tencentSetting.COSRegion
 		job.CloudInputPrefix, job.CloudOutputPrefix = tencentSetting.InputPrefix, tencentSetting.OutputPrefix
+		job.TencentOutputObject = filepath.Base(job.ID) + "-enhanced.{format}"
 	}
 	job.InputPath, job.InputBytes, err = persistVideoUpscaleInput(job, reader, ext)
 	if err != nil {

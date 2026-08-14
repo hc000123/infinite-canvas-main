@@ -15,6 +15,9 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.3.158
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/mps v1.3.158
+	github.com/tencentyun/cos-go-sdk-v5 v0.7.75
 	github.com/volcengine/ve-tos-golang-sdk/v2 v2.9.4
 	github.com/volcengine/volcengine-go-sdk v1.2.26
 	github.com/xuri/excelize/v2 v2.10.0
@@ -31,7 +34,11 @@ require (
 	github.com/alibabacloud-go/debug v1.0.1 // indirect
 	github.com/alibabacloud-go/tea-utils/v2 v2.0.7 // indirect
 	github.com/aliyun/credentials-go v1.4.5 // indirect
+	github.com/clbanning/mxj v1.8.4 // indirect
 	github.com/clbanning/mxj/v2 v2.7.0 // indirect
+	github.com/google/go-querystring v1.0.0 // indirect
+	github.com/mitchellh/mapstructure v1.4.3 // indirect
+	github.com/mozillazg/go-httpheader v0.2.1 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.4 // indirect
 	github.com/rogpeppe/go-internal v1.15.0 // indirect
