@@ -25,7 +25,7 @@ export function AppTopNav() {
     const canvasProjects = useCanvasStore((state) => state.projects);
     const hideHeader = /^\/canvas\/[^/]+/.test(pathname) || pathname.startsWith("/login");
     const slug = pathname.split("/").filter(Boolean)[0];
-    const activeToolSlug = navigationTools.some((tool) => tool.slug === slug) ? (slug as NavigationToolSlug) : undefined;
+    const activeToolSlug = slug === "agent" ? "projects" : navigationTools.some((tool) => tool.slug === slug) ? (slug as NavigationToolSlug) : undefined;
     const projectId = workspaceProjectId(pathname, searchParams);
     const returnTarget = buildReturnTarget(searchParams);
     const themeToggleLabel = theme === "dark" ? "切换到全局浅色主题" : "切换到全局深色主题";

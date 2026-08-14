@@ -54,6 +54,7 @@ test("project production navigation exposes production control and project cache
     const board = readProjectFile("./[id]/components/project-episode-board.tsx");
     const page = readProjectFile("./[id]/page.tsx");
     assert.match(board, /生产总控/);
+    assert.match(board, /<Button type="primary"[\s\S]*?onClick=\{onOpenAgentWorkspace\}>\s*进入生产总控/s);
     assert.doesNotMatch(board, />项目 Agent</);
     assert.doesNotMatch(board, /Skill 管理|onOpenSkillManagement/);
     assert.match(board, /查看项目缓存/);

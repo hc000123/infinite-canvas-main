@@ -6,8 +6,13 @@ import { navigationTools } from "./navigation-tools.ts";
 test("keeps video workflow inside projects instead of the global navigation", () => {
     assert.deepEqual(
         navigationTools.map((tool) => tool.slug),
-        ["projects", "agent", "canvas", "storyboard", "assets", "prompts", "cache"],
+        ["projects", "canvas", "storyboard", "assets", "prompts", "cache"],
     );
+});
+
+test("keeps production control inside projects instead of a peer top-level entry", () => {
+    assert.equal(navigationTools.some((tool) => tool.slug === "agent"), false);
+    assert.deepEqual(navigationTools[0], { slug: "projects", label: "项目中心", shortLabel: "项目", icon: navigationTools[0].icon });
 });
 
 test("keeps the prompt library as a standalone navigation tool", () => {

@@ -13,3 +13,8 @@ test("top navigation always displays tools without a mobile menu", () => {
         assert.match(navSource, /className="[^"]*\bmy-auto\b[^"]*\bshrink-0\b[^"]*"/);
     }
 });
+
+test("legacy production control routes remain visually nested under projects", () => {
+    const source = readFileSync(new URL("./app-top-nav.tsx", import.meta.url), "utf8");
+    assert.match(source, /slug === "agent" \? "projects"/);
+});

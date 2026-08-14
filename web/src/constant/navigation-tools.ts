@@ -1,4 +1,4 @@
-import { BookOpenText, BriefcaseBusiness, Clapperboard, Database, Images, PanelsTopLeft, Route } from "lucide-react";
+import { BookOpenText, BriefcaseBusiness, Clapperboard, Database, Images, PanelsTopLeft } from "lucide-react";
 
 export const navigationTools = [
     {
@@ -6,12 +6,6 @@ export const navigationTools = [
         label: "项目中心",
         shortLabel: "项目",
         icon: BriefcaseBusiness,
-    },
-    {
-        slug: "agent",
-        label: "生产总控",
-        shortLabel: "总控",
-        icon: Route,
     },
     {
         slug: "canvas",

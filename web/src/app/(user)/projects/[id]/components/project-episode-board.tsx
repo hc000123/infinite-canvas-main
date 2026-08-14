@@ -123,8 +123,8 @@ export function ProjectEpisodeBoard({
                 </div>
 
                 <div className="order-3 flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap lg:order-none">
-                    <Button className="h-10 flex-1 px-4 sm:flex-none" icon={<Bot className="size-4" />} onClick={onOpenAgentWorkspace}>
-                        生产总控
+                    <Button type="primary" className="h-10 flex-1 px-4 sm:flex-none" icon={<Bot className="size-4" />} onClick={onOpenAgentWorkspace}>
+                        进入生产总控
                     </Button>
                     <Button className="h-10 flex-1 px-4 sm:flex-none" onClick={onEditProject}>
                         编辑项目
