@@ -302,7 +302,7 @@
         gap: 0.125rem;
     }
 
-    .studio-version-action {
+    .studio-spine-footer .studio-version-action {
         width: 2.75rem !important;
     }
 
@@ -350,6 +350,10 @@
             padding: 0;
         }
 
+        .studio-spine-collapse {
+            display: none !important;
+        }
+
         .studio-spine-label {
             display: none;
         }
@@ -367,7 +371,7 @@
             gap: 0.25rem;
         }
 
-        .studio-version-action {
+        .studio-spine-footer .studio-version-action {
             display: none !important;
         }
     }

@@ -20,13 +20,13 @@ export function AppWorkspaceSpine() {
     const projectId = workspaceProjectId(pathname, searchParams);
 
     useEffect(() => {
-        setCollapsed(window.localStorage.getItem(SPINE_COLLAPSED_KEY) === "1");
+        setCollapsed(readCollapsedPreference());
     }, []);
 
     const toggleCollapsed = () => {
         setCollapsed((current) => {
             const next = !current;
-            window.localStorage.setItem(SPINE_COLLAPSED_KEY, next ? "1" : "0");
+            writeCollapsedPreference(next);
             return next;
         });
     };
@@ -64,10 +64,26 @@ export function AppWorkspaceSpine() {
                 <span className="studio-spine-label">收起侧栏</span>
             </button>
             <div className="studio-spine-footer mt-auto border-t border-[var(--studio-border-subtle)] px-2 py-3">
-                <UserStatusActions hideVersion={collapsed} />
+                <UserStatusActions hideVersion={collapsed} compactVersion />
             </div>
         </aside>
     );
+}
+
+function readCollapsedPreference() {
+    try {
+        return window.localStorage.getItem(SPINE_COLLAPSED_KEY) === "1";
+    } catch {
+        return false;
+    }
+}
+
+function writeCollapsedPreference(collapsed: boolean) {
+    try {
+        window.localStorage.setItem(SPINE_COLLAPSED_KEY, collapsed ? "1" : "0");
+    } catch {
+        // The in-memory state still updates.
+    }
 }
 
 function isToolActive(pathname: string, slug: NavigationToolSlug) {

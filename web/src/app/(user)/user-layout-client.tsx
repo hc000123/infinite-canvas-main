@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
-import { AppTopNav } from "@/components/layout/app-top-nav";
+import { AppWorkspaceSpine } from "@/components/layout/app-workspace-spine";
 import { useProjectCacheQueueRunner } from "@/hooks/use-project-cache-queue-runner";
 import { activateUserStorageScope } from "@/lib/localforage-storage";
 import { subscribeAuthSessionInvalid } from "@/services/auth-session-events";
@@ -20,6 +20,7 @@ export function UserLayoutClient({ children }: { children: ReactNode }) {
     const isReady = useUserStore((state) => state.isReady);
     const clearSession = useUserStore((state) => state.clearSession);
     const authState = protectedUserRouteState(pathname, isReady, token, Boolean(user));
+    const immersiveCanvas = /^\/canvas\/[^/]+/.test(pathname) || pathname.startsWith("/login");
     const [storageReady, setStorageReady] = useState(false);
     useProjectCacheQueueRunner(storageReady ? token : undefined);
 
@@ -70,9 +71,9 @@ export function UserLayoutClient({ children }: { children: ReactNode }) {
     }
 
     return (
-        <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
-            <AppTopNav />
-            <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
+        <div className="flex h-dvh overflow-hidden bg-[var(--studio-app-bg)] text-[var(--studio-text-primary)]">
+            {immersiveCanvas ? null : <AppWorkspaceSpine />}
+            <div className="min-h-0 min-w-0 flex-1 overflow-hidden">{children}</div>
         </div>
     );
 }

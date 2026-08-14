@@ -19,6 +19,7 @@ import { accountDestinationItems } from "./user-status-actions-view";
 type UserStatusActionsProps = {
     showConfig?: boolean;
     hideVersion?: boolean;
+    compactVersion?: boolean;
     variant?: "default" | "canvas" | "text";
     onOpenShortcuts?: () => void;
     accountOpen?: boolean;
@@ -27,7 +28,7 @@ type UserStatusActionsProps = {
     getPopupContainer?: (node: HTMLElement) => HTMLElement;
 };
 
-export function UserStatusActions({ showConfig = true, hideVersion = false, variant = "default", onOpenShortcuts, accountOpen, onAccountOpenChange, accountRef, getPopupContainer }: UserStatusActionsProps) {
+export function UserStatusActions({ showConfig = true, hideVersion = false, compactVersion = false, variant = "default", onOpenShortcuts, accountOpen, onAccountOpenChange, accountRef, getPopupContainer }: UserStatusActionsProps) {
     const theme = useThemeStore((state) => state.theme);
     const setTheme = useThemeStore((state) => state.setTheme);
     const user = useUserStore((state) => state.user);
@@ -47,6 +48,7 @@ export function UserStatusActions({ showConfig = true, hideVersion = false, vari
               : "inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-transparent text-[var(--studio-text-secondary)] transition hover:border-[var(--studio-border-subtle)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)] [&_svg]:size-4";
     const iconStyle: CSSProperties | undefined = variant === "canvas" ? { color: canvasTheme.node.text } : undefined;
     const versionStyle = iconStyle;
+    const versionClass = variant === "canvas" ? undefined : variant === "text" ? `${actionClass} hidden sm:inline-flex` : compactVersion ? `${actionClass} studio-version-action` : undefined;
     const avatarStyle: CSSProperties | undefined = variant === "canvas" ? { borderColor: canvasTheme.toolbar.border, color: canvasTheme.node.text, background: "transparent" } : undefined;
     const themeToggleLabel = theme === "dark" ? "切换到全局浅色主题" : "切换到全局深色主题";
     const menuItems: ItemType[] = [
@@ -85,7 +87,7 @@ export function UserStatusActions({ showConfig = true, hideVersion = false, vari
             <AnimatedThemeToggler theme={theme} onThemeChange={setTheme} className={`${actionClass} ${variant === "text" ? "hidden sm:inline-flex" : ""}`} style={iconStyle} aria-label={themeToggleLabel} title={themeToggleLabel}>
                 {variant === "text" ? (theme === "dark" ? "浅色" : "深色") : undefined}
             </AnimatedThemeToggler>
-            {hideVersion ? null : <VersionReleaseModal className={variant === "canvas" ? undefined : variant === "text" ? `${actionClass} hidden sm:inline-flex` : `${actionClass} studio-version-action`} style={versionStyle} />}
+            {hideVersion ? null : <VersionReleaseModal className={versionClass} style={versionStyle} />}
             {variant === "canvas" && user ? (
                 <Tooltip title="查看数据中心" placement="bottom">
                     <Link href="/data-center" className="flex h-8 shrink-0 items-center gap-1.5 px-1.5 text-xs font-medium tabular-nums opacity-75 transition hover:opacity-100" style={{ color: canvasTheme.node.text }}>

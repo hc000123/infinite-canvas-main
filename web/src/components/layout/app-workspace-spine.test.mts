@@ -18,9 +18,16 @@ test("application spine persists collapse state and remains accessible", () => {
     assert.match(spine, /workspace-spine-collapsed/);
     assert.match(spine, /localStorage\.getItem/);
     assert.match(spine, /localStorage\.setItem/);
+    assert.match(spine, /function readCollapsedPreference\(\)/);
+    assert.match(spine, /function writeCollapsedPreference\(collapsed: boolean\)/);
+    assert.match(spine, /try \{/);
+    assert.match(spine, /catch \{/);
+    assert.match(spine, /setCollapsed\(readCollapsedPreference\(\)\)/);
+    assert.match(spine, /writeCollapsedPreference\(next\)/);
     assert.match(spine, /aria-expanded=\{!collapsed\}/);
     assert.match(spine, /data-collapsed=\{collapsed\}/);
     assert.match(spine, /hideVersion=\{collapsed\}/);
+    assert.match(spine, /compactVersion/);
 });
 
 test("resource child pages keep the resource entry active", () => {
@@ -31,6 +38,7 @@ test("resource child pages keep the resource entry active", () => {
 
 test("immersive canvas remains outside the global spine", () => {
     assert.match(layout, /immersiveCanvas/);
+    assert.match(layout, /import \{ AppWorkspaceSpine \} from "@\/components\/layout\/app-workspace-spine"/);
     assert.match(layout, /<AppWorkspaceSpine/);
     assert.match(layout, /immersiveCanvas \? null : <AppWorkspaceSpine/);
 });
