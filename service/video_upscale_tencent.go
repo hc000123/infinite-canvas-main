@@ -52,6 +52,23 @@ type tencentMPSVideoUpscaleProvider struct {
 	cos tencentCOSAPI
 }
 
+func currentTencentMPSVideoUpscaleProvider(job model.VideoUpscaleJob) (VideoUpscaleProvider, error) {
+	setting, err := currentTencentMPSVideoSetting()
+	if err != nil {
+		return nil, err
+	}
+	setting.COSBucket, setting.COSRegion = job.CloudBucket, job.CloudRegion
+	mpsAPI, err := newTencentCloudMPSAPI(setting)
+	if err != nil {
+		return nil, err
+	}
+	cosAPI, err := newTencentCloudCOSAPI(setting)
+	if err != nil {
+		return nil, err
+	}
+	return &tencentMPSVideoUpscaleProvider{mps: mpsAPI, cos: cosAPI}, nil
+}
+
 func (provider *tencentMPSVideoUpscaleProvider) Upload(ctx context.Context, job model.VideoUpscaleJob) (string, error) {
 	file, err := os.Open(job.InputPath)
 	if err != nil {

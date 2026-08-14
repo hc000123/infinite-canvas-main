@@ -145,13 +145,29 @@ var videoUpscalePollInterval = 3 * time.Second
 func init() {
 	videoUpscaleJobStarter = func(jobID string) {
 		go func() {
-			provider, err := currentVolcengineVideoUpscaleProvider()
+			job, ok, err := repository.GetVideoUpscaleJob(jobID)
+			if err != nil || !ok {
+				_ = failVideoUpscaleJob(jobID, "job_missing", "视频增强任务不存在")
+				return
+			}
+			provider, err := currentVideoUpscaleProvider(job)
 			if err != nil {
 				_ = failVideoUpscaleJob(jobID, "provider_unavailable", "服务端视频超分配置不可用")
 				return
 			}
 			_ = runVideoUpscaleJob(context.Background(), jobID, provider, downloadVideoUpscaleResult, videoUpscalePollInterval)
 		}()
+	}
+}
+
+func currentVideoUpscaleProvider(job model.VideoUpscaleJob) (VideoUpscaleProvider, error) {
+	switch strings.ToLower(strings.TrimSpace(job.Provider)) {
+	case "volcengine-las":
+		return currentVolcengineVideoUpscaleProvider()
+	case "tencent-mps":
+		return currentTencentMPSVideoUpscaleProvider(job)
+	default:
+		return nil, errors.New("unsupported video upscale provider")
 	}
 }
 
@@ -205,7 +221,7 @@ func processVideoUpscaleJob(ctx context.Context, jobID string, provider VideoUps
 		return errors.New("video upscale provider is unavailable")
 	}
 	if (job.ProcessingStage == "upscale_submitting" && job.RunID == "") || (job.ProcessingStage == "interpolation_submitting" && job.InterpolationRunID == "") {
-		_ = failVideoUpscaleJob(job.ID, "submission_uncertain", "无法确认火山付费任务是否已提交，请重新创建任务并再次确认费用")
+		_ = failVideoUpscaleJob(job.ID, "submission_uncertain", "无法确认云端付费任务是否已提交，请重新创建任务并再次确认费用")
 		return errors.New("video upscale submission status is uncertain")
 	}
 	if job.ResultSourceURL == "" && job.InputTOSURL == "" {
@@ -215,8 +231,8 @@ func processVideoUpscaleJob(ctx context.Context, jobID string, provider VideoUps
 		}
 		job.InputTOSURL, err = provider.Upload(ctx, job)
 		if err != nil || strings.TrimSpace(job.InputTOSURL) == "" {
-			_ = failVideoUpscaleJob(job.ID, "upload_failed", "视频上传到火山 TOS 失败，请稍后重试")
-			return firstVideoUpscaleError(err, errors.New("empty TOS input URL"))
+			_ = failVideoUpscaleJob(job.ID, "upload_failed", "视频上传到云端存储失败，请稍后重试")
+			return firstVideoUpscaleError(err, errors.New("empty cloud input URL"))
 		}
 		job.InputTOSURL, job.Progress, job.UpdatedAt = strings.TrimSpace(job.InputTOSURL), 35, now()
 		if _, err = repository.SaveVideoUpscaleJob(job); err != nil {
@@ -231,8 +247,8 @@ func processVideoUpscaleJob(ctx context.Context, jobID string, provider VideoUps
 			}
 			job.RunID, job.ProviderRequestID, err = provider.StartUpscale(ctx, job)
 			if err != nil || strings.TrimSpace(job.RunID) == "" {
-				_ = failVideoUpscaleJob(job.ID, "submission_uncertain", "无法确认火山超分任务是否已提交，请重新创建任务并再次确认费用")
-				return firstVideoUpscaleError(err, errors.New("empty LAS task ID"))
+				_ = failVideoUpscaleJob(job.ID, "submission_uncertain", "无法确认云端增强任务是否已提交，请重新创建任务并再次确认费用")
+				return firstVideoUpscaleError(err, errors.New("empty provider task ID"))
 			}
 			job.RunID, job.Progress, job.ProcessingStage, job.UpdatedAt = strings.TrimSpace(job.RunID), 55, "upscale_processing", now()
 			if _, err = repository.SaveVideoUpscaleJob(job); err != nil {
@@ -241,7 +257,7 @@ func processVideoUpscaleJob(ctx context.Context, jobID string, provider VideoUps
 		}
 		poll, pollErr := provider.PollUpscale(ctx, job)
 		if pollErr != nil {
-			_ = failVideoUpscaleJob(job.ID, "poll_failed", "火山视频增强状态查询失败，请稍后重试")
+			_ = failVideoUpscaleJob(job.ID, "poll_failed", "云端视频增强状态查询失败，请稍后重试")
 			return pollErr
 		}
 		job.ProviderRequestID = firstNonEmpty(strings.TrimSpace(poll.RequestID), job.ProviderRequestID)
@@ -252,12 +268,12 @@ func processVideoUpscaleJob(ctx context.Context, jobID string, provider VideoUps
 			return err
 		case "failed":
 			job.ErrorCode = firstNonEmpty(strings.TrimSpace(poll.ErrorCode), "provider_failed")
-			_ = failVideoUpscaleJob(job.ID, job.ErrorCode, "火山视频增强处理失败，请稍后重试")
-			return errors.New("volcengine video upscale failed")
+			_ = failVideoUpscaleJob(job.ID, job.ErrorCode, "云端视频增强处理失败，请稍后重试")
+			return errors.New("cloud video upscale failed")
 		case "succeeded":
 			job.UpscaleResultTOSURL = strings.TrimSpace(poll.ResultURL)
 			if job.UpscaleResultTOSURL == "" {
-				_ = failVideoUpscaleJob(job.ID, "result_missing", "火山视频增强完成但未返回结果地址")
+				_ = failVideoUpscaleJob(job.ID, "result_missing", "云端视频增强完成但未返回结果地址")
 				return errors.New("video upscale result URL is empty")
 			}
 			job.ProcessingStage, job.Progress, job.UpdatedAt = "upscale_succeeded", 70, now()
@@ -323,7 +339,7 @@ func processVideoUpscaleJob(ctx context.Context, jobID string, provider VideoUps
 	if _, err = repository.SaveVideoUpscaleJob(job); err != nil {
 		return err
 	}
-	if strings.HasPrefix(job.ResultSourceURL, "tos://") {
+	if strings.HasPrefix(job.ResultSourceURL, "tos://") || strings.HasPrefix(job.ResultSourceURL, "cos://") {
 		resolver, ok := provider.(interface{ ResultDownloadURL(string) (string, error) })
 		if !ok {
 			return errors.New("video upscale provider cannot resolve TOS result")

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/basketikun/infinite-canvas/model"
+	"github.com/basketikun/infinite-canvas/repository"
 	mps "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/mps/v20190612"
 )
 
@@ -119,5 +120,61 @@ func TestTencentMPSPollResponseMapsMatchingTemplateResult(t *testing.T) {
 	result, err := tencentMPSPollResponse(response, tencentMPSPollInput{TaskID: "task-1", Definition: 327004, Bucket: "media-1300"})
 	if err != nil || result.Status != "SUCCESS" || result.ResultURL != "cos://media-1300/video-upscale/output/job-1.mp4" || result.RequestID != requestID {
 		t.Fatalf("result=%#v err=%v", result, err)
+	}
+}
+
+func TestCurrentVideoUpscaleProviderSelectsTencentFromFrozenJob(t *testing.T) {
+	setupVideoUpscaleTest(t)
+	settings, err := repository.GetSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.Private.TencentMPSVideo = model.TencentMPSVideoSetting{Enabled: true, SecretID: "id", SecretKey: "key", COSBucket: "current-bucket", COSRegion: "ap-beijing"}
+	if _, err = repository.SaveSettings(settings, now()); err != nil {
+		t.Fatal(err)
+	}
+	provider, err := currentVideoUpscaleProvider(model.VideoUpscaleJob{Provider: "tencent-mps", CloudBucket: "frozen-bucket", CloudRegion: "ap-shanghai"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := provider.(*tencentMPSVideoUpscaleProvider); !ok {
+		t.Fatalf("provider=%T", provider)
+	}
+}
+
+func TestTencentMPSRecoveryPollsExistingTaskWithoutSubmit(t *testing.T) {
+	setupVideoUpscaleTest(t)
+	job := model.VideoUpscaleJob{ID: "recover-tencent", UserID: "user-a", Provider: "tencent-mps", RunID: "task-1", ProcessingStage: "upscale_processing", InputTOSURL: "cos://media-1300/input.mp4", Status: model.VideoUpscaleJobStatusProcessing, FrameInterpolationMode: "keep", TencentTemplateID: 327004, CloudBucket: "media-1300", CreatedAt: now(), UpdatedAt: now()}
+	if _, err := repository.SaveVideoUpscaleJob(job); err != nil {
+		t.Fatal(err)
+	}
+	api := &fakeTencentMPSAPI{pollResult: VideoUpscalePollResult{Status: "PROCESSING"}}
+	provider := &tencentMPSVideoUpscaleProvider{mps: api, cos: &fakeTencentCOSAPI{}}
+	if err := processVideoUpscaleJob(context.Background(), job.ID, provider, nil); err != nil {
+		t.Fatal(err)
+	}
+	if api.submitCount != 0 || api.pollCount != 1 {
+		t.Fatalf("submit=%d poll=%d", api.submitCount, api.pollCount)
+	}
+}
+
+func TestTencentMPSWorkerSignsCOSResultBeforeDownload(t *testing.T) {
+	setupVideoUpscaleTest(t)
+	job := model.VideoUpscaleJob{ID: "download-tencent", UserID: "user-a", Provider: "tencent-mps", RunID: "task-1", ProcessingStage: "upscale_processing", InputTOSURL: "cos://media-1300/input.mp4", Status: model.VideoUpscaleJobStatusProcessing, FrameInterpolationMode: "keep", TencentTemplateID: 327004, CloudBucket: "media-1300", CreatedAt: now(), UpdatedAt: now()}
+	if _, err := repository.SaveVideoUpscaleJob(job); err != nil {
+		t.Fatal(err)
+	}
+	api := &fakeTencentMPSAPI{pollResult: VideoUpscalePollResult{Status: "SUCCESS", ResultURL: "cos://media-1300/video-upscale/output/result.mp4"}}
+	cloud := &fakeTencentCOSAPI{signedURL: "https://signed.example/result.mp4"}
+	downloadedURL := ""
+	downloader := func(_ context.Context, raw string) ([]byte, string, error) {
+		downloadedURL = raw
+		return []byte("video"), "video/mp4", nil
+	}
+	if err := processVideoUpscaleJob(context.Background(), job.ID, &tencentMPSVideoUpscaleProvider{mps: api, cos: cloud}, downloader); err != nil {
+		t.Fatal(err)
+	}
+	if downloadedURL != cloud.signedURL || cloud.signedKey != "video-upscale/output/result.mp4" {
+		t.Fatalf("downloaded=%q signedKey=%q", downloadedURL, cloud.signedKey)
 	}
 }

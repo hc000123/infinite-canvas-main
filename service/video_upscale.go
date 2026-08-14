@@ -204,11 +204,11 @@ func GetUserVideoUpscaleJob(userID, jobID string) (model.VideoUpscaleJob, bool, 
 }
 
 func RetryVideoUpscaleJob(ctx context.Context, userID, jobID string) (model.VideoUpscaleJob, error) {
-	if _, err := currentVideoUpscaleSetting(); err != nil {
-		return model.VideoUpscaleJob{}, err
-	}
 	job, _, err := GetUserVideoUpscaleJob(userID, jobID)
 	if err != nil {
+		return model.VideoUpscaleJob{}, err
+	}
+	if _, err := currentVideoUpscaleProvider(job); err != nil {
 		return model.VideoUpscaleJob{}, err
 	}
 	if job.Status != model.VideoUpscaleJobStatusFailed {
@@ -253,7 +253,7 @@ func RecoverInterruptedVideoUpscaleJobs() error {
 		job.Status = model.VideoUpscaleJobStatusFailed
 		if stage == "upscale_submitting" || stage == "interpolation_submitting" {
 			job.ErrorCode = "submission_uncertain"
-			job.ErrorMessage = "无法确认火山付费任务是否已提交，请重新创建任务并再次确认费用"
+			job.ErrorMessage = "无法确认云端付费任务是否已提交，请重新创建任务并再次确认费用"
 		} else {
 			job.ErrorCode = "server_restarted"
 			job.ErrorMessage = "视频超分任务因服务重启中断，请重试"
