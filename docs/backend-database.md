@@ -59,6 +59,8 @@
 - `workflow_media_items`
 - `prompts`
 - `image_upscale_jobs`
+- `video_upscale_jobs`
+- `video_subtitle_erase_jobs`
 - `settings`
 
 后续新增表时再同步补充本文档，未实际使用的规划表不提前写入。
@@ -74,6 +76,36 @@
 | `status / progress / attempt / error_code / error_message` | `queued / processing / downloading / succeeded / failed` 生命周期、进度、重试次数和安全错误信息。 |
 | `input_width / input_height / input_mime_type / input_bytes / input_path` | 输入图片信息与服务端私有文件路径；`input_path` 不出现在 JSON 响应中。 |
 | `result_url / result_mime_type / result_bytes / output_width / output_height` | 已下载并持久化的结果地址、格式、大小和输出尺寸。 |
+| `cloud_processing / created_at / started_at / completed_at / updated_at` | 云端处理标记与任务时间线。 |
+
+### 画布视频超分任务
+
+`video_upscale_jobs` 保存登录用户发起的火山 LAS 视频超分与可选智能插帧任务，用于 TOS 上传、两段 LAS 异步处理、结果下载、失败重试和服务重启恢复。任务复用系统设置中的火山 TOS AK/SK，LAS API Key 只保存在私有系统设置中；任务表不保存密钥或签名请求信息。
+
+| 字段组 | 说明 |
+| ---- | ---- |
+| `id / user_id / project_id / canvas_id / source_node_id / source_asset_id` | 任务身份、用户所有权和画布来源坐标；查询接口按 `user_id` 隔离。 |
+| `provider / input_tos_url / output_tos_path / run_id / interpolation_run_id / provider_request_id` | 服务商、私有 TOS 输入与输出路径、超分与插帧两个 LAS Task ID 和安全请求追踪；TOS 路径不出现在 JSON 响应中。 |
+| `target / output_quality_mode / preserve_audio / frame_interpolation_mode / interpolation_mode / interpolation_target_frame_rate` | 固化本次任务的 `1080p / 2k`、LAS 输出质量、音频保留、`keep / to25 / to30 / double / to60` 帧率选择、插帧处理模式与目标帧率。 |
+| `status / processing_stage / progress / attempt / error_code / error_message` | 对外生命周期、内部 `upscale_* / interpolation_*` 持久阶段、进度、重试次数和安全错误信息；提交中断且未取得 Task ID 时记录 `submission_uncertain`，不得自动重提付费任务。 |
+| `input_width / input_height / input_duration_seconds / input_frame_rate / input_mime_type / input_bytes / input_path` | 输入视频规格、ffprobe 识别帧率与服务端私有文件路径；`input_path` 不出现在 JSON 响应中。 |
+| `output_width / output_height / upscale_result_tos_url / interpolation_result_tos_url / result_source_url / result_url / result_mime_type / result_bytes` | 等比目标尺寸、两段服务端私有 TOS 结果、最终上游结果地址、公开结果相对地址和输出文件信息；私有 TOS / 上游地址不出现在 JSON 响应中。 |
+| `estimated_billable_minutes / estimated_cost_cny / cost_estimate_available / pricing_rule_version` | 创建任务时按 LAS 单价、输出分辨率和输入帧率固化的费用预估快照；源时长或帧率不可靠时标记为不可预估，不阻断任务。 |
+| `estimated_interpolation_billable_minutes / estimated_interpolation_cost_cny / interpolation_cost_estimate_available / interpolation_pricing_rule_version / estimated_total_cost_cny` | 创建任务时固化的智能插帧折算分钟、费用、计价版本和两段总价快照；选择插帧但无法可靠识别源帧率时在任何付费 Submit 前拒绝。 |
+| `cloud_processing / created_at / started_at / completed_at / updated_at` | 云端处理标记与任务时间线。 |
+
+### 画布视频字幕擦除任务
+
+`video_subtitle_erase_jobs` 保存登录用户发起的火山 LAS 硬字幕擦除任务。任务使用独立生命周期，不要求同时执行视频超分或智能插帧；输入上传到北京 TOS 后只持久化 `tos://` 地址，提交算子时临时生成的 HTTPS 签名地址不会写入数据库或接口响应。
+
+| 字段组 | 说明 |
+| ---- | ---- |
+| `id / user_id / project_id / canvas_id / source_node_id / source_asset_id` | 任务身份、用户所有权和画布来源坐标；查询接口按 `user_id` 隔离。 |
+| `provider / input_tos_url / run_id / client_token / provider_request_id` | 服务商、私有 TOS 输入、LAS Task ID、稳定幂等标识和请求追踪；TOS 路径与 `client_token` 不出现在 JSON 响应中。 |
+| `status / processing_stage / progress / attempt / error_code / error_message` | `queued / uploading / processing / downloading / succeeded / failed` 生命周期、内部处理阶段、重试次数和安全错误信息。 |
+| `input_width / input_height / input_duration_seconds / input_mime_type / input_bytes / input_path` | 输入视频规格与服务端私有文件路径；输入最高 2K。 |
+| `output_width / output_height / output_duration_seconds / result_source_url / result_url / result_mime_type / result_bytes` | 最高 1080P 的输出规格、24 小时上游结果地址、已持久化公开地址和文件信息；上游地址不出现在 JSON 响应中。 |
+| `estimated_billable_minutes / estimated_cost_cny / cost_estimate_available / pricing_rule_version` | 按输出时长和 `0.4 元/分钟` 固化的费用预估快照。 |
 | `cloud_processing / created_at / started_at / completed_at / updated_at` | 云端处理标记与任务时间线。 |
 
 ### Artifact 与 Invocation Runtime

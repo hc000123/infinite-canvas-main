@@ -8,7 +8,10 @@ test("canvas overlays avoid React 19 and Ant Design 6 console errors", () => {
     const topBar = readCanvasFile("../components/canvas-top-bar.tsx");
     const assetPicker = readCanvasFile("../components/asset-picker-modal.tsx");
 
-    assert.doesNotMatch(topBar, /\bDropdown\b|overlayClassName/);
+    assert.doesNotMatch(topBar, /overlayClassName|\boverlay=/);
+    assert.match(topBar, /<Dropdown/);
+    assert.match(topBar, /menu=\{\{/);
+    assert.match(topBar, /onOpenChange=/);
     assert.doesNotMatch(assetPicker, /maskClosable/);
     assert.match(assetPicker, /mask=\{\{ closable: !importing \}\}/);
 });

@@ -1,6 +1,7 @@
 import type { Asset } from "@/stores/use-asset-store";
 
 import type { StoryboardAssetRef, StoryboardGroup, StoryboardShot } from "./storyboard-management";
+import { readAssetProductionTrace, type MediaProductionTrace } from "./media-production-trace.ts";
 
 export type StoryboardClipExportWarningType = "missing_primary_asset" | "primary_asset_not_video" | "failed_shot" | "missing_video_storage" | "duration_anomaly";
 
@@ -35,6 +36,7 @@ export type StoryboardClipExportShot = {
     taskId?: string;
     actionType?: string;
     config?: Record<string, unknown>;
+    productionTrace?: Omit<MediaProductionTrace, "nextAction"> & { nextAction: MediaProductionTrace["nextAction"] | "resolve_warnings" };
     references: StoryboardClipExportReference[];
     warnings: StoryboardClipExportWarning[];
 };
@@ -142,6 +144,7 @@ export function buildStoryboardClipExportPlan({ group, shots, assets, exportedAt
             taskId: readString(generation?.taskId) || shot.lastTaskId,
             actionType: readString(generation?.actionType),
             config,
+            productionTrace: productionTrace(primaryAsset, warnings, assets),
             references,
             warnings,
         };
@@ -170,7 +173,7 @@ export function buildStoryboardClipExportPlan({ group, shots, assets, exportedAt
 }
 
 export function storyboardClipExportCsv(shots: StoryboardClipExportShot[]) {
-    const header = ["序号", "分镜ID", "标题", "状态", "主视频文件", "时长秒", "模型", "供应商", "任务ID", "生成方式", "提示词", "实际提交提示词", "参考素材", "检查结果"];
+    const header = ["序号", "分镜ID", "标题", "状态", "主视频文件", "时长秒", "模型", "供应商", "任务ID", "生成方式", "生产包", "剧本版本", "后处理费用(元)", "下一步", "提示词", "实际提交提示词", "参考素材", "检查结果"];
     const rows = shots.map((shot) => [
         String(shot.order),
         shot.shotId,
@@ -182,6 +185,10 @@ export function storyboardClipExportCsv(shots: StoryboardClipExportShot[]) {
         shot.provider || "",
         shot.taskId || "",
         shot.actionType || "",
+        shot.productionTrace?.productionPackageId || "",
+        shot.productionTrace?.scriptVersion || "",
+        String(shot.productionTrace?.costSnapshot.postProcessingCny || ""),
+        shot.productionTrace?.nextAction || "",
         shot.prompt,
         shot.effectivePrompt,
         shot.references.map((ref) => [ref.title || ref.assetId, ref.role, ref.path].filter(Boolean).join(" · ")).join("\n"),
@@ -225,6 +232,7 @@ function shotPromptText(shot: StoryboardClipExportShot) {
                 taskId: shot.taskId,
                 actionType: shot.actionType,
                 config: shot.config,
+                productionTrace: shot.productionTrace,
             },
             null,
             2,
@@ -240,6 +248,11 @@ function shotPromptText(shot: StoryboardClipExportShot) {
 
 function warning(shotId: string, type: StoryboardClipExportWarningType, message: string): StoryboardClipExportWarning {
     return { shotId, type, message };
+}
+
+function productionTrace(asset: Asset | undefined, warnings: StoryboardClipExportWarning[], assets: Asset[]): StoryboardClipExportShot["productionTrace"] {
+    const trace = readAssetProductionTrace(asset, assets);
+    return trace ? { ...trace, nextAction: warnings.length ? "resolve_warnings" : trace.nextAction } : undefined;
 }
 
 function csvCell(value: string) {

@@ -4,13 +4,12 @@ import test from "node:test";
 
 const read = (relative: string) => readFileSync(new URL(relative, import.meta.url), "utf8");
 
-test("places Agent between projects and canvas in the shared navigation", () => {
+test("removes Agent from the shared navigation without removing the compatibility route", () => {
     const source = read("../../../constant/navigation-tools.ts");
-    const projects = source.indexOf('slug: "projects"');
-    const agent = source.indexOf('slug: "agent"');
-    const canvas = source.indexOf('slug: "canvas"');
-    assert.ok(projects >= 0 && projects < agent && agent < canvas);
-    assert.match(source, /slug: "agent",\s*label: "生产总控",\s*shortLabel: "总控"/s);
+    const page = read("./page.tsx");
+    assert.doesNotMatch(source, /slug: "agent"|生产总控/);
+    assert.match(page, /legacyAgentRedirectHref/);
+    assert.match(page, /redirect\(/);
 });
 
 test("presents the Agent route as production control instead of an Agent definition center", () => {
@@ -51,14 +50,15 @@ test("keeps local projects visible while remote progress reports an error", () =
     assert.doesNotMatch(source, /ensureWorkflowRun/);
 });
 
-test("supports all-project, project, and episode drill-down in one Agent route", () => {
+test("keeps all-project and project drill-down in Agent while redirecting episodes", () => {
     const source = read("./agent-workspace.tsx");
     assert.match(source, /searchParams\.get\("projectId"\)/);
     assert.match(source, /searchParams\.get\("episodeId"\)/);
     assert.match(source, /AgentProjectOverview/);
     assert.match(source, /AgentEpisodeOverview/);
     assert.doesNotMatch(source, /AgentStageGates/);
-    assert.match(source, /if \(selectedEpisode\) return <EpisodeWorkflowWorkbench/);
+    assert.match(source, /router\.replace\(agentEpisodeHref\(selectedEpisode,/);
+    assert.doesNotMatch(source, /<EpisodeWorkflowWorkbench/);
 });
 
 test("keeps Zustand selectors referentially stable", () => {

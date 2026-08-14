@@ -107,9 +107,8 @@ export const CanvasNode = React.memo(function CanvasNode({
     const isBatchChild = data.type === CanvasNodeType.Image && Boolean(data.metadata?.batchRootId);
     const isActive = isConnectionTarget || isSelected || isFocusRelated;
     const showFrameReferenceHandles = data.type === CanvasNodeType.Video && data.metadata?.videoReferenceImageMode === "first_last_frame";
-    const packageAccent = theme.node.activeStroke;
-    const packageAccentSoft = theme.toolbar.activeBg;
-    const imageBorderColor = isActive ? theme.node.activeStroke : isProductionPackageActive ? packageAccent : isRelated && !isBatchChild ? theme.node.muted : "transparent";
+    const packageAccent = theme.accent;
+    const imageBorderColor = isActive ? theme.accent : isProductionPackageActive ? packageAccent : isRelated && !isBatchChild ? theme.node.muted : theme.node.stroke;
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const resizeRef = useRef({
         isResizing: false,
@@ -255,17 +254,10 @@ export const CanvasNode = React.memo(function CanvasNode({
             onContextMenu={(event) => onContextMenu(event, data.id)}
         >
             <div
-                className="relative h-full w-full overflow-visible rounded-lg border-2"
+                className="relative h-full w-full overflow-visible rounded-[4px] border"
                 style={{
                     background: hasImageContent || hasVideoContent || hasAudioContent ? "transparent" : theme.node.fill,
-                    borderColor: hasImageContent ? imageBorderColor : isActive ? theme.node.activeStroke : isProductionPackageActive ? packageAccent : isRelated ? theme.node.muted : theme.node.stroke,
-                    boxShadow: isActive
-                        ? `0 0 0 1px ${theme.node.activeStroke}55`
-                        : isProductionPackageActive
-                          ? `0 0 0 1px ${packageAccentSoft}, var(--studio-shadow)`
-                          : isRelated && !isBatchChild
-                            ? `0 0 0 1px ${theme.node.muted}55, var(--studio-shadow)`
-                            : undefined,
+                    borderColor: hasImageContent ? imageBorderColor : isActive ? theme.accent : isProductionPackageActive ? packageAccent : isRelated ? theme.node.muted : theme.node.stroke,
                 }}
                 onMouseDown={(event) => onMouseDown(event, data.id)}
                 onDoubleClick={(event) => {

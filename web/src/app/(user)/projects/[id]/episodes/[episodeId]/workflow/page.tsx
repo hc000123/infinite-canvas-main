@@ -1,13 +1,13 @@
-import { redirect } from "next/navigation";
+import { EpisodeWorkflowWorkbench } from "./episode-workflow-workbench";
+import { workflowReturnTarget, type WorkflowNavigationSearchParams } from "./workflow-navigation";
 
-import { agentWorkspaceHref } from "../../../../agent-workspace-route";
-
-type LegacyWorkflowPageProps = {
+type WorkflowPageProps = {
     params: Promise<{ episodeId: string; id: string }>;
-    searchParams: Promise<{ shot?: string; stage?: string }>;
+    searchParams: Promise<WorkflowNavigationSearchParams>;
 };
 
-export default async function LegacyWorkflowPage({ params, searchParams }: LegacyWorkflowPageProps) {
+export default async function WorkflowPage({ params, searchParams }: WorkflowPageProps) {
     const [{ episodeId, id: projectId }, query] = await Promise.all([params, searchParams]);
-    redirect(agentWorkspaceHref({ projectId, episodeId, stage: query.stage || "script", shot: query.shot }));
+    const returnTarget = workflowReturnTarget(projectId, query);
+    return <EpisodeWorkflowWorkbench episodeId={episodeId} projectId={projectId} returnHref={returnTarget.href} returnLabel={returnTarget.label} />;
 }

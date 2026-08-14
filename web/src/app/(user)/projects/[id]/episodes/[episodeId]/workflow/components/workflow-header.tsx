@@ -10,15 +10,16 @@ export function WorkflowHeader(props: {
     onContinue: () => void;
     onRefresh: () => void;
     progress: number;
-    projectId: string;
     projectTitle: string;
+    returnHref: string;
+    returnLabel: string;
     workerReady: boolean;
 }) {
     return (
         <header className="shrink-0 border-b border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)]/80 px-5 py-3 backdrop-blur xl:px-7">
             <div className="flex min-w-0 items-center justify-between gap-5">
                 <div className="flex min-w-0 items-center gap-4">
-                    <Link href={`/projects/${props.projectId}`} aria-label="返回项目" className="grid size-9 shrink-0 place-items-center rounded-md text-[var(--studio-text-muted)] transition hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]">
+                    <Link href={props.returnHref} aria-label={props.returnLabel} title={props.returnLabel} className="grid size-9 shrink-0 place-items-center rounded-md text-[var(--studio-text-muted)] transition hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-text-primary)]">
                         <ArrowLeft className="size-4" />
                     </Link>
                     <div className="min-w-0">

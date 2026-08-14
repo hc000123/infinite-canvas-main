@@ -1,6 +1,6 @@
 "use client";
 
-import { Checkbox, Form, Input, Select, Tag } from "antd";
+import { Form, Input, Radio, Segmented, Select } from "antd";
 
 import type { AssetCategory, AssetSubject } from "@/stores/use-asset-store";
 import { episodeProductionName, type ScriptEpisode } from "../../canvas/utils/script-management";
@@ -20,13 +20,14 @@ export function AssetBindingFields({ episodes, projects, subjects, lockedProject
 
     return (
         <section className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4">
-            <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                    <div className="text-sm font-semibold text-[var(--studio-text-primary)]">项目资产绑定</div>
-                    <div className="mt-1 text-xs text-[var(--studio-text-muted)]">项目、分类和集数使用结构化选择，不从文件名或普通标签推断。</div>
-                </div>
-                <Tag className="studio-tag">图片必填</Tag>
-            </div>
+            <div className="mb-4 text-sm font-semibold text-[var(--studio-text-primary)]">资产归属</div>
+            <Form.Item name="category" label="资产分类" rules={[{ required: true, message: "请选择资产分类" }]}>
+                <Segmented
+                    block
+                    options={(["character", "scene", "prop", "other"] as AssetCategory[]).map((value) => ({ label: assetCategoryLabel(value), value }))}
+                    onChange={(value) => form.setFieldsValue({ category: value as AssetCategory, subjectId: undefined, subjectName: "", variantName: defaultAssetVariantName(value as AssetCategory) })}
+                />
+            </Form.Item>
             <div className="grid gap-4 sm:grid-cols-2">
                 <Form.Item name="projectId" label="所属项目" rules={[{ required: true, message: "请选择所属项目" }]}>
                     <Select
@@ -36,15 +37,6 @@ export function AssetBindingFields({ episodes, projects, subjects, lockedProject
                         placeholder="选择项目"
                         options={projects.map((project) => ({ label: project.title, value: project.id }))}
                         onChange={() => form.setFieldsValue({ category: undefined, subjectId: undefined, subjectName: "", episodeIds: [] })}
-                    />
-                </Form.Item>
-                <Form.Item name="category" label="资产分类" rules={[{ required: true, message: "请选择资产分类" }]}>
-                    <Select
-                        placeholder="角色 / 场景 / 道具 / 其他"
-                        options={(["character", "scene", "prop", "other"] as AssetCategory[]).map((value) => ({ label: assetCategoryLabel(value), value }))}
-                        onChange={(value: AssetCategory) => {
-                            form.setFieldsValue({ subjectId: undefined, subjectName: "", variantName: defaultAssetVariantName(value) });
-                        }}
                     />
                 </Form.Item>
                 <Form.Item name="subjectId" label="绑定资产主体" rules={[{ required: true, message: "请选择或新建资产主体" }]}>
@@ -62,8 +54,14 @@ export function AssetBindingFields({ episodes, projects, subjects, lockedProject
                 <Form.Item name="variantName" label="图片形态 / 马甲" rules={[{ required: true, message: "请输入图片形态名称" }]}>
                     <Input placeholder={category === "character" ? "基础形象 / 校服 / 受伤状态" : "基础状态 / 夜景 / 损坏状态"} />
                 </Form.Item>
-                <Form.Item name="allEpisodes" label="适用范围" valuePropName="checked">
-                    <Checkbox onChange={(event) => (event.target.checked ? form.setFieldValue("episodeIds", []) : lockedEpisodeId ? form.setFieldValue("episodeIds", [lockedEpisodeId]) : undefined)}>全剧通用</Checkbox>
+                <Form.Item name="allEpisodes" label="适用范围">
+                    <Radio.Group
+                        block
+                        optionType="button"
+                        buttonStyle="solid"
+                        options={[{ label: "全剧通用", value: true }, { label: "指定集数", value: false }]}
+                        onChange={(event) => (event.target.value ? form.setFieldValue("episodeIds", []) : lockedEpisodeId ? form.setFieldValue("episodeIds", [lockedEpisodeId]) : undefined)}
+                    />
                 </Form.Item>
             </div>
             {!allEpisodes ? (

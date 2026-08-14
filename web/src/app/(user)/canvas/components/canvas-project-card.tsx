@@ -2,7 +2,7 @@
 
 import { Check, Download, Pencil, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { Button, Input } from "antd";
+import { Button, Input, Tooltip } from "antd";
 
 import { useCanvasStore, type CanvasProject } from "../stores/use-canvas-store";
 import { useCanvasUiStore } from "../stores/use-canvas-ui-store";
@@ -64,14 +64,24 @@ export function CanvasProjectCard({ project, projectTitle }: { project: CanvasPr
                 <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
                     {editing ? (
                         <>
-                            <Button type="text" size="small" shape="circle" icon={<Check className="size-4" />} onClick={saveTitle} aria-label="保存名称" />
-                            <Button type="text" size="small" shape="circle" icon={<X className="size-4" />} onClick={stopEditing} aria-label="取消重命名" />
+                            <Tooltip title="保存名称">
+                                <Button type="text" size="small" shape="circle" icon={<Check className="size-4" />} onClick={saveTitle} aria-label="保存名称" />
+                            </Tooltip>
+                            <Tooltip title="取消重命名">
+                                <Button type="text" size="small" shape="circle" icon={<X className="size-4" />} onClick={stopEditing} aria-label="取消重命名" />
+                            </Tooltip>
                         </>
                     ) : (
                         <>
-                            <Button type="text" size="small" shape="circle" icon={<Download className="size-4" />} onClick={() => void exportCanvasProjects([project], project.title || "眨眼之间")} aria-label="导出" />
-                            <Button type="text" size="small" shape="circle" icon={<Pencil className="size-4" />} onClick={() => startEditing(project.id, project.title)} aria-label="重命名" />
-                            <Button type="text" size="small" shape="circle" icon={<Trash2 className="size-4" />} onClick={() => setDeleteIds([project.id])} aria-label="删除" />
+                            <Tooltip title="导出画布">
+                                <Button type="text" size="small" shape="circle" icon={<Download className="size-4" />} onClick={() => void exportCanvasProjects([project], project.title || "眨眼之间")} aria-label="导出画布" />
+                            </Tooltip>
+                            <Tooltip title="重命名画布">
+                                <Button type="text" size="small" shape="circle" icon={<Pencil className="size-4" />} onClick={() => startEditing(project.id, project.title)} aria-label="重命名画布" />
+                            </Tooltip>
+                            <Tooltip title="删除画布">
+                                <Button type="text" size="small" shape="circle" icon={<Trash2 className="size-4" />} onClick={() => setDeleteIds([project.id])} aria-label="删除画布" />
+                            </Tooltip>
                         </>
                     )}
                 </div>

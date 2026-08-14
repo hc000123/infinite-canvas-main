@@ -21,9 +21,33 @@ test("project script entry invokes the selected Skill without an Agent Plan", ()
     assert.doesNotMatch(page, /\n\s+运行剧本 Skill\n/);
     assert.match(page, /preflightScriptInvocation/);
     assert.match(page, /createInvocation/);
-    assert.match(board, /aria-label="剧本优化 Skill"/);
-    assert.match(board, /剧本 Skill/);
+    assert.match(board, /aria-label="剧本优化方案"/);
+    assert.doesNotMatch(board, />\s*剧本 Skill\s*</);
     assert.doesNotMatch(page, /createAgentPlan|Agent Plan|buildScriptSkillOverride/);
+});
+
+test("episode title itself opens the existing rename flow", () => {
+    const board = readProjectFile("./[id]/components/project-episode-board.tsx");
+
+    assert.match(board, /aria-label=\{`修改 \$\{episodeDisplayTitle\(row\)\} 标题`\}/);
+    assert.match(board, /setSelectedId\(row\.id\);\s+onEditTitle\(row\);/);
+    assert.doesNotMatch(board, /aria-label=\{`修改 \$\{episodeDisplayTitle\(selectedEpisode\)\} 标题`\}/);
+});
+
+test("original script area itself opens the existing editor", () => {
+    const board = readProjectFile("./[id]/components/project-episode-board.tsx");
+
+    assert.match(board, /aria-label=\{`编辑 \$\{episodeDisplayTitle\(selectedEpisode\)\} 剧本`\}/);
+    assert.match(board, /onClick=\{\(\) => setEditingScript\(true\)\}/);
+    assert.doesNotMatch(board, />\s*编辑剧本\s*</);
+});
+
+test("episode production starts with the episode rail and keeps create in that context", () => {
+    const board = readProjectFile("./[id]/components/project-episode-board.tsx");
+    const productionPanel = board.slice(board.indexOf("function ProjectEpisodeProductionPanel"), board.indexOf("function ProjectOverviewPanel"));
+
+    assert.doesNotMatch(productionPanel, /项目中心 \/|>分集制作<|进度 \{progress\}%/);
+    assert.match(productionPanel, /<aside[\s\S]*新建分集/);
 });
 
 test("episode import uses scene wording and has no import-time optimization action", () => {
@@ -50,16 +74,17 @@ test("project Agent center has an explicit return-to-project action", () => {
     assert.match(page, /`\/projects\/\$\{project\.id\}`/);
 });
 
-test("project production navigation exposes production control and project cache", () => {
+test("project production navigation keeps episode production and project cache", () => {
     const board = readProjectFile("./[id]/components/project-episode-board.tsx");
     const page = readProjectFile("./[id]/page.tsx");
-    assert.match(board, /生产总控/);
+    assert.match(board, /制作本集/);
+    assert.doesNotMatch(board, /项目总控|进入生产总控|onOpenAgentWorkspace/);
     assert.doesNotMatch(board, />项目 Agent</);
     assert.doesNotMatch(board, /Skill 管理|onOpenSkillManagement/);
     assert.match(board, /查看项目缓存/);
     assert.doesNotMatch(board, /Workflow 中心/);
     assert.doesNotMatch(board, /Agent 中心/);
-    assert.match(page, /onOpenAgentWorkspace=\{\(\) => router\.push\(agentWorkspaceHref\(\{ projectId: project\.id \}\)\)\}/);
+    assert.doesNotMatch(page, /agentWorkspaceHref|onOpenAgentWorkspace/);
     assert.doesNotMatch(page, /onOpenSkillManagement|\/skills`/);
     assert.doesNotMatch(page, /onOpenAgentSettings|\/agents`|onOpenWorkflowCenter/);
 });

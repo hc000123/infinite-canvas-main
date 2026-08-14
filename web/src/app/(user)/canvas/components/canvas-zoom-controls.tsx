@@ -18,12 +18,12 @@ export function CanvasZoomControls({ scale, onScaleChange, onReset, isMiniMapOpe
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const colorTheme = useThemeStore((state) => state.theme);
     const theme = canvasThemes[colorTheme];
-    const dockStyle = { background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item, boxShadow: "var(--studio-shadow)" };
+    const dockStyle = { background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.toolbar.item };
     const activeStyle = { background: theme.toolbar.activeBg, color: theme.toolbar.activeText };
 
     return (
         <div className="absolute bottom-5 left-14 z-50 sm:left-5" onMouseDown={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
-            <div className="flex h-14 items-center gap-1 rounded-lg border px-2 shadow-[var(--studio-shadow)] backdrop-blur" style={dockStyle}>
+            <div data-canvas-editorial-surface className="flex h-14 items-center gap-1 rounded-md border px-2" style={dockStyle}>
                 <Tooltip title={isMiniMapOpen ? "关闭小地图" : "打开小地图"}>
                     <Button
                         type="text"

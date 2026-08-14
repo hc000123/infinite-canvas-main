@@ -1,13 +1,19 @@
 import { Button, Progress } from "antd";
+import { saveAs } from "file-saver";
 import { CheckCircle2, CircleAlert, Download, PackageCheck } from "lucide-react";
 
 import type { ProductionPackage } from "@/app/(user)/video/use-video-package-store";
+import type { Asset } from "@/stores/use-asset-store";
 
-import { buildDeliveryReport } from "../workflow-delivery-check";
+import { buildDeliveryReport, buildProductionAcceptanceManifest } from "../workflow-delivery-check";
 
-export function WorkflowDeliveryPanel({ packages }: { packages: ProductionPackage[] }) {
-    const report = buildDeliveryReport(packages);
+export function WorkflowDeliveryPanel({ assets, episodeId, packages, projectId, scriptSnapshot, workflowRunId }: { assets: Asset[]; episodeId: string; packages: ProductionPackage[]; projectId: string; scriptSnapshot: string; workflowRunId?: string }) {
+    const report = buildDeliveryReport(packages, assets);
     const percent = report.total ? Math.round((report.completedCount / report.total) * 100) : 0;
+    const exportManifest = () => {
+        const manifest = buildProductionAcceptanceManifest({ assets, episodeId, packages, projectId, scriptSnapshot, workflowRunId });
+        saveAs(new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json;charset=utf-8" }), `生产验收清单_${episodeId}.json`);
+    };
     return (
         <div className="space-y-3">
             <section className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-4">
@@ -17,9 +23,9 @@ export function WorkflowDeliveryPanel({ packages }: { packages: ProductionPackag
                             <PackageCheck className="size-4 text-[var(--studio-accent)]" />
                             本集交付检查
                         </div>
-                        <p className="mt-1 text-xs text-[var(--studio-text-muted)]">检查提示词、参考资产、任务状态、成功版本和素材归档。</p>
+                        <p className="mt-1 text-xs text-[var(--studio-text-muted)]">检查剧本快照、提示词、参考资产、生成版本、后处理任务与费用追溯。</p>
                     </div>
-                    <Button type="primary" icon={<Download className="size-4" />} disabled={!report.ready}>
+                    <Button type="primary" icon={<Download className="size-4" />} disabled={!report.ready} onClick={exportManifest}>
                         导出交付清单
                     </Button>
                 </div>

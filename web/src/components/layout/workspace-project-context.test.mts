@@ -6,15 +6,15 @@ import { workspaceProjectId } from "./workspace-project-context.ts";
 
 const read = (relative: string) => readFileSync(new URL(relative, import.meta.url), "utf8");
 
-test("shared top bars preserve current project for production control and assets", () => {
+test("shared workspace navigation preserves current project for production control and assets", () => {
     const helper = read("./workspace-project-context.ts");
-    const appTopNav = read("./app-top-nav.tsx");
+    const appSpine = read("./app-workspace-spine.tsx");
     const projectTopNav = read("../../app/(user)/projects/project-workspace-shell.tsx");
 
     assert.match(helper, /export function workspaceProjectId/);
     assert.match(helper, /export function contextualToolHref/);
-    assert.match(helper, /toolSlug === "agent" \|\| toolSlug === "assets"/);
-    assert.match(appTopNav, /contextualToolHref\(toolSlug, projectId\)/);
+    assert.match(helper, /toolSlug === "assets"/);
+    assert.match(appSpine, /contextualToolHref\(toolSlug, projectId\)/);
     assert.match(projectTopNav, /contextualToolHref\(toolSlug, projectId\)/);
 });
 

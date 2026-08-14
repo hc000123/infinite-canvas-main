@@ -1,7 +1,7 @@
 import { useMemo, type Dispatch, type SetStateAction } from "react";
 
 import type { CanvasNodeHoverToolbarActions } from "../components/canvas-node-hover-toolbar";
-import type { CanvasNodeData } from "../types";
+import { CanvasNodeType, type CanvasNodeData } from "../types";
 
 export function useCanvasNodeToolActions({
     captureVideoCurrentFrame,
@@ -12,7 +12,11 @@ export function useCanvasNodeToolActions({
     handleFontSizeChange,
     handleRetryNode,
     openImageUpscale,
+    openVideoUpscale,
+    openVideoSubtitleErase,
     retryImageUpscale,
+    retryVideoUpscale,
+    retryVideoSubtitleErase,
     handleUploadRequest,
     openNodeCapability,
     openTextEditor,
@@ -35,7 +39,11 @@ export function useCanvasNodeToolActions({
     handleFontSizeChange: (nodeId: string, fontSize: number) => void;
     handleRetryNode: (node: CanvasNodeData) => Promise<void> | void;
     openImageUpscale: (node: CanvasNodeData) => Promise<void> | void;
+    openVideoUpscale: (node: CanvasNodeData) => Promise<void> | void;
+    openVideoSubtitleErase: (node: CanvasNodeData) => Promise<void> | void;
     retryImageUpscale: (node: CanvasNodeData) => Promise<void> | void;
+    retryVideoUpscale: (node: CanvasNodeData) => Promise<void> | void;
+    retryVideoSubtitleErase: (node: CanvasNodeData) => Promise<void> | void;
     handleUploadRequest: (nodeId?: string) => void;
     openNodeCapability: (node: CanvasNodeData) => void;
     openTextEditor: (node: CanvasNodeData) => void;
@@ -69,9 +77,10 @@ export function useCanvasNodeToolActions({
             onRefreshReview: (node) => void refreshNodeVolcengineReview(node),
             onCrop: (node) => setCropNodeId(node.id),
             onAngle: (node) => setAngleNodeId(node.id),
-            onUpscale: (node) => void openImageUpscale(node),
+            onUpscale: (node) => void (node.type === CanvasNodeType.Video ? openVideoUpscale(node) : openImageUpscale(node)),
+            onSubtitleErase: (node) => void openVideoSubtitleErase(node),
             onViewImage: (node) => setPreviewNodeId(node.id),
-            onRetry: (node) => void (node.metadata?.imageUpscale ? retryImageUpscale(node) : handleRetryNode(node)),
+            onRetry: (node) => void (node.metadata?.subtitleErase ? retryVideoSubtitleErase(node) : node.metadata?.videoUpscale ? retryVideoUpscale(node) : node.metadata?.imageUpscale ? retryImageUpscale(node) : handleRetryNode(node)),
             onToggleFreeResize: (node) => toggleNodeFreeResize(node.id),
             onDelete: (node) => deleteNodes(new Set([node.id])),
         }),
@@ -84,11 +93,15 @@ export function useCanvasNodeToolActions({
             handleFontSizeChange,
             handleRetryNode,
             openImageUpscale,
+            openVideoUpscale,
+            openVideoSubtitleErase,
             handleUploadRequest,
             openTextEditor,
             openNodeCapability,
             refreshNodeVolcengineReview,
             retryImageUpscale,
+            retryVideoUpscale,
+            retryVideoSubtitleErase,
             saveNodeAsset,
             setAngleNodeId,
             setCropNodeId,

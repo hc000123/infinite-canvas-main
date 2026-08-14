@@ -24,7 +24,13 @@ test("asset page wires project then source then project child canvas selectors",
     assert.match(actions, /changeSourceScope/);
     assert.match(query, /const \[canvasLibraryFilter, setCanvasLibraryFilter\] = useState\(""\)/);
     assert.match(query, /canvasIdsForCreativeProject/);
+    assert.doesNotMatch(query, /if \(!initialProjectId\) return;/);
     assert.match(page, /workspaceProjectId\("\/assets", searchParams\)/);
+    assert.match(page, /params\.set\("projectId", value\)/);
+    assert.match(page, /router\.replace\(query \? `\$\{pathname\}\?\$\{query\}` : pathname/);
+    assert.match(page, /const activeContextFolderId = activeFolderId \|\| projectFolderRows\.find\(\(item\) => item\.project\.id === projectContextFilter\)\?\.folder\.id/);
+    assert.ok((page.match(/activeFolderId: activeContextFolderId/g) || []).length >= 2);
+    assert.match(readAssetFile("./use-asset-editor-actions.ts"), /folderId: asset\.folderId \|\| activeFolderId \|\| ""/);
     assert.match(page, /onCanvasLibraryFilterChange: assetFilterActions\.changeCanvasLibraryFilter/);
     assert.match(page, /onSourceScopeChange: assetFilterActions\.changeSourceScope/);
 });

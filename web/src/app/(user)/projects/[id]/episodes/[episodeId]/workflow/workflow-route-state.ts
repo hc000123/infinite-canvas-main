@@ -18,14 +18,24 @@ export function selectDefaultWorkflowShot(shots: WorkflowRouteShot[]) {
 
 export function normalizeWorkflowRouteState(input: { shot?: string | null; stage?: string | null }, shotInput: string[] | WorkflowRouteShot[]): WorkflowRouteState {
     const shots = shotInput.map((item) => (typeof item === "string" ? { id: item, status: "incomplete" as const } : item));
-    const requested = ({ assets: "asset-extraction", delivery: "video" } as Record<string, WorkflowStageKey>)[input.stage || ""] || input.stage;
-    const stage = workflowStageKeys.includes(requested as WorkflowStageKey) ? (requested as WorkflowStageKey) : "script";
+    const stage = normalizeWorkflowStageKey(input.stage);
     const shot = input.shot && shots.some((item) => item.id === input.shot) ? input.shot : selectDefaultWorkflowShot(shots);
     return { shot, stage };
 }
 
-export function workflowRouteSearch(state: WorkflowRouteState) {
-    const params = new URLSearchParams({ stage: state.stage });
+export function normalizeWorkflowStageKey(stage?: string | null, fallback: WorkflowStageKey = "script") {
+    const requested = ({ assets: "asset-extraction", delivery: "video" } as Record<string, WorkflowStageKey>)[stage || ""] || stage;
+    return workflowStageKeys.includes(requested as WorkflowStageKey) ? (requested as WorkflowStageKey) : fallback;
+}
+
+export function workflowRouteSearch(state: WorkflowRouteState, currentSearch = "") {
+    const params = new URLSearchParams(currentSearch);
+    params.set("stage", state.stage);
     if (state.shot) params.set("shot", state.shot);
+    else params.delete("shot");
     return params.toString();
+}
+
+export function workflowRouteHref(projectId: string, episodeId: string, state: WorkflowRouteState, currentSearch = "") {
+    return `/projects/${encodeURIComponent(projectId)}/episodes/${encodeURIComponent(episodeId)}/workflow?${workflowRouteSearch(state, currentSearch)}`;
 }

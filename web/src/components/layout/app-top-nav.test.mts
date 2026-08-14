@@ -2,14 +2,17 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-test("top navigation always displays tools without a mobile menu", () => {
-    const appTopNavSource = readFileSync(new URL("./app-top-nav.tsx", import.meta.url), "utf8");
-    const projectWorkspaceSource = readFileSync(new URL("../../app/(user)/projects/project-workspace-shell.tsx", import.meta.url), "utf8");
+test("application navigation uses a stable spine without a hover-only menu", () => {
+    const source = readFileSync(new URL("./app-workspace-spine.tsx", import.meta.url), "utf8");
+    assert.doesNotMatch(source, /MobileNavDrawer|mobileNavOpen|打开导航菜单/);
+    assert.match(source, /aria-label="全局工作区"/);
+    assert.match(source, /<nav className="[^"]*flex flex-col[^"]*"/);
+    assert.match(source, /aria-current=/);
+});
 
-    for (const navSource of [appTopNavSource, projectWorkspaceSource]) {
-        assert.doesNotMatch(navSource, /MobileNavDrawer|mobileNavOpen|打开导航菜单/);
-        assert.match(navSource, /<nav className="[^"]*\bflex\b[^"]*\bmin-w-0\b[^"]*\bflex-1\b[^"]*\boverflow-x-auto\b[^"]*\bthin-scrollbar\b[^"]*"/);
-        assert.match(navSource, /className="flex min-w-0 flex-1 items-center"/);
-        assert.match(navSource, /className="[^"]*\bmy-auto\b[^"]*\bshrink-0\b[^"]*"/);
-    }
+test("project center is the single project-level primary entry", () => {
+    const spine = readFileSync(new URL("./app-workspace-spine.tsx", import.meta.url), "utf8");
+    const navigationTools = readFileSync(new URL("../../constant/navigation-tools.ts", import.meta.url), "utf8");
+    assert.doesNotMatch(navigationTools, /slug: "agent"|生产总控/);
+    assert.match(spine, /pathname === `\/\$\{slug\}` \|\| pathname\.startsWith\(`\/\$\{slug\}\/`\)/);
 });

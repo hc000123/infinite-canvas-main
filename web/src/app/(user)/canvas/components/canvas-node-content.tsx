@@ -230,8 +230,7 @@ function ImageNodeContent(props: NodeContentRendererProps) {
 
 function EmptyImageContent({ node, theme, isBatchRoot, batchCount, batchExpanded, batchOpening, batchRecovering, onToggleBatch, onImageQuickAction }: NodeContentRendererProps) {
     const content = (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-5 px-8" style={{ color: theme.node.placeholder }}>
-            <ImageIcon className="size-16 opacity-35" />
+        <div className="flex h-full w-full flex-col items-center justify-center px-8" style={{ color: theme.node.placeholder }}>
             <div className="w-full max-w-[220px] space-y-2 self-start">
                 <div className="text-xs font-medium" style={{ color: theme.node.muted }}>
                     尝试：

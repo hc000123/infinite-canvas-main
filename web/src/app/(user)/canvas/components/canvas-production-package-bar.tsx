@@ -35,14 +35,14 @@ export function CanvasProductionPackageBar({
     if (!packages.length) return null;
     return (
         <div className={`pointer-events-none absolute left-4 ${inspectorCollapsed ? "right-14" : "right-[440px]"} top-16 z-40 flex justify-center`}>
-            <div className="pointer-events-auto flex max-w-full gap-2 overflow-x-auto rounded-lg border p-1.5 backdrop-blur-md" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border }} data-canvas-no-zoom>
+            <div data-canvas-editorial-surface className="pointer-events-auto flex max-w-full gap-2 overflow-x-auto rounded-md border p-1.5" style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border }} data-canvas-no-zoom>
                 {packages.map((item) => {
                     const active = item.id === activePackageId;
                     const visibleVersionCount = item.versions.filter((version) => !version.hidden).length;
                     return (
                         <div
                             key={item.id}
-                            className="min-w-[150px] rounded-lg border px-3 py-2 transition hover:opacity-95"
+                            className="min-w-[150px] rounded-md border px-3 py-2 transition hover:opacity-95"
                             style={{ background: active ? activePackageStyle.background : theme.node.fill, borderColor: active ? activePackageStyle.border : theme.node.stroke, color: active ? activePackageStyle.text : theme.node.text }}
                             title={`${item.label} · ${item.title}`}
                         >

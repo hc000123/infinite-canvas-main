@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, FolderOpen, Home, Keyboard, Layers3, LayoutGrid, Menu as MenuIcon, Plus, Redo2, Save, Trash2, Undo2, Upload } from "lucide-react";
-import { Button, Menu as AntMenu, Modal, type MenuProps } from "antd";
+import { ArrowLeft, Ellipsis, FolderOpen, Keyboard, Layers3, LayoutGrid, Menu as MenuIcon, Plus, Redo2, Save, Trash2, Undo2, Upload } from "lucide-react";
+import { Button, Dropdown, Menu as AntMenu, Modal, type MenuProps } from "antd";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -22,12 +22,12 @@ export function CanvasTopBar({
     capacity,
     returnLabel,
     onReturnParent,
-    onHome,
     onCreateProject,
     canCreateChildCanvas,
     childCanvases,
     onOpenChildCanvas,
     onDeleteProject,
+    onClearCanvas,
     onSaveProject,
     onImportImage,
     onOpenAssets,
@@ -49,12 +49,12 @@ export function CanvasTopBar({
     capacity: CanvasCapacitySnapshot;
     returnLabel: string;
     onReturnParent: () => void;
-    onHome: () => void;
     onCreateProject: () => void;
     canCreateChildCanvas: boolean;
     childCanvases: Array<{ id: string; title: string }>;
     onOpenChildCanvas: (canvasId: string) => void;
     onDeleteProject: () => void;
+    onClearCanvas: () => void;
     onSaveProject: () => void;
     onImportImage: () => void;
     onOpenAssets: () => void;
@@ -67,6 +67,7 @@ export function CanvasTopBar({
     const titleRef = useRef<HTMLDivElement>(null);
     const menuTriggerRef = useRef<HTMLDivElement>(null);
     const [menuOpen, setMenuOpen] = useState(false);
+    const [globalActionsOpen, setGlobalActionsOpen] = useState(false);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const childMenuItems: MenuProps["items"] = childCanvases.length
         ? [{ key: "children", icon: <Layers3 className="size-4" />, label: "切换子画布", children: childCanvases.map((canvas) => ({ key: `child-${canvas.id}`, label: canvas.title, onClick: () => onOpenChildCanvas(canvas.id) })) }]
@@ -100,7 +101,7 @@ export function CanvasTopBar({
                     <div ref={menuTriggerRef} className="relative">
                         <button
                             type="button"
-                            className="grid size-9 place-items-center rounded-full transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
+                            className="grid size-9 place-items-center rounded-md transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
                             style={{ color: theme.node.text }}
                             onClick={() => setMenuOpen((open) => !open)}
                             aria-label="打开画布菜单"
@@ -115,9 +116,6 @@ export function CanvasTopBar({
                                     selectable={false}
                                     onClick={() => setMenuOpen(false)}
                                     items={[
-                                        { key: "parent", icon: <ArrowLeft className="size-4" />, label: returnLabel, onClick: onReturnParent },
-                                        { key: "projects", icon: <Home className="size-4" />, label: "项目中心", onClick: onHome },
-                                        { type: "divider" },
                                         {
                                             key: "new",
                                             disabled: hasEpisode && !canCreateChildCanvas,
@@ -126,12 +124,8 @@ export function CanvasTopBar({
                                             onClick: onCreateProject,
                                         },
                                         ...(childMenuItems || []),
-                                        { key: "save", icon: <Save className="size-4" />, label: "保存画布", onClick: onSaveProject },
+                                        { key: "clear", danger: true, icon: <Trash2 className="size-4" />, label: "清空画布", onClick: onClearCanvas },
                                         { key: "delete", danger: true, icon: <Trash2 className="size-4" />, label: "删除当前画布", onClick: onDeleteProject },
-                                        { type: "divider" },
-                                        { key: "import", icon: <Upload className="size-4" />, label: "导入图片", onClick: onImportImage },
-                                        { key: "assets", icon: <FolderOpen className="size-4" />, label: "打开素材", onClick: onOpenAssets },
-                                        { key: "organize", icon: <LayoutGrid className="size-4" />, label: "整理画布", onClick: onOrganizeCanvas },
                                         { type: "divider" },
                                         { key: "undo", disabled: !canUndo, icon: <Undo2 className="size-4" />, label: <MenuLabel text="撤销" shortcut="⌘ Z" />, onClick: onUndo },
                                         { key: "redo", disabled: !canRedo, icon: <Redo2 className="size-4" />, label: <MenuLabel text="重做" shortcut="⌘ ⇧ Z / ⌘ Y" />, onClick: onRedo },
@@ -145,7 +139,7 @@ export function CanvasTopBar({
                     <div ref={titleRef} className="flex min-w-0 items-center gap-1.5 overflow-hidden">
                         <button
                             type="button"
-                            className="grid size-8 shrink-0 place-items-center rounded-lg transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
+                            className="grid size-8 shrink-0 place-items-center rounded-md transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
                             style={{ color: theme.node.muted }}
                             onClick={onReturnParent}
                             aria-label={returnLabel}
@@ -185,10 +179,36 @@ export function CanvasTopBar({
 
                 <div className="pointer-events-auto flex shrink-0 items-center gap-1">
                     <CanvasCapacityIndicator capacity={capacity} />
+                    <Dropdown
+                        trigger={["click"]}
+                        placement="bottomRight"
+                        open={globalActionsOpen}
+                        onOpenChange={setGlobalActionsOpen}
+                        menu={{
+                            items: [
+                                { key: "global-import", icon: <Upload className="size-4" />, label: "导入", onClick: onImportImage },
+                                { key: "global-assets", icon: <FolderOpen className="size-4" />, label: "素材", onClick: onOpenAssets },
+                                { key: "global-organize", icon: <LayoutGrid className="size-4" />, label: "整理画布", onClick: onOrganizeCanvas },
+                                { key: "global-save", icon: <Save className="size-4" />, label: "保存", onClick: onSaveProject },
+                            ],
+                        }}
+                    >
+                        <button
+                            type="button"
+                            className="md:hidden grid size-9 place-items-center rounded-md transition hover:bg-[var(--studio-hover-bg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
+                            style={{ color: theme.node.text }}
+                            aria-label="全局操作"
+                            aria-haspopup="menu"
+                            aria-expanded={globalActionsOpen}
+                        >
+                            <Ellipsis className="size-5" />
+                        </button>
+                    </Dropdown>
                     <div className="hidden items-center gap-1 md:flex">
-                        <TopAction icon={<Upload className="size-4" />} label="导入" onClick={onImportImage} />
-                        <TopAction icon={<FolderOpen className="size-4" />} label="素材" onClick={onOpenAssets} />
-                        <TopAction icon={<LayoutGrid className="size-4" />} label="整理画布" onClick={onOrganizeCanvas} />
+                        <TopAction label="导入" icon={<Upload className="size-4" />} onClick={onImportImage} />
+                        <TopAction label="素材" icon={<FolderOpen className="size-4" />} onClick={onOpenAssets} />
+                        <TopAction label="整理画布" icon={<LayoutGrid className="size-4" />} onClick={onOrganizeCanvas} />
+                        <TopAction label="保存" icon={<Save className="size-4" />} onClick={onSaveProject} />
                     </div>
                 </div>
             </div>
@@ -218,7 +238,7 @@ export function CanvasTopBar({
 function TopAction({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     return (
-        <Button type="text" className="!h-8 !rounded-lg !px-2 !text-sm !font-medium opacity-85 hover:!opacity-100 sm:!px-2.5" style={{ color: theme.node.text }} icon={icon} onClick={onClick} aria-label={label} title={label}>
+        <Button type="text" className="!h-8 !rounded-md !px-2 !text-sm !font-medium opacity-85 hover:!opacity-100 sm:!px-2.5" style={{ color: theme.node.text }} icon={icon} onClick={onClick} aria-label={label} title={label}>
             <span className="hidden sm:inline">{label}</span>
         </Button>
     );

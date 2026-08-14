@@ -18,6 +18,7 @@ import { accountDestinationItems } from "./user-status-actions-view";
 
 type UserStatusActionsProps = {
     showConfig?: boolean;
+    hideVersion?: boolean;
     variant?: "default" | "canvas" | "text";
     onOpenShortcuts?: () => void;
     accountOpen?: boolean;
@@ -26,7 +27,7 @@ type UserStatusActionsProps = {
     getPopupContainer?: (node: HTMLElement) => HTMLElement;
 };
 
-export function UserStatusActions({ showConfig = true, variant = "default", onOpenShortcuts, accountOpen, onAccountOpenChange, accountRef, getPopupContainer }: UserStatusActionsProps) {
+export function UserStatusActions({ showConfig = true, hideVersion = false, variant = "default", onOpenShortcuts, accountOpen, onAccountOpenChange, accountRef, getPopupContainer }: UserStatusActionsProps) {
     const theme = useThemeStore((state) => state.theme);
     const setTheme = useThemeStore((state) => state.setTheme);
     const user = useUserStore((state) => state.user);
@@ -84,7 +85,7 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
             <AnimatedThemeToggler theme={theme} onThemeChange={setTheme} className={`${actionClass} ${variant === "text" ? "hidden sm:inline-flex" : ""}`} style={iconStyle} aria-label={themeToggleLabel} title={themeToggleLabel}>
                 {variant === "text" ? (theme === "dark" ? "浅色" : "深色") : undefined}
             </AnimatedThemeToggler>
-            <VersionReleaseModal className={variant === "text" ? `${actionClass} hidden sm:inline-flex` : undefined} style={versionStyle} />
+            {hideVersion ? null : <VersionReleaseModal className={variant === "text" ? `${actionClass} hidden sm:inline-flex` : undefined} style={versionStyle} />}
             {variant === "canvas" && user ? (
                 <Tooltip title="查看数据中心" placement="bottom">
                     <Link href="/data-center" className="flex h-8 shrink-0 items-center gap-1.5 px-1.5 text-xs font-medium tabular-nums opacity-75 transition hover:opacity-100" style={{ color: canvasTheme.node.text }}>

@@ -14,7 +14,10 @@ export function videoWorkflowEpisodeKey(order: number | string, projectId?: stri
 }
 
 export function videoWorkflowHref(order: number, sourceProjectId?: string, sourceEpisodeId?: string) {
-    if (sourceProjectId && sourceEpisodeId) return agentWorkspaceHref({ projectId: sourceProjectId, episodeId: sourceEpisodeId, stage: "script" });
+    if (sourceProjectId && sourceEpisodeId) {
+        const params = new URLSearchParams({ stage: "script" });
+        return `/projects/${encodeURIComponent(sourceProjectId)}/episodes/${encodeURIComponent(sourceEpisodeId)}/workflow?${params.toString()}`;
+    }
     const params = new URLSearchParams({
         episode: videoWorkflowEpisodeKey(order, sourceProjectId),
         projectSlug: videoWorkflowProjectSlug(sourceProjectId),
@@ -30,4 +33,3 @@ function sanitizeWorkflowKey(value: string) {
         .replace(/[^\w-]+/g, "-")
         .replace(/^-+|-+$/g, "");
 }
-import { agentWorkspaceHref } from "../projects/agent-workspace-route.ts";

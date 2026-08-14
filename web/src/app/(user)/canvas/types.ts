@@ -57,6 +57,75 @@ export type CanvasImageUpscaleMetadata = {
     errorCode?: string;
 };
 
+export type CanvasVideoUpscaleMetadata = {
+    jobId: string;
+    provider: string;
+    runId?: string;
+    providerRequestId?: string;
+    target: "1080p" | "2k";
+    status: "queued" | "uploading" | "processing" | "downloading" | "succeeded" | "failed";
+    progress: number;
+    attempt: number;
+    processingStage?: string;
+    sourceNodeId: string;
+    sourceAssetId?: string;
+    inputWidth: number;
+    inputHeight: number;
+    inputDurationSeconds: number;
+    inputFrameRate?: number;
+    outputWidth?: number;
+    outputHeight?: number;
+    outputDurationSeconds?: number;
+    outputQualityMode?: "compatible" | "balanced" | "master";
+    preserveAudio?: boolean;
+    frameInterpolationMode?: "keep" | "to25" | "to30" | "double" | "to60";
+    interpolationMode?: "ultra-fast" | "fast" | "medium";
+    interpolationTargetFrameRate?: number;
+    interpolationRunId?: string;
+    estimatedBillableMinutes?: number;
+    estimatedCostCny?: number;
+    costEstimateAvailable?: boolean;
+    pricingRuleVersion?: string;
+    estimatedInterpolationBillableMinutes?: number;
+    estimatedInterpolationCostCny?: number;
+    interpolationCostEstimateAvailable?: boolean;
+    interpolationPricingRuleVersion?: string;
+    estimatedTotalCostCny?: number;
+    cloudProcessing: true;
+    startedAt?: string;
+    completedAt?: string;
+    durationMs?: number;
+    errorCode?: string;
+};
+
+export type CanvasVideoSubtitleEraseMetadata = {
+    jobId: string;
+    provider: string;
+    runId?: string;
+    providerRequestId?: string;
+    status: "queued" | "uploading" | "processing" | "downloading" | "succeeded" | "failed";
+    progress: number;
+    attempt: number;
+    processingStage?: string;
+    sourceNodeId: string;
+    sourceAssetId?: string;
+    inputWidth: number;
+    inputHeight: number;
+    inputDurationSeconds: number;
+    outputWidth?: number;
+    outputHeight?: number;
+    outputDurationSeconds?: number;
+    estimatedBillableMinutes?: number;
+    estimatedCostCny?: number;
+    costEstimateAvailable?: boolean;
+    pricingRuleVersion?: string;
+    cloudProcessing: true;
+    startedAt?: string;
+    completedAt?: string;
+    durationMs?: number;
+    errorCode?: string;
+};
+
 export type CanvasMediaVersion = {
     id: string;
     versionNumber: number;
@@ -89,6 +158,8 @@ export type CanvasNodeMetadata = {
     status?: CanvasNodeStatus;
     errorDetails?: string;
     imageUpscale?: CanvasImageUpscaleMetadata;
+    videoUpscale?: CanvasVideoUpscaleMetadata;
+    subtitleErase?: CanvasVideoSubtitleEraseMetadata;
     fontSize?: number;
     generationMode?: CanvasGenerationMode;
     generationType?: CanvasImageGenerationType;

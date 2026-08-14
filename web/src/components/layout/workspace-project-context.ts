@@ -18,6 +18,6 @@ export function workspaceProjectId(pathname: string, searchParams: SearchParamRe
 }
 
 export function contextualToolHref(toolSlug: NavigationToolSlug, projectId: string) {
-    if ((toolSlug === "agent" || toolSlug === "assets") && projectId) return `/${toolSlug}?projectId=${encodeURIComponent(projectId)}`;
+    if (toolSlug === "assets" && projectId) return `/${toolSlug}?projectId=${encodeURIComponent(projectId)}`;
     return `/${toolSlug}`;
 }

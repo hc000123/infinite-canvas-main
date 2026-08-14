@@ -127,6 +127,50 @@ func TestNormalizePrivateSettingAllocatesGloballyUniqueChannelIDs(t *testing.T) 
 	}
 }
 
+func TestNormalizeVideoUpscaleSettingDefaults(t *testing.T) {
+	result := normalizePrivateSetting(model.PrivateSetting{VideoUpscale: model.VideoUpscaleSetting{
+		APIKey: "  las-key  ", OutputTOSPath: "  tos://bucket/output  ",
+	}}).VideoUpscale
+
+	if result.Provider != "volcengine-las" || result.APIKey != "las-key" || result.OutputTOSPath != "tos://bucket/output/" || result.OutputQualityMode != "compatible" || !result.PreserveAudio || result.MaxTarget != "2k" {
+		t.Fatalf("normalized video upscale setting = %#v", result)
+	}
+}
+
+func TestNormalizeVideoSubtitleEraseSettingDefaultsDisabled(t *testing.T) {
+	result := normalizePrivateSetting(model.PrivateSetting{}).VideoUpscale
+	if result.SubtitleEraseEnabled {
+		t.Fatalf("subtitle erase should default to disabled: %#v", result)
+	}
+}
+
+func TestSaveSettingsRestoresAndMasksVideoUpscaleAPIKey(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := repository.SaveSettings(model.Settings{Private: model.PrivateSetting{VideoUpscale: model.VideoUpscaleSetting{APIKey: "saved-las-key"}}}, now())
+	if err != nil {
+		t.Fatalf("seed settings: %v", err)
+	}
+
+	_, err = SaveSettings(model.Settings{Private: model.PrivateSetting{VideoUpscale: model.VideoUpscaleSetting{
+		Enabled: true, SubtitleEraseEnabled: true, Provider: " volcengine-las ", APIKey: maskedAPIKey, OutputTOSPath: " tos://bucket/output ", OutputQualityMode: " balanced ", PreserveAudio: true, MaxTarget: " 2k ",
+	}}})
+	if err != nil {
+		t.Fatalf("SaveSettings returned error: %v", err)
+	}
+	saved, err := repository.GetSettings()
+	if err != nil {
+		t.Fatalf("GetSettings returned error: %v", err)
+	}
+	upscale := saved.Private.VideoUpscale
+	if !upscale.Enabled || !upscale.SubtitleEraseEnabled || upscale.Provider != "volcengine-las" || upscale.APIKey != "saved-las-key" || upscale.OutputTOSPath != "tos://bucket/output/" || upscale.OutputQualityMode != "balanced" || !upscale.PreserveAudio || upscale.MaxTarget != "2k" {
+		t.Fatalf("saved video upscale setting = %#v", upscale)
+	}
+	admin, err := AdminSettings()
+	if err != nil || admin.Private.VideoUpscale.APIKey != "" || !admin.Private.VideoUpscale.APIKeyConfigured {
+		t.Fatalf("admin video upscale secret = %#v err=%v", admin.Private.VideoUpscale, err)
+	}
+}
+
 func TestKeepPrivateAPIKeysLeavesJimengNoSecretChannelEmpty(t *testing.T) {
 	saved := model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{
 		{ID: "first", Name: "Jimeng", Protocol: modelProtocolJimengCLI},
@@ -207,6 +251,53 @@ func TestAdminSettingsMasksSavedChannelAPIKey(t *testing.T) {
 	}
 	if strings.Contains(settings.Private.Channels[0].APIKey, "sk-real-admin") {
 		t.Fatalf("admin settings leaked api key: %q", settings.Private.Channels[0].APIKey)
+	}
+}
+
+func TestAdminSettingsHidesImageUpscaleSecrets(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := repository.SaveSettings(model.Settings{Private: model.PrivateSetting{ImageUpscale: model.ImageUpscaleSetting{
+		Managed: true, Enabled: true, Provider: "aliyun", AccessKeyID: "ak-id", AccessKeySecret: "ak-secret", SecurityToken: "sts-token",
+	}}}, now())
+	if err != nil {
+		t.Fatalf("seed settings: %v", err)
+	}
+
+	settings, err := AdminSettings()
+	if err != nil {
+		t.Fatalf("AdminSettings returned error: %v", err)
+	}
+	upscale := settings.Private.ImageUpscale
+	if upscale.AccessKeyID != "" || upscale.AccessKeySecret != "" || upscale.SecurityToken != "" {
+		t.Fatalf("admin settings leaked image upscale secrets: %#v", upscale)
+	}
+	if !upscale.AccessKeyIDConfigured || !upscale.AccessKeySecretConfigured || !upscale.SecurityTokenConfigured {
+		t.Fatalf("configured flags = %#v, want all true", upscale)
+	}
+}
+
+func TestSaveSettingsKeepsAndIndividuallyReplacesImageUpscaleSecrets(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := repository.SaveSettings(model.Settings{Private: model.PrivateSetting{ImageUpscale: model.ImageUpscaleSetting{
+		Managed: true, Enabled: true, Provider: "aliyun", AccessKeyID: "old-id", AccessKeySecret: "old-secret", SecurityToken: "old-token",
+	}}}, now())
+	if err != nil {
+		t.Fatalf("seed settings: %v", err)
+	}
+
+	_, err = SaveSettings(model.Settings{Private: model.PrivateSetting{ImageUpscale: model.ImageUpscaleSetting{
+		Enabled: true, Provider: "aliyun", AccessKeySecret: "new-secret",
+	}}})
+	if err != nil {
+		t.Fatalf("SaveSettings returned error: %v", err)
+	}
+	saved, err := repository.GetSettings()
+	if err != nil {
+		t.Fatalf("GetSettings returned error: %v", err)
+	}
+	upscale := saved.Private.ImageUpscale
+	if !upscale.Managed || upscale.AccessKeyID != "old-id" || upscale.AccessKeySecret != "new-secret" || upscale.SecurityToken != "old-token" {
+		t.Fatalf("saved image upscale setting = %#v", upscale)
 	}
 }
 

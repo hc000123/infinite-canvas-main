@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/basketikun/infinite-canvas/config"
+	"github.com/basketikun/infinite-canvas/model"
+	"github.com/basketikun/infinite-canvas/repository"
 )
 
 type ImageUpscaleProviderRequest struct {
@@ -32,12 +34,25 @@ type ImageUpscaleProviderConfig struct {
 }
 
 func currentImageUpscaleProviderConfig() ImageUpscaleProviderConfig {
-	return ImageUpscaleProviderConfig{
+	fallback := ImageUpscaleProviderConfig{
 		Provider:        config.Cfg.ImageUpscaleProvider,
 		AccessKeyID:     config.Cfg.AlibabaCloudAccessKeyID,
 		AccessKeySecret: config.Cfg.AlibabaCloudAccessKeySecret,
 		SecurityToken:   config.Cfg.AlibabaCloudSecurityToken,
 	}
+	settings, err := repository.GetSettings()
+	if err != nil || !settings.Private.ImageUpscale.Managed {
+		return fallback
+	}
+	setting := normalizeImageUpscaleSetting(settings.Private.ImageUpscale)
+	if !setting.Enabled {
+		return ImageUpscaleProviderConfig{Provider: setting.Provider}
+	}
+	return imageUpscaleProviderConfigFromSetting(setting)
+}
+
+func imageUpscaleProviderConfigFromSetting(setting model.ImageUpscaleSetting) ImageUpscaleProviderConfig {
+	return ImageUpscaleProviderConfig{Provider: setting.Provider, AccessKeyID: setting.AccessKeyID, AccessKeySecret: setting.AccessKeySecret, SecurityToken: setting.SecurityToken}
 }
 
 func imageUpscaleProviderName(value string) string {

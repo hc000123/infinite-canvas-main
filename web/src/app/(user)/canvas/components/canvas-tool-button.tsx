@@ -15,6 +15,7 @@ export function CanvasToolButton({
     danger = false,
     disabled = false,
     size = "sm",
+    instantFeedback = false,
 }: {
     title?: string;
     label: string;
@@ -24,24 +25,25 @@ export function CanvasToolButton({
     danger?: boolean;
     disabled?: boolean;
     size?: "sm" | "md";
+    instantFeedback?: boolean;
 }) {
     const colorTheme = useThemeStore((state) => state.theme);
     const theme = canvasThemes[colorTheme];
     const { token } = antdTheme.useToken();
     const [hovered, setHovered] = useState(false);
     const dangerColor = token.colorError;
-    const textColor = danger ? dangerColor : theme.toolbar.item;
+    const textColor = danger ? dangerColor : active ? theme.accent : theme.toolbar.item;
     const buttonSize = size === "md" ? "h-12 w-12 px-1.5" : "h-8 w-8";
-    const iconSize = size === "md" ? "size-9 rounded-lg" : "size-8 rounded-lg";
+    const iconSize = size === "md" ? "size-9 rounded-md" : "size-8 rounded-md";
     const hoverActive = hovered && !disabled && !active;
 
     const tooltipText = title || label;
 
     return (
-        <Tooltip title={<span style={{ color: theme.node.text }}>{tooltipText}</span>} placement="top" mouseEnterDelay={0.2} classNames={{ root: "canvas-tool-tooltip" }} styles={{ container: { color: theme.node.text } }}>
+        <Tooltip title={<span style={{ color: theme.node.text }}>{tooltipText}</span>} placement="top" mouseEnterDelay={instantFeedback ? 0 : 0.2} classNames={{ root: "canvas-tool-tooltip" }} styles={{ container: { color: theme.node.text } }}>
             <button
                 type="button"
-                className={`group relative grid ${buttonSize} place-items-center transition disabled:cursor-not-allowed`}
+                className={`group relative grid ${buttonSize} place-items-center ${instantFeedback ? "transition-colors duration-75" : "transition"} disabled:cursor-not-allowed`}
                 style={{ color: textColor, opacity: disabled && !active ? 0.35 : 1 }}
                 disabled={disabled}
                 onClick={onClick}
@@ -50,10 +52,11 @@ export function CanvasToolButton({
                 aria-label={tooltipText}
             >
                 <span
-                    className={`grid ${iconSize} place-items-center transition`}
+                    className={`grid ${iconSize} place-items-center ${instantFeedback ? "transition-colors duration-75" : "transition"}`}
                     style={{
                         background: active ? theme.toolbar.activeBg : hoverActive ? theme.toolbar.itemHover : undefined,
-                        color: active ? theme.toolbar.activeText : danger ? dangerColor : hoverActive ? theme.toolbar.activeText : undefined,
+                        color: active ? theme.accent : danger ? dangerColor : hoverActive ? theme.node.text : undefined,
+                        outline: active ? `1px solid ${theme.focusRing}` : undefined,
                     }}
                 >
                     {icon}

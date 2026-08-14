@@ -65,7 +65,7 @@ var imageUpscaleJobStarter = func(jobID string) {
 }
 
 func ImageUpscaleCapabilities() ImageUpscaleCapabilitiesResult {
-	provider := imageUpscaleProviderName(config.Cfg.ImageUpscaleProvider)
+	provider := imageUpscaleProviderName(currentImageUpscaleProviderConfig().Provider)
 	return ImageUpscaleCapabilitiesResult{Enabled: ImageUpscaleConfigured(), Provider: provider, Scales: []int{2, 4}, MaxInputBytes: maxImageUpscaleInputBytes, MaxLongEdge: 1920, MaxShortEdge: 1080, CloudProcessing: true}
 }
 
@@ -89,7 +89,7 @@ func CreateImageUpscaleJob(ctx context.Context, userID string, reader io.Reader,
 	stamp := now()
 	job := model.ImageUpscaleJob{
 		ID: newID("image-upscale"), UserID: strings.TrimSpace(userID), ProjectID: strings.TrimSpace(input.ProjectID), CanvasID: strings.TrimSpace(input.CanvasID),
-		SourceNodeID: strings.TrimSpace(input.SourceNodeID), SourceAssetID: strings.TrimSpace(input.SourceAssetID), Provider: imageUpscaleProviderName(config.Cfg.ImageUpscaleProvider), Scale: input.Scale,
+		SourceNodeID: strings.TrimSpace(input.SourceNodeID), SourceAssetID: strings.TrimSpace(input.SourceAssetID), Provider: imageUpscaleProviderName(currentImageUpscaleProviderConfig().Provider), Scale: input.Scale,
 		Status: model.ImageUpscaleJobStatusQueued, Progress: 5, Attempt: 1, InputWidth: imageInfo.width, InputHeight: imageInfo.height,
 		InputMIMEType: imageInfo.mimeType, InputBytes: int64(len(data)), CloudProcessing: true, CreatedAt: stamp, UpdatedAt: stamp,
 	}

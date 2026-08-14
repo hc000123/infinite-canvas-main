@@ -2,7 +2,7 @@
 
 import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { App, Button, Empty, Input, Select } from "antd";
+import { App, Empty, Input, Select, Tooltip } from "antd";
 import { Plus, Search } from "lucide-react";
 
 import { useEffectiveConfig } from "@/stores/use-config-store";
@@ -87,29 +87,33 @@ function CanvasPageContent() {
                     </div>
                     <div className="flex min-w-0 gap-2">
                         <Input allowClear className="min-w-0 flex-1 sm:w-64 sm:flex-none" prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />} value={keyword} placeholder="搜索画布" onChange={(event) => setKeyword(event.target.value)} />
-                        <Button type="primary" className="studio-primary-action shrink-0" icon={<Plus className="size-4" />} disabled={!activeProject} onClick={openCreate}>
-                            新建画布
-                        </Button>
                     </div>
                 </header>
 
                 {loading ? (
                     <section className="studio-panel mt-4 flex min-h-[420px] items-center justify-center text-sm text-[var(--studio-text-muted)]">正在加载画布...</section>
-                ) : visibleCanvases.length ? (
+                ) : visibleCanvases.length || (activeProject && !keyword) ? (
                     <section className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                         {visibleCanvases.map((canvas) => {
                             const projectId = canvasProjectMap.get(canvas.id);
                             return <CanvasProjectCard key={canvas.id} project={canvas} projectTitle={projects.find((project) => project.id === projectId)?.title || "未绑定项目"} />;
                         })}
+                        {activeProject && !keyword ? (
+                            <Tooltip title="新建画布">
+                                <button
+                                    type="button"
+                                    className="studio-panel flex min-h-52 cursor-pointer items-center justify-center text-[var(--studio-text-muted)] transition hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-accent)]"
+                                    onClick={openCreate}
+                                    aria-label="新建画布"
+                                >
+                                    <Plus className="size-7" />
+                                </button>
+                            </Tooltip>
+                        ) : null}
                     </section>
                 ) : (
                     <section className="studio-panel mt-4 flex min-h-[420px] flex-col items-center justify-center px-6 text-center">
                         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={keyword ? "没有匹配的画布" : activeProject ? "当前项目还没有画布" : "还没有画布"} />
-                        {activeProject && !keyword ? (
-                            <Button type="primary" className="studio-primary-action mt-4" onClick={openCreate}>
-                                新建项目画布
-                            </Button>
-                        ) : null}
                     </section>
                 )}
             </div>

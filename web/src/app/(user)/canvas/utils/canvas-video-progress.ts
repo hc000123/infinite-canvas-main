@@ -13,6 +13,8 @@ export type CanvasVideoProgress = {
 const steps = ["创建任务", "排队", "生成", "回填", "完成"];
 
 export function buildCanvasVideoProgress(metadata: CanvasNodeMetadata | undefined, nodeStatus?: CanvasNodeStatus): CanvasVideoProgress {
+    if (metadata?.subtitleErase) return subtitleEraseProgress(metadata.subtitleErase.status, metadata.subtitleErase.progress);
+    if (metadata?.videoUpscale) return videoUpscaleProgress(metadata.videoUpscale.status, metadata.videoUpscale.progress);
     const taskStatus = normalizeVideoTaskStatus(metadata?.taskStatus || metadata?.rawTaskStatus);
     const elapsedSeconds = videoElapsedSeconds(metadata, Date.now(), nodeStatus);
     if (metadata?.content && !metadata.pendingMediaVersion) return progress("succeeded", "完成", 100, 5);
@@ -22,6 +24,24 @@ export function buildCanvasVideoProgress(metadata: CanvasNodeMetadata | undefine
     if (taskStatus === "running") return progress("running", "生成中", runningPercent(elapsedSeconds), 3);
     if (taskStatus === "queued") return progress("queued", "排队中", 24, 2);
     return progress("creating", "创建任务", 8, 1);
+}
+
+function subtitleEraseProgress(status: NonNullable<CanvasNodeMetadata["subtitleErase"]>["status"], percent: number) {
+    if (status === "succeeded") return progress("succeeded", "字幕擦除完成", 100, 5);
+    if (status === "failed") return progress("failed", "字幕擦除失败", percent, 3);
+    if (status === "downloading") return progress("caching", "保存擦除结果", percent, 4);
+    if (status === "processing") return progress("running", "云端字幕擦除中", percent, 3);
+    if (status === "uploading") return progress("queued", "上传原视频", percent, 2);
+    return progress("creating", "准备字幕擦除", percent, 1);
+}
+
+function videoUpscaleProgress(status: NonNullable<CanvasNodeMetadata["videoUpscale"]>["status"], percent: number) {
+    if (status === "succeeded") return progress("succeeded", "超分完成", 100, 5);
+    if (status === "failed") return progress("failed", "超分失败", percent, 3);
+    if (status === "downloading") return progress("caching", "保存结果中", percent, 4);
+    if (status === "processing") return progress("running", "云端增强中", percent, 3);
+    if (status === "uploading") return progress("queued", "上传原视频", percent, 2);
+    return progress("creating", "准备超分", percent, 1);
 }
 
 export function videoElapsedSeconds(metadata: CanvasNodeMetadata | undefined, now: number, nodeStatus?: CanvasNodeStatus) {

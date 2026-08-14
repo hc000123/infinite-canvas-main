@@ -46,6 +46,8 @@ import { useCanvasUiActions } from "../hooks/use-canvas-ui-actions";
 import { useCanvasVideoTaskRecovery } from "../hooks/use-canvas-video-task-recovery";
 import { useCanvasMediaVersionActions } from "../hooks/use-canvas-media-version-actions";
 import { useCanvasImageUpscaleActions } from "../hooks/use-canvas-image-upscale-actions";
+import { useCanvasVideoUpscaleActions } from "../hooks/use-canvas-video-upscale-actions";
+import { useCanvasVideoSubtitleEraseActions } from "../hooks/use-canvas-video-subtitle-erase-actions";
 import { useCanvasViewportGeometry } from "../hooks/use-canvas-viewport-geometry";
 import { useCanvasWorkspaceStores } from "../hooks/use-canvas-workspace-stores";
 import { shouldWriteGeneratedAsset } from "../utils/canvas-generated-asset-writeback";
@@ -261,7 +263,7 @@ function InfiniteCanvasPage() {
         setSelectedConnectionId,
         setContextMenu,
     });
-    const { cleanupCanvasFiles, clearFocusParam, navigateCanvasPage, navigateToProjects, openProjectsHome, showCanvasSuccess, showImageGenerationError, showVideoGenerationWarning } = useCanvasPageCallbacks({
+    const { cleanupCanvasFiles, clearFocusParam, navigateCanvasPage, navigateToProjects, showCanvasSuccess, showImageGenerationError, showVideoGenerationWarning } = useCanvasPageCallbacks({
         canvasId,
         cleanupAssetImages,
         getCleanupHistory,
@@ -689,10 +691,7 @@ function InfiniteCanvasPage() {
         handleUploadRequest,
         deleteSelection,
         deselectCanvas,
-        openEpisodeWorkbench,
         setClearConfirmOpen,
-        setAssetPickerTab,
-        setAssetPickerOpen,
     });
 
     const { copySelectedNodes, pasteCopiedNodes, pasteSystemClipboard, pasteClipboardEvent } = useCanvasClipboardActions({
@@ -761,6 +760,34 @@ function InfiniteCanvasPage() {
 
     const imageUpscale = useCanvasImageUpscaleActions({
         addCanvasNodeToAssets,
+        canvasId,
+        connectionsRef,
+        message,
+        nodes,
+        nodesRef,
+        projectId: workspaceProjectId,
+        setConnections,
+        setNodes,
+        setSelectedConnectionId,
+        setSelectedNodeIds,
+    });
+    const videoUpscale = useCanvasVideoUpscaleActions({
+        addCanvasNodeToAssets,
+        cacheUploadedCanvasMedia,
+        canvasId,
+        connectionsRef,
+        message,
+        nodes,
+        nodesRef,
+        projectId: workspaceProjectId,
+        setConnections,
+        setNodes,
+        setSelectedConnectionId,
+        setSelectedNodeIds,
+    });
+    const videoSubtitleErase = useCanvasVideoSubtitleEraseActions({
+        addCanvasNodeToAssets,
+        cacheUploadedCanvasMedia,
         canvasId,
         connectionsRef,
         message,
@@ -864,9 +891,13 @@ function InfiniteCanvasPage() {
             handleUploadRequest,
             openNodeCapability: canvasCapability.openNodeCapability,
             openImageUpscale: imageUpscale.open,
+            openVideoUpscale: videoUpscale.open,
+            openVideoSubtitleErase: videoSubtitleErase.open,
             openTextEditor,
             refreshNodeVolcengineReview,
             retryImageUpscale: imageUpscale.retry,
+            retryVideoUpscale: videoUpscale.retry,
+            retryVideoSubtitleErase: videoSubtitleErase.retry,
             saveNodeAsset,
             setAngleNodeId,
             setCropNodeId,
@@ -926,10 +957,10 @@ function InfiniteCanvasPage() {
                     capacity={capacity}
                     returnLabel={currentProject?.parentCanvasId ? "返回主画布" : returnTarget.label}
                     onReturnParent={returnFromCanvas}
-                    onHome={openProjectsHome}
                     onCreateProject={createAndOpenCanvas}
                     onOpenChildCanvas={(id) => navigateCanvasPage(`/canvas/${id}`)}
                     onDeleteProject={deleteCurrentProject}
+                    onClearCanvas={toolbarActions.onClear}
                     onSaveProject={saveCurrentProject}
                     onImportImage={() => handleUploadRequest()}
                     onOpenAssets={inspectorPanelActions.openAssetPicker}
@@ -1088,6 +1119,12 @@ function InfiniteCanvasPage() {
                     upscaleNode={imageUpscale.node}
                     upscaleCapabilities={imageUpscale.capabilities}
                     upscaleSubmitting={imageUpscale.submitting}
+                    videoUpscaleNode={videoUpscale.node}
+                    videoUpscaleCapabilities={videoUpscale.capabilities}
+                    videoUpscaleSubmitting={videoUpscale.submitting}
+                    videoSubtitleEraseNode={videoSubtitleErase.node}
+                    videoSubtitleEraseCapabilities={videoSubtitleErase.capabilities}
+                    videoSubtitleEraseSubmitting={videoSubtitleErase.submitting}
                     projectId={workspaceProjectId}
                     projectTitle={workspaceProjectTitle}
                     episodeId={currentProject?.episodeId}
@@ -1108,6 +1145,8 @@ function InfiniteCanvasPage() {
                     onCloseTextEditor={() => setExpandedTextNodeId(null)}
                     onClosePreview={renderActions.closePreview}
                     onCloseUpscale={imageUpscale.close}
+                    onCloseVideoUpscale={videoUpscale.close}
+                    onCloseVideoSubtitleErase={videoSubtitleErase.close}
                     onCloseScriptManager={renderActions.closeScriptManager}
                     onCloseStoryboardManager={renderActions.closeStoryboardManager}
                     onCreateBriefImageConfig={createBriefImageConfigNode}
@@ -1115,6 +1154,8 @@ function InfiniteCanvasPage() {
                     onGenerateAngleNode={(node, params) => void generateAngleNode(node, params)}
                     onImageInputChange={handleImageInputChange}
                     onUpscaleImageNode={imageUpscale.submit}
+                    onUpscaleVideoNode={videoUpscale.submit}
+                    onSubtitleEraseNode={videoSubtitleErase.submit}
                     onOpenStoryboardGroup={renderActions.openStoryboardGroup}
                     onSaveTextNode={handleNodeContentChange}
                 />

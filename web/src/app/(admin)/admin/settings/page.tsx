@@ -9,6 +9,8 @@ import { EditorView } from "@uiw/react-codemirror";
 
 import { modelMatchesAiCapability, type AiModelKind } from "@/lib/ai-model-kind";
 import { ModelChannelWizard } from "./components/model-channel-wizard";
+import { ImageUpscaleSettingsSection } from "./components/image-upscale-settings-section";
+import { VideoUpscaleSettingsSection } from "./components/video-upscale-settings-section";
 import { ProviderPresetModal } from "./components/provider-preset-modal";
 import { sanitizeModelChannelPublication } from "./model-channel-publication";
 import { buildChannelModelSourceGroups, isChannelModelSourceOption } from "./model-channel-source-options";
@@ -18,6 +20,8 @@ import {
     fetchAdminSettings,
     fetchChannelModels,
     saveAdminSettings,
+    testAdminImageUpscale,
+    testAdminVideoUpscale,
     testChannelModel,
     type AdminModelChannel,
     type AdminModelCost,
@@ -62,6 +66,8 @@ const emptySettings: AdminSettings = {
         promptSync: { enabled: false, cron: "*/5 * * * *" },
         auth: {},
         volcengineAsset: { enabled: false, accessKey: "", secretKey: "", accessKeyConfigured: false, secretKeyConfigured: false, projectName: "default", region: "cn-beijing", assetGroupId: "", publicAssetBaseUrl: "" },
+        imageUpscale: { managed: false, enabled: false, provider: "aliyun", accessKeyId: "", accessKeySecret: "", securityToken: "", accessKeyIdConfigured: false, accessKeySecretConfigured: false, securityTokenConfigured: false },
+        videoUpscale: { enabled: false, subtitleEraseEnabled: false, provider: "volcengine-las", apiKey: "", apiKeyConfigured: false, outputTosPath: "", outputQualityMode: "compatible", preserveAudio: true, maxTarget: "2k" },
     },
 };
 const emptyChannel: AdminModelChannel = {
@@ -116,6 +122,8 @@ export default function AdminSettingsPage() {
     const [testResults, setTestResults] = useState<Record<string, { status: "success" | "error"; duration?: string; message: string }>>({});
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [isTestingImageUpscale, setIsTestingImageUpscale] = useState(false);
+    const [isTestingVideoUpscale, setIsTestingVideoUpscale] = useState(false);
     const [isDeletingChannel, setIsDeletingChannel] = useState(false);
     const [isEnterpriseVideoFocus, setIsEnterpriseVideoFocus] = useState(false);
     const [modelCosts, setModelCosts] = useState<AdminModelCost[]>([]);
@@ -124,6 +132,8 @@ export default function AdminSettingsPage() {
     const publicModels = useMemo(() => watchedPublicModels || [], [watchedPublicModels]);
     const publicModelChannel = Form.useWatch(["public", "modelChannel"], { form, preserve: true }) || emptySettings.public.modelChannel;
     const privateVolcengineAsset = Form.useWatch(["private", "volcengineAsset"], form) || emptySettings.private.volcengineAsset;
+    const privateImageUpscale = Form.useWatch(["private", "imageUpscale"], form) || emptySettings.private.imageUpscale;
+    const privateVideoUpscale = Form.useWatch(["private", "videoUpscale"], form) || emptySettings.private.videoUpscale;
     const publicImageModelOptions = useMemo(() => buildCapabilityModelOptions(publicModels, channels, "image"), [channels, publicModels]);
     const publicVideoModelOptions = useMemo(() => buildCapabilityModelOptions(publicModels, channels, "video"), [channels, publicModels]);
     const publicTextModels = useMemo(() => filterModelsByCapability(publicModels, channels, "text"), [channels, publicModels]);
@@ -135,7 +145,7 @@ export default function AdminSettingsPage() {
     const activeJsonText = jsonText[activeTab];
     const jsonError = activeMode === "json" ? getJsonError(activeJsonText) : "";
     const publicConfigWarnings = useMemo(() => buildPublicConfigWarnings(publicModelChannel, channels), [channels, publicModelChannel]);
-    const privateConfigWarnings = useMemo(() => buildPrivateConfigWarnings(channels, privateVolcengineAsset), [channels, privateVolcengineAsset]);
+    const privateConfigWarnings = useMemo(() => buildPrivateConfigWarnings(channels, privateVolcengineAsset, privateImageUpscale, privateVideoUpscale), [channels, privateImageUpscale, privateVideoUpscale, privateVolcengineAsset]);
     const activeWarnings = activeTab === "public" ? publicConfigWarnings : privateConfigWarnings;
     const isSettingsBusy = isLoading || isSaving || isApplyingProviderPreset || isSavingChannelWizard || isDeletingChannel;
 
@@ -204,6 +214,34 @@ export default function AdminSettingsPage() {
             }, setIsSaving, { kind: "snapshot" });
         } catch (error) {
             message.error(error instanceof Error ? error.message : "保存失败");
+        }
+    };
+
+    const testImageUpscale = async () => {
+        if (!token) return;
+        const setting = normalizePrivateImageUpscaleSetting(form.getFieldValue(["private", "imageUpscale"]));
+        setIsTestingImageUpscale(true);
+        try {
+            const result = await testAdminImageUpscale(token, { ...setting, managed: true });
+            message.success(result.message);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "图片超分连接测试失败");
+        } finally {
+            setIsTestingImageUpscale(false);
+        }
+    };
+
+    const testVideoUpscale = async () => {
+        if (!token) return;
+        const setting = normalizePrivateVideoUpscaleSetting(form.getFieldValue(["private", "videoUpscale"]));
+        setIsTestingVideoUpscale(true);
+        try {
+            const result = await testAdminVideoUpscale(token, setting);
+            message.success(result.message);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "视频超分连接测试失败");
+        } finally {
+            setIsTestingVideoUpscale(false);
         }
     };
 
@@ -629,6 +667,8 @@ export default function AdminSettingsPage() {
                     ) : activeMode === "visual" ? (
                         <Form form={form} layout="vertical" initialValues={emptySettings} requiredMark={false}>
                             <Flex vertical gap={12}>
+                                <ImageUpscaleSettingsSection form={form} setting={privateImageUpscale} testing={isTestingImageUpscale} onTest={testImageUpscale} />
+                                <VideoUpscaleSettingsSection setting={privateVideoUpscale} credentials={privateVolcengineAsset} testing={isTestingVideoUpscale} onTest={testVideoUpscale} />
                                 <Collapse
                                     defaultActiveKey={[]}
                                     items={[{
@@ -991,6 +1031,8 @@ function normalizePrivateSetting(setting: Partial<AdminSettings["private"]> = {}
         },
         auth: {},
         volcengineAsset: normalizePrivateVolcengineAssetSetting(setting.volcengineAsset),
+        imageUpscale: normalizePrivateImageUpscaleSetting(setting.imageUpscale),
+        videoUpscale: normalizePrivateVideoUpscaleSetting(setting.videoUpscale),
     };
 }
 
@@ -1011,6 +1053,38 @@ function normalizePrivateVolcengineAssetSetting(setting: Partial<AdminSettings["
 function isVolcengineAssetKeyConfigured(setting: Partial<AdminSettings["private"]["volcengineAsset"]>, key: "accessKey" | "secretKey") {
     if (key === "accessKey") return setting.accessKeyConfigured === true || Boolean(setting.accessKey);
     return setting.secretKeyConfigured === true || Boolean(setting.secretKey);
+}
+
+function normalizePrivateImageUpscaleSetting(setting: Partial<AdminSettings["private"]["imageUpscale"]> = {}): AdminSettings["private"]["imageUpscale"] {
+    return {
+        managed: setting.managed === true,
+        enabled: setting.enabled === true,
+        provider: "aliyun",
+        accessKeyId: setting.accessKeyId || "",
+        accessKeySecret: setting.accessKeySecret || "",
+        securityToken: setting.securityToken || "",
+        accessKeyIdConfigured: setting.accessKeyIdConfigured === true,
+        accessKeySecretConfigured: setting.accessKeySecretConfigured === true,
+        securityTokenConfigured: setting.securityTokenConfigured === true,
+    };
+}
+
+function isImageUpscaleKeyConfigured(setting: Partial<AdminSettings["private"]["imageUpscale"]>, key: "accessKeyId" | "accessKeySecret") {
+    return setting[`${key}Configured`] === true || Boolean(setting[key]);
+}
+
+function normalizePrivateVideoUpscaleSetting(setting: Partial<AdminSettings["private"]["videoUpscale"]> = {}): AdminSettings["private"]["videoUpscale"] {
+    return {
+        enabled: setting.enabled === true,
+        subtitleEraseEnabled: setting.subtitleEraseEnabled === true,
+        provider: "volcengine-las",
+        apiKey: setting.apiKey || "",
+        apiKeyConfigured: setting.apiKeyConfigured === true,
+        outputTosPath: setting.outputTosPath?.trim() || "",
+        outputQualityMode: setting.outputQualityMode === "balanced" || setting.outputQualityMode === "master" ? setting.outputQualityMode : "compatible",
+        preserveAudio: true,
+        maxTarget: "2k",
+    };
 }
 
 function normalizeChannel(item: Partial<AdminModelChannel> = {}): AdminModelChannel {
@@ -1162,6 +1236,7 @@ function mergePrivateSecrets(input: AdminSettings, saved: AdminSettings): AdminS
                 accessKey: input.private.volcengineAsset.accessKey || saved.private.volcengineAsset.accessKey,
                 secretKey: input.private.volcengineAsset.secretKey || saved.private.volcengineAsset.secretKey,
             },
+            imageUpscale: saved.private.imageUpscale,
         },
     };
 }
@@ -1218,7 +1293,7 @@ function buildPublicConfigWarnings(modelChannel: AdminSettings["public"]["modelC
     return warnings;
 }
 
-function buildPrivateConfigWarnings(channels: AdminModelChannel[], volcengineAsset: AdminSettings["private"]["volcengineAsset"]) {
+function buildPrivateConfigWarnings(channels: AdminModelChannel[], volcengineAsset: AdminSettings["private"]["volcengineAsset"], imageUpscale: AdminSettings["private"]["imageUpscale"], videoUpscale: AdminSettings["private"]["videoUpscale"]) {
     const warnings: string[] = [];
     if (!channels.length) {
         warnings.push("还没有模型渠道。请点击“新增渠道”，填写接口地址、API Key，并配置至少一个模型。");
@@ -1238,6 +1313,17 @@ function buildPrivateConfigWarnings(channels: AdminModelChannel[], volcengineAss
         if (!isVolcengineAssetKeyConfigured(volcengineAsset, "secretKey")) warnings.push("火山素材审核已开启，但 Secret Key 未配置。请在“火山素材审核”卡片填写密钥。");
         if (!volcengineAsset.publicAssetBaseUrl.trim()) warnings.push("火山素材审核已开启，但公网素材访问地址未配置。请填写 TOS 或公网素材地址。");
     }
+    if (imageUpscale.enabled) {
+        if (!isImageUpscaleKeyConfigured(imageUpscale, "accessKeyId")) warnings.push("图片超分已开启，但 AccessKey ID 未配置。请在“图片超分”卡片填写访问密钥。");
+        if (!isImageUpscaleKeyConfigured(imageUpscale, "accessKeySecret")) warnings.push("图片超分已开启，但 AccessKey Secret 未配置。请在“图片超分”卡片填写密钥。");
+    }
+    if (videoUpscale.enabled) {
+        if (!isVolcengineAssetKeyConfigured(volcengineAsset, "accessKey")) warnings.push("视频超分已开启，但共享 Access Key 未配置。请在“火山素材审核”卡片填写访问密钥。");
+        if (!isVolcengineAssetKeyConfigured(volcengineAsset, "secretKey")) warnings.push("视频超分已开启，但共享 Secret Key 未配置。请在“火山素材审核”卡片填写密钥。");
+        if (!videoUpscale.apiKeyConfigured && !videoUpscale.apiKey.trim()) warnings.push("视频超分已开启，但 LAS API Key 未配置。");
+        if (!videoUpscale.outputTosPath.trim()) warnings.push("视频超分已开启，但北京地域 TOS 输出目录未配置。");
+    }
+    if (videoUpscale.subtitleEraseEnabled && !videoUpscale.enabled) warnings.push("字幕擦除已开启，但视频 LAS 处理尚未启用。");
     return warnings;
 }
 

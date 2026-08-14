@@ -25,6 +25,10 @@ test("regular episode canvases return to the project detail page", () => {
     assert.deepEqual(target, { href: "/projects/project-1", label: "返回项目详情" });
 });
 
+test("unbound canvases return to the canvas list", () => {
+    assert.deepEqual(canvasPageReturnTargetForProject(), { href: "/canvas", label: "返回画布列表" });
+});
+
 test("video workflow episode can fall back to the canvas episode title", () => {
     const episode = videoWorkflowEpisodeFromCanvasProject({
         episodeId: "video-workflow:",

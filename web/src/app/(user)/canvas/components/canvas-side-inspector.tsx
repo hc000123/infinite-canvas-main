@@ -195,6 +195,7 @@ export function CanvasSideInspector({
             onCrop={nodeToolActions.onCrop}
             onAngle={nodeToolActions.onAngle}
             onUpscale={nodeToolActions.onUpscale}
+            onSubtitleErase={nodeToolActions.onSubtitleErase}
             onViewImage={nodeToolActions.onViewImage}
         />
     );
