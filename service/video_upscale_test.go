@@ -48,6 +48,70 @@ func TestCreateVideoUpscaleJobValidatesMetadataAndPersistsInput(t *testing.T) {
 	}
 }
 
+func TestTencentMPSTemplateID(t *testing.T) {
+	cases := []struct {
+		scene, target string
+		want          int64
+	}{
+		{"comic", "1080p", 327004}, {"comic", "2k", 327006},
+		{"live", "1080p", 327003}, {"live", "2k", 327005},
+		{"restore", "1080p", 327022}, {"restore", "2k", 327023},
+	}
+	for _, item := range cases {
+		got, err := tencentMPSTemplateID(item.scene, item.target)
+		if err != nil || got != item.want {
+			t.Fatalf("scene=%s target=%s got=%d err=%v want=%d", item.scene, item.target, got, err, item.want)
+		}
+	}
+	for _, item := range [][2]string{{"unknown", "1080p"}, {"comic", "4k"}} {
+		if _, err := tencentMPSTemplateID(item[0], item[1]); err == nil {
+			t.Fatalf("scene=%s target=%s should fail", item[0], item[1])
+		}
+	}
+}
+
+func TestCreateTencentMPSVideoUpscaleJobFreezesProviderOptions(t *testing.T) {
+	setupVideoUpscaleTest(t)
+	settings, err := repository.GetSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.Private.TencentMPSVideo = model.TencentMPSVideoSetting{
+		Enabled: true, SecretID: "secret-id", SecretKey: "secret-key", COSBucket: "media-1300000000", COSRegion: "ap-shanghai", InputPrefix: "custom/input/", OutputPrefix: "custom/output/", DefaultScene: "comic",
+	}
+	if _, err = repository.SaveSettings(settings, now()); err != nil {
+		t.Fatal(err)
+	}
+	videoUpscaleMetadataProbe = func(context.Context, string) (videoUpscaleSourceMetadata, error) {
+		return videoUpscaleSourceMetadata{Width: 1280, Height: 720, DurationSeconds: 10, FrameRate: 24}, nil
+	}
+	job, err := CreateVideoUpscaleJob(context.Background(), "user-a", strings.NewReader("video"), VideoUpscaleCreateInput{
+		Filename: "source.mp4", ContentType: "video/mp4", Provider: "tencent-mps", EnhancementScene: "comic", Target: "1080p",
+		OutputQualityMode: "master", PreserveAudioSet: true, FrameInterpolationMode: "double", InterpolationMode: "medium",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.Provider != "tencent-mps" || job.EnhancementScene != "comic" || job.TencentTemplateID != 327004 || job.CloudBucket != "media-1300000000" || job.CloudRegion != "ap-shanghai" || job.CloudInputPrefix != "custom/input/" || job.CloudOutputPrefix != "custom/output/" {
+		t.Fatalf("Tencent snapshot=%#v", job)
+	}
+	if job.OutputQualityMode != "" || job.FrameInterpolationMode != "keep" || job.InterpolationMode != "" || !job.PreserveAudio || job.CostEstimateAvailable || job.EstimatedTotalCostCNY != 0 {
+		t.Fatalf("Tencent provider-specific options=%#v", job)
+	}
+}
+
+func TestCreateVideoUpscaleJobRejectsUnknownProviderBeforePersisting(t *testing.T) {
+	setupVideoUpscaleTest(t)
+	started := 0
+	videoUpscaleJobStarter = func(string) { started++ }
+	_, err := CreateVideoUpscaleJob(context.Background(), "user-a", strings.NewReader("video"), VideoUpscaleCreateInput{
+		Filename: "source.mp4", ContentType: "video/mp4", Provider: "unknown", Target: "1080p",
+	})
+	if err == nil || !strings.Contains(err.Error(), "渠道") || started != 0 {
+		t.Fatalf("err=%v started=%d", err, started)
+	}
+}
+
 func TestCreateVideoUpscaleJobAllowsUnknownDurationAndFrameRate(t *testing.T) {
 	setupVideoUpscaleTest(t)
 	videoUpscaleMetadataProbe = func(context.Context, string) (videoUpscaleSourceMetadata, error) {

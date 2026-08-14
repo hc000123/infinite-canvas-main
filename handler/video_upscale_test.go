@@ -36,9 +36,9 @@ func TestVideoUpscaleCapabilitiesHidePrivateConfiguration(t *testing.T) {
 
 func TestVideoUpscaleCreateInputUsesInterpolationModeFormField(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/video-upscale/jobs", strings.NewReader(""))
-	request.Form = map[string][]string{"interpolationMode": {"medium"}}
+	request.Form = map[string][]string{"interpolationMode": {"medium"}, "provider": {"tencent-mps"}, "enhancementScene": {"comic"}}
 	input := videoUpscaleCreateInputFromRequest(request)
-	if input.InterpolationMode != "medium" {
+	if input.InterpolationMode != "medium" || input.Provider != "tencent-mps" || input.EnhancementScene != "comic" {
 		t.Fatalf("input=%#v", input)
 	}
 }

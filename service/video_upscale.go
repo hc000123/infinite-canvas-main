@@ -23,6 +23,8 @@ var videoUpscaleMaxInputBytes int64 = 500 * 1024 * 1024
 type VideoUpscaleCreateInput struct {
 	Filename               string
 	ContentType            string
+	Provider               string
+	EnhancementScene       string
 	Target                 string
 	ProjectID              string
 	CanvasID               string
@@ -50,7 +52,21 @@ func CreateVideoUpscaleJob(ctx context.Context, userID string, reader io.Reader,
 	if userID == "" {
 		return model.VideoUpscaleJob{}, safeMessageError{message: "请先登录"}
 	}
-	setting, err := currentVideoUpscaleSetting()
+	provider := strings.ToLower(strings.TrimSpace(input.Provider))
+	if provider == "" {
+		provider = "volcengine-las"
+	}
+	var setting model.VideoUpscaleSetting
+	var tencentSetting model.TencentMPSVideoSetting
+	var err error
+	switch provider {
+	case "volcengine-las":
+		setting, err = currentVideoUpscaleSetting()
+	case "tencent-mps":
+		tencentSetting, err = currentTencentMPSVideoSetting()
+	default:
+		return model.VideoUpscaleJob{}, safeMessageError{message: "视频增强渠道不受支持"}
+	}
 	if err != nil {
 		return model.VideoUpscaleJob{}, err
 	}
@@ -62,33 +78,36 @@ func CreateVideoUpscaleJob(ctx context.Context, userID string, reader io.Reader,
 	if target != "1080p" && target != "2k" {
 		return model.VideoUpscaleJob{}, safeMessageError{message: "视频超分只支持 1080p 或 2K"}
 	}
-	qualityMode := strings.ToLower(strings.TrimSpace(input.OutputQualityMode))
-	if qualityMode == "" {
-		qualityMode = setting.OutputQualityMode
-	}
-	if qualityMode != "compatible" && qualityMode != "balanced" && qualityMode != "master" {
-		return model.VideoUpscaleJob{}, safeMessageError{message: "输出质量模式不受支持"}
-	}
-	frameInterpolationMode := strings.ToLower(strings.TrimSpace(input.FrameInterpolationMode))
-	if frameInterpolationMode == "" {
-		frameInterpolationMode = "keep"
-	}
-	if frameInterpolationMode != "keep" && frameInterpolationMode != "to25" && frameInterpolationMode != "to30" && frameInterpolationMode != "double" && frameInterpolationMode != "to60" {
-		return model.VideoUpscaleJob{}, safeMessageError{message: "插帧帧率模式不受支持"}
-	}
-	interpolationMode := strings.ToLower(strings.TrimSpace(input.InterpolationMode))
-	if frameInterpolationMode != "keep" {
-		if interpolationMode == "" {
-			interpolationMode = "fast"
+	qualityMode, frameInterpolationMode, interpolationMode := "", "keep", ""
+	if provider == "volcengine-las" {
+		qualityMode = strings.ToLower(strings.TrimSpace(input.OutputQualityMode))
+		if qualityMode == "" {
+			qualityMode = setting.OutputQualityMode
 		}
-		if interpolationMode != "ultra-fast" && interpolationMode != "fast" && interpolationMode != "medium" {
-			return model.VideoUpscaleJob{}, safeMessageError{message: "插帧模式不受支持"}
+		if qualityMode != "compatible" && qualityMode != "balanced" && qualityMode != "master" {
+			return model.VideoUpscaleJob{}, safeMessageError{message: "输出质量模式不受支持"}
 		}
-	} else {
-		interpolationMode = ""
+		frameInterpolationMode = strings.ToLower(strings.TrimSpace(input.FrameInterpolationMode))
+		if frameInterpolationMode == "" {
+			frameInterpolationMode = "keep"
+		}
+		if frameInterpolationMode != "keep" && frameInterpolationMode != "to25" && frameInterpolationMode != "to30" && frameInterpolationMode != "double" && frameInterpolationMode != "to60" {
+			return model.VideoUpscaleJob{}, safeMessageError{message: "插帧帧率模式不受支持"}
+		}
+		interpolationMode = strings.ToLower(strings.TrimSpace(input.InterpolationMode))
+		if frameInterpolationMode != "keep" {
+			if interpolationMode == "" {
+				interpolationMode = "fast"
+			}
+			if interpolationMode != "ultra-fast" && interpolationMode != "fast" && interpolationMode != "medium" {
+				return model.VideoUpscaleJob{}, safeMessageError{message: "插帧模式不受支持"}
+			}
+		} else {
+			interpolationMode = ""
+		}
 	}
 	preserveAudio := true
-	if input.PreserveAudioSet {
+	if provider == "volcengine-las" && input.PreserveAudioSet {
 		preserveAudio = input.PreserveAudio
 	}
 	if reader == nil {
@@ -100,8 +119,22 @@ func CreateVideoUpscaleJob(ctx context.Context, userID string, reader io.Reader,
 	stamp := now()
 	job := model.VideoUpscaleJob{
 		ID: newID("video-upscale"), UserID: userID, ProjectID: strings.TrimSpace(input.ProjectID), CanvasID: strings.TrimSpace(input.CanvasID), SourceNodeID: strings.TrimSpace(input.SourceNodeID), SourceAssetID: strings.TrimSpace(input.SourceAssetID),
-		Provider: setting.Provider, OutputTOSPath: setting.OutputTOSPath, Target: target, OutputQualityMode: qualityMode, PreserveAudio: preserveAudio, FrameInterpolationMode: frameInterpolationMode, InterpolationMode: interpolationMode, ProcessingStage: "queued", PricingRuleVersion: videoUpscalePricingRuleVersion, InterpolationPricingRuleVersion: videoInterpolationPricingRuleVersion,
+		Provider: provider, OutputTOSPath: setting.OutputTOSPath, Target: target, OutputQualityMode: qualityMode, PreserveAudio: preserveAudio, FrameInterpolationMode: frameInterpolationMode, InterpolationMode: interpolationMode, ProcessingStage: "queued",
 		Status: model.VideoUpscaleJobStatusQueued, Progress: 5, Attempt: 1, InputMIMEType: mimeType, CloudProcessing: true, CreatedAt: stamp, UpdatedAt: stamp,
+	}
+	if provider == "volcengine-las" {
+		job.PricingRuleVersion, job.InterpolationPricingRuleVersion = videoUpscalePricingRuleVersion, videoInterpolationPricingRuleVersion
+	} else {
+		job.EnhancementScene = strings.ToLower(strings.TrimSpace(input.EnhancementScene))
+		if job.EnhancementScene == "" {
+			job.EnhancementScene = tencentSetting.DefaultScene
+		}
+		job.TencentTemplateID, err = tencentMPSTemplateID(job.EnhancementScene, target)
+		if err != nil {
+			return model.VideoUpscaleJob{}, err
+		}
+		job.CloudBucket, job.CloudRegion = tencentSetting.COSBucket, tencentSetting.COSRegion
+		job.CloudInputPrefix, job.CloudOutputPrefix = tencentSetting.InputPrefix, tencentSetting.OutputPrefix
 	}
 	job.InputPath, job.InputBytes, err = persistVideoUpscaleInput(job, reader, ext)
 	if err != nil {
@@ -122,10 +155,12 @@ func CreateVideoUpscaleJob(ctx context.Context, userID string, reader io.Reader,
 	if err != nil {
 		return model.VideoUpscaleJob{}, err
 	}
-	if estimate, ok := estimateVideoUpscaleCost(job.InputDurationSeconds, job.InputFrameRate, job.OutputWidth, job.OutputHeight); ok {
-		job.EstimatedBillableMinutes = estimate.BillableMinutes
-		job.EstimatedCostCNY = estimate.CostCNY
-		job.CostEstimateAvailable = true
+	if provider == "volcengine-las" {
+		if estimate, ok := estimateVideoUpscaleCost(job.InputDurationSeconds, job.InputFrameRate, job.OutputWidth, job.OutputHeight); ok {
+			job.EstimatedBillableMinutes = estimate.BillableMinutes
+			job.EstimatedCostCNY = estimate.CostCNY
+			job.CostEstimateAvailable = true
+		}
 	}
 	if frameInterpolationMode != "keep" {
 		job.InterpolationTargetFrameRate, err = videoInterpolationTargetFPS(job.InputFrameRate, frameInterpolationMode)
@@ -332,6 +367,33 @@ func currentVideoUpscaleSetting() (model.VideoUpscaleSetting, error) {
 		return model.VideoUpscaleSetting{}, safeMessageError{message: "服务端视频超分配置不完整"}
 	}
 	return setting, nil
+}
+
+func currentTencentMPSVideoSetting() (model.TencentMPSVideoSetting, error) {
+	settings, err := repository.GetSettings()
+	if err != nil {
+		return model.TencentMPSVideoSetting{}, err
+	}
+	setting := normalizeSettings(settings).Private.TencentMPSVideo
+	if !setting.Enabled {
+		return model.TencentMPSVideoSetting{}, safeMessageError{message: "服务端尚未启用腾讯 MPS 视频增强"}
+	}
+	if setting.SecretID == "" || setting.SecretKey == "" || setting.COSBucket == "" || setting.COSRegion == "" {
+		return model.TencentMPSVideoSetting{}, safeMessageError{message: "服务端腾讯 MPS 视频增强配置不完整"}
+	}
+	return setting, nil
+}
+
+func tencentMPSTemplateID(scene, target string) (int64, error) {
+	templates := map[string]map[string]int64{
+		"comic":   {"1080p": 327004, "2k": 327006},
+		"live":    {"1080p": 327003, "2k": 327005},
+		"restore": {"1080p": 327022, "2k": 327023},
+	}
+	if templateID := templates[strings.ToLower(strings.TrimSpace(scene))][strings.ToLower(strings.TrimSpace(target))]; templateID != 0 {
+		return templateID, nil
+	}
+	return 0, safeMessageError{message: "腾讯 MPS 增强场景或目标清晰度不受支持"}
 }
 
 func videoUpscaleInputFormat(filename, contentType string) (string, string, error) {

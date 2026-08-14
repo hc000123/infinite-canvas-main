@@ -51,7 +51,7 @@ func CreateVideoUpscaleJob(w http.ResponseWriter, r *http.Request) {
 
 func videoUpscaleCreateInputFromRequest(r *http.Request) service.VideoUpscaleCreateInput {
 	return service.VideoUpscaleCreateInput{
-		Target: r.FormValue("target"), ProjectID: r.FormValue("projectId"), CanvasID: r.FormValue("canvasId"), SourceNodeID: r.FormValue("sourceNodeId"), SourceAssetID: r.FormValue("sourceAssetId"), OutputQualityMode: r.FormValue("outputQualityMode"), FrameInterpolationMode: r.FormValue("frameInterpolationMode"), InterpolationMode: r.FormValue("interpolationMode"),
+		Provider: r.FormValue("provider"), EnhancementScene: r.FormValue("enhancementScene"), Target: r.FormValue("target"), ProjectID: r.FormValue("projectId"), CanvasID: r.FormValue("canvasId"), SourceNodeID: r.FormValue("sourceNodeId"), SourceAssetID: r.FormValue("sourceAssetId"), OutputQualityMode: r.FormValue("outputQualityMode"), FrameInterpolationMode: r.FormValue("frameInterpolationMode"), InterpolationMode: r.FormValue("interpolationMode"),
 	}
 }
 

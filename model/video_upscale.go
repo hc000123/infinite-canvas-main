@@ -19,6 +19,13 @@ type VideoUpscaleJob struct {
 	SourceNodeID                          string                `json:"sourceNodeId"`
 	SourceAssetID                         string                `json:"sourceAssetId"`
 	Provider                              string                `json:"provider"`
+	EnhancementScene                      string                `json:"enhancementScene"`
+	TencentTemplateID                     int64                 `json:"tencentTemplateId"`
+	CloudBucket                           string                `json:"-"`
+	CloudRegion                           string                `json:"-"`
+	CloudInputPrefix                      string                `json:"-"`
+	CloudOutputPrefix                     string                `json:"-"`
+	TencentOutputObject                   string                `json:"-" gorm:"type:text"`
 	InputTOSURL                           string                `json:"-" gorm:"type:text"`
 	OutputTOSPath                         string                `json:"-" gorm:"type:text"`
 	RunID                                 string                `json:"runId" gorm:"index"`
