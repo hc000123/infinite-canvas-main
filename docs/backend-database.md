@@ -78,15 +78,17 @@
 | `result_url / result_mime_type / result_bytes / output_width / output_height` | 已下载并持久化的结果地址、格式、大小和输出尺寸。 |
 | `cloud_processing / created_at / started_at / completed_at / updated_at` | 云端处理标记与任务时间线。 |
 
-### 画布视频超分任务
+### 画布视频增强任务
 
-`video_upscale_jobs` 保存登录用户发起的火山 LAS 视频超分与可选智能插帧任务，用于 TOS 上传、两段 LAS 异步处理、结果下载、失败重试和服务重启恢复。任务复用系统设置中的火山 TOS AK/SK，LAS API Key 只保存在私有系统设置中；任务表不保存密钥或签名请求信息。
+`video_upscale_jobs` 保存登录用户发起的火山 LAS 或腾讯 MPS 视频增强任务，用于云存储上传、异步处理、结果下载、失败重试和服务重启恢复。火山渠道可继续串联 LAS 智能插帧；腾讯渠道通过 COS 和 MPS 处理，保持源帧率与音频。任务表只冻结渠道和执行参数，不保存密钥或签名请求信息。
 
 | 字段组 | 说明 |
 | ---- | ---- |
 | `id / user_id / project_id / canvas_id / source_node_id / source_asset_id` | 任务身份、用户所有权和画布来源坐标；查询接口按 `user_id` 隔离。 |
-| `provider / input_tos_url / output_tos_path / run_id / interpolation_run_id / provider_request_id` | 服务商、私有 TOS 输入与输出路径、超分与插帧两个 LAS Task ID 和安全请求追踪；TOS 路径不出现在 JSON 响应中。 |
-| `target / output_quality_mode / preserve_audio / frame_interpolation_mode / interpolation_mode / interpolation_target_frame_rate` | 固化本次任务的 `1080p / 2k`、LAS 输出质量、音频保留、`keep / to25 / to30 / double / to60` 帧率选择、插帧处理模式与目标帧率。 |
+| `provider / enhancement_scene / tencent_template_id` | 固化本次任务的 `volcengine-las / tencent-mps` 渠道；腾讯任务额外固化 `comic / live / restore` 场景及对应 MPS 模板 ID。 |
+| `cloud_bucket / cloud_region / cloud_input_prefix / cloud_output_prefix / tencent_output_object` | 腾讯任务创建时冻结的 COS 存储位置与输出对象；这些私有路径不出现在 JSON 响应中。 |
+| `input_tos_url / output_tos_path / run_id / interpolation_run_id / provider_request_id` | 云端输入输出位置、当前增强 Task ID、可选 LAS 插帧 Task ID 和安全请求追踪；私有路径不出现在 JSON 响应中。 |
+| `target / output_quality_mode / preserve_audio / frame_interpolation_mode / interpolation_mode / interpolation_target_frame_rate` | 固化本次任务的 `1080p / 2k` 与后处理参数。LAS 可使用输出质量、音频和插帧选项；腾讯 MPS 强制保持源帧率和音频，不执行 LAS 插帧。 |
 | `status / processing_stage / progress / attempt / error_code / error_message` | 对外生命周期、内部 `upscale_* / interpolation_*` 持久阶段、进度、重试次数和安全错误信息；提交中断且未取得 Task ID 时记录 `submission_uncertain`，不得自动重提付费任务。 |
 | `input_width / input_height / input_duration_seconds / input_frame_rate / input_mime_type / input_bytes / input_path` | 输入视频规格、ffprobe 识别帧率与服务端私有文件路径；`input_path` 不出现在 JSON 响应中。 |
 | `output_width / output_height / upscale_result_tos_url / interpolation_result_tos_url / result_source_url / result_url / result_mime_type / result_bytes` | 等比目标尺寸、两段服务端私有 TOS 结果、最终上游结果地址、公开结果相对地址和输出文件信息；私有 TOS / 上游地址不出现在 JSON 响应中。 |
@@ -359,6 +361,10 @@ Workflow Adapter 不新增数据库表，也不调用模型。Adapter 定义保�
 | `promptSync`      | object   | 历史 GitHub 远程提示词定时同步配置；当前没有内置远程提示词源 |
 | `auth`            | object   | 私有登录配置，当前不包含第三方登录配置                       |
 | `volcengineAsset` | object   | 火山素材审核私有配置                                         |
+| `videoUpscale`    | object   | 火山 LAS 视频超分、插帧和字幕擦除私有配置                  |
+| `tencentMpsVideo` | object   | 腾讯 MPS 视频增强与 COS 私有配置                              |
+
+`tencentMpsVideo` 保存 `enabled`、脱敏保留的 `secretId / secretKey`、`cosBucket / cosRegion`、`inputPrefix / outputPrefix` 和 `defaultScene`。前缀默认为 `video-upscale/input/` 与 `video-upscale/output/`，默认场景为 `comic`；公开能力接口只返回已启用渠道、目标清晰度、场景和计费提示，不返回密钥或 COS 路径。
 
 `channels` 每项字段：
 
