@@ -147,6 +147,19 @@ type VideoUpscaleSetting struct {
 	MaxTarget            string `json:"maxTarget"`
 }
 
+type TencentMPSVideoSetting struct {
+	Enabled             bool   `json:"enabled"`
+	SecretID            string `json:"secretId"`
+	SecretKey           string `json:"secretKey"`
+	SecretIDConfigured  bool   `json:"secretIdConfigured"`
+	SecretKeyConfigured bool   `json:"secretKeyConfigured"`
+	COSBucket           string `json:"cosBucket"`
+	COSRegion           string `json:"cosRegion"`
+	InputPrefix         string `json:"inputPrefix"`
+	OutputPrefix        string `json:"outputPrefix"`
+	DefaultScene        string `json:"defaultScene"`
+}
+
 // PrivateSetting 私有配置。
 type PrivateSetting struct {
 	Channels        []ModelChannel         `json:"channels"`
@@ -155,6 +168,7 @@ type PrivateSetting struct {
 	VolcengineAsset VolcengineAssetSetting `json:"volcengineAsset"`
 	ImageUpscale    ImageUpscaleSetting    `json:"imageUpscale"`
 	VideoUpscale    VideoUpscaleSetting    `json:"videoUpscale"`
+	TencentMPSVideo TencentMPSVideoSetting `json:"tencentMpsVideo"`
 }
 
 // PromptSyncSetting 提示词定时同步配置。

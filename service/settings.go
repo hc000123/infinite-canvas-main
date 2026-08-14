@@ -57,6 +57,7 @@ func SaveSettings(settings model.Settings) (model.Settings, error) {
 	keepPrivateVolcengineAssetSecrets(&settings, normalizedSaved)
 	keepPrivateImageUpscaleSecrets(&settings, normalizedSaved)
 	keepPrivateVideoUpscaleSecrets(&settings, normalizedSaved)
+	keepPrivateTencentMPSVideoSecrets(&settings, normalizedSaved)
 	settings.Private.ImageUpscale.Managed = true
 	settings = normalizeSettings(settings)
 	if err := validateModelProtocolConflicts(settings.Private.Channels); err != nil {
@@ -680,6 +681,7 @@ func normalizePrivateSetting(setting model.PrivateSetting) model.PrivateSetting 
 	setting.VolcengineAsset = normalizeVolcengineAssetSetting(setting.VolcengineAsset)
 	setting.ImageUpscale = normalizeImageUpscaleSetting(setting.ImageUpscale)
 	setting.VideoUpscale = normalizeVideoUpscaleSetting(setting.VideoUpscale)
+	setting.TencentMPSVideo = normalizeTencentMPSVideoSetting(setting.TencentMPSVideo)
 	for i := range setting.Channels {
 		setting.Channels[i] = normalizeModelChannel(setting.Channels[i])
 	}
@@ -724,6 +726,10 @@ func hidePrivateAPIKeys(settings model.Settings) model.Settings {
 	settings.Private.ImageUpscale.SecurityToken = ""
 	settings.Private.VideoUpscale.APIKeyConfigured = strings.TrimSpace(settings.Private.VideoUpscale.APIKey) != ""
 	settings.Private.VideoUpscale.APIKey = ""
+	settings.Private.TencentMPSVideo.SecretIDConfigured = strings.TrimSpace(settings.Private.TencentMPSVideo.SecretID) != ""
+	settings.Private.TencentMPSVideo.SecretKeyConfigured = strings.TrimSpace(settings.Private.TencentMPSVideo.SecretKey) != ""
+	settings.Private.TencentMPSVideo.SecretID = ""
+	settings.Private.TencentMPSVideo.SecretKey = ""
 	return settings
 }
 
@@ -805,6 +811,15 @@ func keepPrivateVideoUpscaleSecrets(settings *model.Settings, saved model.Settin
 	}
 }
 
+func keepPrivateTencentMPSVideoSecrets(settings *model.Settings, saved model.Settings) {
+	if value := strings.TrimSpace(settings.Private.TencentMPSVideo.SecretID); value == "" || isMaskedAPIKey(value) {
+		settings.Private.TencentMPSVideo.SecretID = saved.Private.TencentMPSVideo.SecretID
+	}
+	if value := strings.TrimSpace(settings.Private.TencentMPSVideo.SecretKey); value == "" || isMaskedAPIKey(value) {
+		settings.Private.TencentMPSVideo.SecretKey = saved.Private.TencentMPSVideo.SecretKey
+	}
+}
+
 func normalizeVolcengineAssetSetting(setting model.VolcengineAssetSetting) model.VolcengineAssetSetting {
 	setting.AccessKey = strings.TrimSpace(setting.AccessKey)
 	setting.SecretKey = strings.TrimSpace(setting.SecretKey)
@@ -855,6 +870,33 @@ func normalizeVideoUpscaleSetting(setting model.VideoUpscaleSetting) model.Video
 		setting.MaxTarget = "2k"
 	}
 	return setting
+}
+
+func normalizeTencentMPSVideoSetting(setting model.TencentMPSVideoSetting) model.TencentMPSVideoSetting {
+	setting.SecretID = strings.TrimSpace(setting.SecretID)
+	setting.SecretKey = strings.TrimSpace(setting.SecretKey)
+	setting.SecretIDConfigured = setting.SecretIDConfigured || setting.SecretID != ""
+	setting.SecretKeyConfigured = setting.SecretKeyConfigured || setting.SecretKey != ""
+	setting.COSBucket = strings.TrimSpace(setting.COSBucket)
+	setting.COSRegion = strings.TrimSpace(setting.COSRegion)
+	if setting.COSRegion == "" {
+		setting.COSRegion = "ap-beijing"
+	}
+	setting.InputPrefix = normalizeCloudObjectPrefix(setting.InputPrefix, "video-upscale/input/")
+	setting.OutputPrefix = normalizeCloudObjectPrefix(setting.OutputPrefix, "video-upscale/output/")
+	setting.DefaultScene = strings.ToLower(strings.TrimSpace(setting.DefaultScene))
+	if setting.DefaultScene != "live" && setting.DefaultScene != "restore" {
+		setting.DefaultScene = "comic"
+	}
+	return setting
+}
+
+func normalizeCloudObjectPrefix(value, fallback string) string {
+	value = strings.Trim(strings.TrimSpace(value), "/")
+	if value == "" {
+		return fallback
+	}
+	return value + "/"
 }
 
 func findSavedChannelForSecretRestore(channel model.ModelChannel, saved []model.ModelChannel) (model.ModelChannel, bool, bool) {

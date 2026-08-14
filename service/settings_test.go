@@ -171,6 +171,42 @@ func TestSaveSettingsRestoresAndMasksVideoUpscaleAPIKey(t *testing.T) {
 	}
 }
 
+func TestTencentMPSVideoSecretsAreMaskedAndPreserved(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := repository.SaveSettings(model.Settings{Private: model.PrivateSetting{TencentMPSVideo: model.TencentMPSVideoSetting{
+		Enabled: true, SecretID: "saved-secret-id", SecretKey: "saved-secret-key", COSBucket: "media-1300000000", COSRegion: "ap-shanghai",
+	}}}, now())
+	if err != nil {
+		t.Fatalf("seed settings: %v", err)
+	}
+
+	admin, err := AdminSettings()
+	if err != nil {
+		t.Fatalf("AdminSettings returned error: %v", err)
+	}
+	masked := admin.Private.TencentMPSVideo
+	if masked.SecretID != "" || masked.SecretKey != "" || !masked.SecretIDConfigured || !masked.SecretKeyConfigured {
+		t.Fatalf("admin Tencent MPS secrets = %#v", masked)
+	}
+
+	masked.SecretID, masked.SecretKey = maskedAPIKey, maskedAPIKey
+	_, err = SaveSettings(model.Settings{Private: model.PrivateSetting{TencentMPSVideo: masked}})
+	if err != nil {
+		t.Fatalf("SaveSettings returned error: %v", err)
+	}
+	saved, err := repository.GetSettings()
+	if err != nil {
+		t.Fatalf("GetSettings returned error: %v", err)
+	}
+	setting := saved.Private.TencentMPSVideo
+	if setting.SecretID != "saved-secret-id" || setting.SecretKey != "saved-secret-key" {
+		t.Fatalf("saved Tencent MPS secrets = %q/%q", setting.SecretID, setting.SecretKey)
+	}
+	if setting.COSRegion != "ap-shanghai" || setting.InputPrefix != "video-upscale/input/" || setting.OutputPrefix != "video-upscale/output/" || setting.DefaultScene != "comic" {
+		t.Fatalf("normalized Tencent MPS setting = %#v", setting)
+	}
+}
+
 func TestKeepPrivateAPIKeysLeavesJimengNoSecretChannelEmpty(t *testing.T) {
 	saved := model.Settings{Private: model.PrivateSetting{Channels: []model.ModelChannel{
 		{ID: "first", Name: "Jimeng", Protocol: modelProtocolJimengCLI},
