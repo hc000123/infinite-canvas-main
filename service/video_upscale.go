@@ -269,6 +269,7 @@ func RecoverInterruptedVideoUpscaleJobs() error {
 type VideoUpscaleCapabilitiesResult struct {
 	Enabled                  bool                                     `json:"enabled"`
 	Provider                 string                                   `json:"provider"`
+	Providers                []VideoUpscaleProviderCapability         `json:"providers"`
 	Targets                  []string                                 `json:"targets"`
 	MaxInputBytes            int64                                    `json:"maxInputBytes"`
 	CloudProcessing          bool                                     `json:"cloudProcessing"`
@@ -277,6 +278,16 @@ type VideoUpscaleCapabilitiesResult struct {
 	DefaultOutputQualityMode string                                   `json:"defaultOutputQualityMode"`
 	PreserveAudioSupported   bool                                     `json:"preserveAudioSupported"`
 	FrameInterpolation       VideoUpscaleFrameInterpolationCapability `json:"frameInterpolation"`
+}
+
+type VideoUpscaleProviderCapability struct {
+	ID                string   `json:"id"`
+	Name              string   `json:"name"`
+	Targets           []string `json:"targets"`
+	EnhancementScenes []string `json:"enhancementScenes"`
+	DefaultScene      string   `json:"defaultScene"`
+	CostNotice        string   `json:"costNotice"`
+	Interpolation     bool     `json:"interpolation"`
 }
 
 type VideoUpscalePricingRules struct {
@@ -319,14 +330,25 @@ type VideoInterpolationPixelTier struct {
 }
 
 func VideoUpscaleCapabilities() VideoUpscaleCapabilitiesResult {
-	setting, err := currentVideoUpscaleSetting()
+	settings, _ := repository.GetSettings()
+	private := normalizeSettings(settings).Private
+	providers := []VideoUpscaleProviderCapability{}
+	if private.VideoUpscale.Enabled && private.VideoUpscale.APIKey != "" && private.VideoUpscale.OutputTOSPath != "" && private.VolcengineAsset.AccessKey != "" && private.VolcengineAsset.SecretKey != "" {
+		providers = append(providers, VideoUpscaleProviderCapability{ID: "volcengine-las", Name: "火山 LAS", Targets: []string{"1080p", "2k"}, Interpolation: true})
+	}
+	if private.TencentMPSVideo.Enabled && private.TencentMPSVideo.SecretID != "" && private.TencentMPSVideo.SecretKey != "" && private.TencentMPSVideo.COSBucket != "" && private.TencentMPSVideo.COSRegion != "" {
+		providers = append(providers, VideoUpscaleProviderCapability{
+			ID: "tencent-mps", Name: "腾讯 MPS", Targets: []string{"1080p", "2k"}, EnhancementScenes: []string{"comic", "live", "restore"}, DefaultScene: private.TencentMPSVideo.DefaultScene,
+			CostNotice: "腾讯 MPS 将按视频增强与转码分别计费，实际费用以腾讯云账单为准。",
+		})
+	}
 	provider := "volcengine-las"
-	if setting.Provider != "" {
-		provider = setting.Provider
+	if len(providers) > 0 {
+		provider = providers[0].ID
 	}
 	return VideoUpscaleCapabilitiesResult{
-		Enabled: err == nil, Provider: provider, Targets: []string{"1080p", "2k"}, MaxInputBytes: videoUpscaleMaxInputBytes, CloudProcessing: true,
-		Pricing: videoUpscalePricingRules(), OutputQualityModes: []string{"compatible", "balanced", "master"}, DefaultOutputQualityMode: firstNonEmpty(setting.OutputQualityMode, "compatible"), PreserveAudioSupported: true,
+		Enabled: len(providers) > 0, Provider: provider, Providers: providers, Targets: []string{"1080p", "2k"}, MaxInputBytes: videoUpscaleMaxInputBytes, CloudProcessing: true,
+		Pricing: videoUpscalePricingRules(), OutputQualityModes: []string{"compatible", "balanced", "master"}, DefaultOutputQualityMode: firstNonEmpty(private.VideoUpscale.OutputQualityMode, "compatible"), PreserveAudioSupported: true,
 		FrameInterpolation: videoUpscaleFrameInterpolationCapability(),
 	}
 }

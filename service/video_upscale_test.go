@@ -242,6 +242,29 @@ func TestVideoUpscaleCapabilitiesExposePricingAndOutputOptions(t *testing.T) {
 	}
 }
 
+func TestVideoUpscaleCapabilitiesExposeConfiguredProviders(t *testing.T) {
+	setupVideoUpscaleTest(t)
+	settings, err := repository.GetSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.Private.TencentMPSVideo = model.TencentMPSVideoSetting{Enabled: true, SecretID: "id", SecretKey: "key", COSBucket: "media-1300000000", COSRegion: "ap-beijing", DefaultScene: "comic"}
+	if _, err = repository.SaveSettings(settings, now()); err != nil {
+		t.Fatal(err)
+	}
+	result := VideoUpscaleCapabilities()
+	if !result.Enabled || len(result.Providers) != 2 || result.Providers[0].ID != "volcengine-las" || result.Providers[1].ID != "tencent-mps" {
+		t.Fatalf("providers=%#v", result.Providers)
+	}
+	tencent := result.Providers[1]
+	if tencent.DefaultScene != "comic" || len(tencent.EnhancementScenes) != 3 || tencent.EnhancementScenes[2] != "restore" || tencent.Interpolation || tencent.CostNotice == "" {
+		t.Fatalf("Tencent capability=%#v", tencent)
+	}
+	if !result.Providers[0].Interpolation {
+		t.Fatalf("Volcengine interpolation capability=%#v", result.Providers[0])
+	}
+}
+
 func TestVideoUpscaleTargetDimensionsPreserveAspectRatio(t *testing.T) {
 	for _, item := range []struct {
 		width, height int
