@@ -56,7 +56,15 @@ export function canvasNodeToAsset(node: CanvasNodeData): CanvasAssetPayload | nu
                 bytes: node.metadata.bytes || 0,
                 mimeType: node.metadata.mimeType || "video/mp4",
             },
-            metadata: { source: "canvas", nodeId: node.id, prompt: node.metadata?.prompt, canvasSource: node.metadata?.canvasSource, volcengineAsset: node.metadata?.volcengineAsset },
+            metadata: {
+                source: "canvas",
+                nodeId: node.id,
+                prompt: node.metadata?.prompt,
+                canvasSource: node.metadata?.canvasSource,
+                volcengineAsset: node.metadata?.volcengineAsset,
+                videoUpscale: node.metadata?.videoUpscale,
+                subtitleErase: node.metadata?.subtitleErase,
+            },
         };
     }
 

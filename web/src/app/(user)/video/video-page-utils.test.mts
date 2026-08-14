@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildPackageVideoConfig } from "./video-page-utils.ts";
+import { buildPackageAssetGeneration, buildPackageVideoConfig } from "./video-page-utils.ts";
 
 const baseConfig = {
     channelMode: "remote",
@@ -111,4 +111,17 @@ test("buildPackageVideoConfig normalizes resolution after stale package model fa
     assert.equal(openaiFallback.videoProtocol, "openai");
     assert.equal(openaiFallback.videoModel, "openai-video");
     assert.equal(openaiFallback.vquality, "720");
+});
+
+test("video asset generation keeps the source script snapshot", () => {
+    const item = {
+        id: "P01",
+        prompt: "人物推门",
+        projectId: "project-1",
+        segment: "推门",
+        sourceScript: "第一场：人物推门",
+    } as Parameters<typeof buildPackageAssetGeneration>[0];
+    const generation = buildPackageAssetGeneration(item, baseConfig, {} as Parameters<typeof buildPackageAssetGeneration>[2], null, "2026-08-14T10:00:00.000Z");
+
+    assert.equal(generation.scriptSnapshot, "第一场：人物推门");
 });

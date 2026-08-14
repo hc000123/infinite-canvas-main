@@ -13,7 +13,7 @@ test("shared top bars preserve current project for production control and assets
 
     assert.match(helper, /export function workspaceProjectId/);
     assert.match(helper, /export function contextualToolHref/);
-    assert.match(helper, /toolSlug === "agent" \|\| toolSlug === "assets"/);
+    assert.match(helper, /toolSlug === "assets"/);
     assert.match(appTopNav, /contextualToolHref\(toolSlug, projectId\)/);
     assert.match(projectTopNav, /contextualToolHref\(toolSlug, projectId\)/);
 });

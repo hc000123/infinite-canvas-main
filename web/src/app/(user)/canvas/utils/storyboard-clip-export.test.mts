@@ -81,6 +81,38 @@ test("normalizes unsafe path segments", () => {
     assert.equal(safeFileSegment('第 1 集: A/B * "C"'), "第_1_集_A_B_C");
 });
 
+test("includes production lineage, post-processing costs and selected output in the clip manifest", () => {
+    const sourceAsset = videoAsset("video-1", "生成原片", "video:source", "ep-seedance", "volcengine-ark");
+    sourceAsset.metadata = {
+        generation: {
+            actionType: "generate",
+            aiTaskCredits: 12,
+            assetVersionNumber: 2,
+            productionPackageId: "P01",
+            scriptSnapshot: "第一场：推门",
+            taskId: "generate-1",
+            taskStatus: "succeeded",
+        },
+    };
+    const upscaledAsset = videoAsset("video-2", "超分结果", "video:upscaled", "", "");
+    upscaledAsset.metadata = { canvasSource: { sourceAssetId: "video-1" }, videoUpscale: { estimatedCostCny: 0.21, jobId: "upscale-1", provider: "volcengine-las", status: "succeeded" } };
+    const asset = videoAsset("video-3", "最终成片", "video:final", "", "");
+    asset.metadata = { canvasSource: { sourceAssetId: "video-2" }, subtitleErase: { estimatedCostCny: 0.08, jobId: "subtitle-1", provider: "volcengine-las", status: "succeeded" } };
+
+    const plan = buildStoryboardClipExportPlan({ group, shots: [shot("shot-1", 1, "开门", "video-3")], assets: [sourceAsset, upscaledAsset, asset], exportedAt: "2026-08-14T10:00:00.000Z" });
+    const trace = plan.manifest.shots[0].productionTrace;
+
+    assert.equal(trace?.productionPackageId, "P01");
+    assert.match(trace?.scriptVersion || "", /^snapshot-[a-f0-9]{8}$/);
+    assert.equal(trace?.generation.taskId, "generate-1");
+    assert.equal(trace?.costSnapshot.generationCredits, 12);
+    assert.equal(trace?.costSnapshot.postProcessingCny, 0.29);
+    assert.deepEqual(trace?.postProcessing.map((item) => item.type), ["video_upscale", "subtitle_erase"]);
+    assert.equal(trace?.selectedOutput.assetId, "video-3");
+    assert.equal(trace?.selectedOutput.assetVersionNumber, 2);
+    assert.equal(trace?.nextAction, "ready_for_edit");
+});
+
 function shot(id: string, order: number, title: string, primaryAssetId?: string, assetRefs: StoryboardShot["assetRefs"] = []): StoryboardShot {
     return {
         id,
