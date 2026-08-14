@@ -129,25 +129,30 @@ func TestNormalizePrivateSettingAllocatesGloballyUniqueChannelIDs(t *testing.T) 
 
 func TestNormalizeVideoUpscaleSettingDefaults(t *testing.T) {
 	result := normalizePrivateSetting(model.PrivateSetting{VideoUpscale: model.VideoUpscaleSetting{
-		SpaceName: "  short-drama-vod  ",
+		APIKey: "  las-key  ", OutputTOSPath: "  tos://bucket/output  ",
 	}}).VideoUpscale
 
-	if result.Provider != "volcengine" || result.SpaceName != "short-drama-vod" || result.Scenario != "aigc" || result.EnhanceLevel != "Standard" || result.MaxTarget != "2k" {
+	if result.Provider != "volcengine-las" || result.APIKey != "las-key" || result.OutputTOSPath != "tos://bucket/output/" || result.OutputQualityMode != "compatible" || !result.PreserveAudio || result.MaxTarget != "2k" {
 		t.Fatalf("normalized video upscale setting = %#v", result)
 	}
 }
 
-func TestSaveSettingsPersistsVideoUpscaleWithoutCopyingVolcengineSecrets(t *testing.T) {
+func TestNormalizeVideoSubtitleEraseSettingDefaultsDisabled(t *testing.T) {
+	result := normalizePrivateSetting(model.PrivateSetting{}).VideoUpscale
+	if result.SubtitleEraseEnabled {
+		t.Fatalf("subtitle erase should default to disabled: %#v", result)
+	}
+}
+
+func TestSaveSettingsRestoresAndMasksVideoUpscaleAPIKey(t *testing.T) {
 	setupAITaskTestDB(t)
-	_, err := repository.SaveSettings(model.Settings{Private: model.PrivateSetting{VolcengineAsset: model.VolcengineAssetSetting{
-		AccessKey: "shared-ak", SecretKey: "shared-sk",
-	}}}, now())
+	_, err := repository.SaveSettings(model.Settings{Private: model.PrivateSetting{VideoUpscale: model.VideoUpscaleSetting{APIKey: "saved-las-key"}}}, now())
 	if err != nil {
 		t.Fatalf("seed settings: %v", err)
 	}
 
 	_, err = SaveSettings(model.Settings{Private: model.PrivateSetting{VideoUpscale: model.VideoUpscaleSetting{
-		Enabled: true, Provider: " volcengine ", SpaceName: " video-space ", Scenario: " aigc ", EnhanceLevel: " Standard ", MaxTarget: " 2k ",
+		Enabled: true, SubtitleEraseEnabled: true, Provider: " volcengine-las ", APIKey: maskedAPIKey, OutputTOSPath: " tos://bucket/output ", OutputQualityMode: " balanced ", PreserveAudio: true, MaxTarget: " 2k ",
 	}}})
 	if err != nil {
 		t.Fatalf("SaveSettings returned error: %v", err)
@@ -157,11 +162,12 @@ func TestSaveSettingsPersistsVideoUpscaleWithoutCopyingVolcengineSecrets(t *test
 		t.Fatalf("GetSettings returned error: %v", err)
 	}
 	upscale := saved.Private.VideoUpscale
-	if !upscale.Enabled || upscale.Provider != "volcengine" || upscale.SpaceName != "video-space" || upscale.Scenario != "aigc" || upscale.EnhanceLevel != "Standard" || upscale.MaxTarget != "2k" {
+	if !upscale.Enabled || !upscale.SubtitleEraseEnabled || upscale.Provider != "volcengine-las" || upscale.APIKey != "saved-las-key" || upscale.OutputTOSPath != "tos://bucket/output/" || upscale.OutputQualityMode != "balanced" || !upscale.PreserveAudio || upscale.MaxTarget != "2k" {
 		t.Fatalf("saved video upscale setting = %#v", upscale)
 	}
-	if saved.Private.VolcengineAsset.AccessKey != "shared-ak" || saved.Private.VolcengineAsset.SecretKey != "shared-sk" {
-		t.Fatalf("shared Volcengine credentials changed: %#v", saved.Private.VolcengineAsset)
+	admin, err := AdminSettings()
+	if err != nil || admin.Private.VideoUpscale.APIKey != "" || !admin.Private.VideoUpscale.APIKeyConfigured {
+		t.Fatalf("admin video upscale secret = %#v err=%v", admin.Private.VideoUpscale, err)
 	}
 }
 

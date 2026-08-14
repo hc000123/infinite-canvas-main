@@ -10,7 +10,7 @@ func TestVideoUpscaleJobOwnershipAndActiveRecovery(t *testing.T) {
 	setupRepositoryTestDB(t)
 	jobs := []model.VideoUpscaleJob{
 		{ID: "video-queued", UserID: "user-a", Status: model.VideoUpscaleJobStatusQueued, CreatedAt: "1", UpdatedAt: "1"},
-		{ID: "video-uploading", UserID: "user-a", Status: model.VideoUpscaleJobStatusUploading, VODVid: "vid-1", CreatedAt: "2", UpdatedAt: "2"},
+		{ID: "video-uploading", UserID: "user-a", Status: model.VideoUpscaleJobStatusUploading, InputTOSURL: "tos://bucket/input.mp4", CreatedAt: "2", UpdatedAt: "2"},
 		{ID: "video-processing", UserID: "user-b", Status: model.VideoUpscaleJobStatusProcessing, RunID: "run-1", CreatedAt: "3", UpdatedAt: "3"},
 		{ID: "video-done", UserID: "user-b", Status: model.VideoUpscaleJobStatusSucceeded, CreatedAt: "4", UpdatedAt: "4"},
 	}
@@ -32,9 +32,9 @@ func TestVideoUpscaleJobOwnershipAndActiveRecovery(t *testing.T) {
 	}
 }
 
-func TestSaveVideoUpscaleJobPreservesVolcengineIdentifiers(t *testing.T) {
+func TestSaveVideoUpscaleJobPreservesLASIdentifiers(t *testing.T) {
 	setupRepositoryTestDB(t)
-	job := model.VideoUpscaleJob{ID: "video-update", UserID: "user-a", Status: model.VideoUpscaleJobStatusUploading, VODVid: "vid-1", RunID: "run-1", Progress: 30}
+	job := model.VideoUpscaleJob{ID: "video-update", UserID: "user-a", Status: model.VideoUpscaleJobStatusUploading, InputTOSURL: "tos://bucket/input.mp4", RunID: "task-1", Progress: 30}
 	if _, err := SaveVideoUpscaleJob(job); err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestSaveVideoUpscaleJobPreservesVolcengineIdentifiers(t *testing.T) {
 		t.Fatal(err)
 	}
 	stored, ok, err := GetVideoUpscaleJob(job.ID)
-	if err != nil || !ok || stored.VODVid != "vid-1" || stored.RunID != "run-1" || stored.ErrorCode != "poll_failed" {
+	if err != nil || !ok || stored.InputTOSURL != "tos://bucket/input.mp4" || stored.RunID != "task-1" || stored.ErrorCode != "poll_failed" {
 		t.Fatalf("stored job = %#v ok=%v err=%v", stored, ok, err)
 	}
 }

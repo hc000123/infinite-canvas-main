@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,25 +18,163 @@ import (
 func TestCreateVideoUpscaleJobValidatesMetadataAndPersistsInput(t *testing.T) {
 	setupVideoUpscaleTest(t)
 	videoUpscaleMetadataProbe = func(context.Context, string) (videoUpscaleSourceMetadata, error) {
-		return videoUpscaleSourceMetadata{Width: 1280, Height: 720, DurationSeconds: 6.5}, nil
+		return videoUpscaleSourceMetadata{Width: 1280, Height: 720, DurationSeconds: 10, FrameRate: 24}, nil
 	}
 	started := ""
 	videoUpscaleJobStarter = func(id string) { started = id }
 
 	job, err := CreateVideoUpscaleJob(context.Background(), "user-a", bytes.NewReader([]byte("video-content")), VideoUpscaleCreateInput{
 		Filename: "source.mp4", ContentType: "video/mp4", Target: "1080p", ProjectID: "project-1", CanvasID: "canvas-1", SourceNodeID: "node-1",
+		OutputQualityMode: "balanced", PreserveAudio: true, PreserveAudioSet: true, FrameInterpolationMode: "keep",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if job.Status != model.VideoUpscaleJobStatusQueued || job.InputWidth != 1280 || job.InputHeight != 720 || job.OutputWidth != 1920 || job.OutputHeight != 1080 || job.InputDurationSeconds != 6.5 || job.Target != "1080p" || started != job.ID {
+	if job.Status != model.VideoUpscaleJobStatusQueued || job.InputWidth != 1280 || job.InputHeight != 720 || job.OutputWidth != 1920 || job.OutputHeight != 1080 || job.InputDurationSeconds != 10 || job.Target != "1080p" || started != job.ID {
 		t.Fatalf("job=%#v started=%q", job, started)
+	}
+	if job.InputFrameRate != 24 || job.OutputQualityMode != "balanced" || !job.PreserveAudio || job.FrameInterpolationMode != "keep" || !job.CostEstimateAvailable || job.EstimatedBillableMinutes != .5 || job.EstimatedCostCNY != 1.1 || job.PricingRuleVersion != videoUpscalePricingRuleVersion {
+		t.Fatalf("job snapshot=%#v", job)
+	}
+	stored, ok, err := repository.GetVideoUpscaleJob(job.ID)
+	if err != nil || !ok || stored.InputFrameRate != 24 || stored.OutputQualityMode != "balanced" || !stored.PreserveAudio || stored.FrameInterpolationMode != "keep" || stored.EstimatedCostCNY != 1.1 {
+		t.Fatalf("stored snapshot=%#v ok=%v err=%v", stored, ok, err)
 	}
 	if _, err := os.Stat(job.InputPath); err != nil {
 		t.Fatalf("input file: %v", err)
 	}
 	if _, ok, err := GetUserVideoUpscaleJob("user-b", job.ID); err == nil || ok {
 		t.Fatalf("foreign owner read job: ok=%v err=%v", ok, err)
+	}
+}
+
+func TestCreateVideoUpscaleJobAllowsUnknownDurationAndFrameRate(t *testing.T) {
+	setupVideoUpscaleTest(t)
+	videoUpscaleMetadataProbe = func(context.Context, string) (videoUpscaleSourceMetadata, error) {
+		return videoUpscaleSourceMetadata{Width: 1280, Height: 720}, nil
+	}
+	job, err := CreateVideoUpscaleJob(context.Background(), "user-a", strings.NewReader("video"), VideoUpscaleCreateInput{Filename: "source.mp4", ContentType: "video/mp4", Target: "1080p"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.CostEstimateAvailable || job.EstimatedCostCNY != 0 || job.EstimatedBillableMinutes != 0 || job.PricingRuleVersion != videoUpscalePricingRuleVersion {
+		t.Fatalf("unknown metadata must not create a cost estimate: %#v", job)
+	}
+}
+
+func TestCreateVideoUpscaleJobPersistsInterpolationAndCostSnapshots(t *testing.T) {
+	setupVideoUpscaleTest(t)
+	videoUpscaleMetadataProbe = func(context.Context, string) (videoUpscaleSourceMetadata, error) {
+		return videoUpscaleSourceMetadata{Width: 1280, Height: 720, DurationSeconds: 60, FrameRate: 24}, nil
+	}
+	job, err := CreateVideoUpscaleJob(context.Background(), "user-a", strings.NewReader("video"), VideoUpscaleCreateInput{
+		Filename: "source.mp4", ContentType: "video/mp4", Target: "1080p", FrameInterpolationMode: "double", InterpolationMode: "fast",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.ProcessingStage != "queued" || job.FrameInterpolationMode != "double" || job.InterpolationMode != "fast" || job.InterpolationTargetFrameRate != 48 || !job.InterpolationCostEstimateAvailable || job.EstimatedInterpolationBillableMinutes != 3 || job.EstimatedInterpolationCostCNY != 1.5 || job.InterpolationPricingRuleVersion != videoInterpolationPricingRuleVersion || job.EstimatedTotalCostCNY != job.EstimatedCostCNY+job.EstimatedInterpolationCostCNY {
+		t.Fatalf("job=%#v", job)
+	}
+	stored, ok, err := repository.GetVideoUpscaleJob(job.ID)
+	if err != nil || !ok || stored.InterpolationMode != "fast" || stored.InterpolationTargetFrameRate != 48 || stored.EstimatedTotalCostCNY != job.EstimatedTotalCostCNY {
+		t.Fatalf("stored=%#v ok=%v err=%v", stored, ok, err)
+	}
+}
+
+func TestCreateVideoUpscaleJobValidatesInterpolationBeforeStarting(t *testing.T) {
+	for _, item := range []struct {
+		name           string
+		frameRate      float64
+		frameMode      string
+		processingMode string
+		want           string
+	}{
+		{name: "unknown frame rate", frameRate: 0, frameMode: "double", processingMode: "fast", want: "帧率"},
+		{name: "to25 at 25", frameRate: 25, frameMode: "to25", processingMode: "fast", want: "25fps"},
+		{name: "to30 at 30", frameRate: 30, frameMode: "to30", processingMode: "fast", want: "30fps"},
+		{name: "to60 at 60", frameRate: 60, frameMode: "to60", processingMode: "fast", want: "60fps"},
+		{name: "invalid frame mode", frameRate: 24, frameMode: "triple", processingMode: "fast", want: "帧率模式"},
+		{name: "invalid processing mode", frameRate: 24, frameMode: "double", processingMode: "slow", want: "插帧模式"},
+	} {
+		t.Run(item.name, func(t *testing.T) {
+			setupVideoUpscaleTest(t)
+			videoUpscaleMetadataProbe = func(context.Context, string) (videoUpscaleSourceMetadata, error) {
+				return videoUpscaleSourceMetadata{Width: 1280, Height: 720, DurationSeconds: 60, FrameRate: item.frameRate}, nil
+			}
+			started := 0
+			videoUpscaleJobStarter = func(string) { started++ }
+			_, err := CreateVideoUpscaleJob(context.Background(), "user-a", strings.NewReader("video"), VideoUpscaleCreateInput{
+				Filename: "source.mp4", ContentType: "video/mp4", Target: "1080p", FrameInterpolationMode: item.frameMode, InterpolationMode: item.processingMode,
+			})
+			if err == nil || !strings.Contains(err.Error(), item.want) || started != 0 {
+				t.Fatalf("err=%v started=%d want containing %q", err, started, item.want)
+			}
+		})
+	}
+}
+
+func TestCreateVideoUpscaleJobKeepClearsInterpolationSnapshot(t *testing.T) {
+	setupVideoUpscaleTest(t)
+	videoUpscaleMetadataProbe = func(context.Context, string) (videoUpscaleSourceMetadata, error) {
+		return videoUpscaleSourceMetadata{Width: 1280, Height: 720, DurationSeconds: 60, FrameRate: 24}, nil
+	}
+	job, err := CreateVideoUpscaleJob(context.Background(), "user-a", strings.NewReader("video"), VideoUpscaleCreateInput{
+		Filename: "source.mp4", ContentType: "video/mp4", Target: "1080p", FrameInterpolationMode: "keep", InterpolationMode: "medium",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.InterpolationMode != "" || job.InterpolationTargetFrameRate != 0 || job.InterpolationCostEstimateAvailable || job.EstimatedInterpolationCostCNY != 0 || job.EstimatedTotalCostCNY != job.EstimatedCostCNY {
+		t.Fatalf("keep snapshot=%#v", job)
+	}
+}
+
+func TestCreateVideoUpscaleJobRejectsUnsupportedOutputOptions(t *testing.T) {
+	setupVideoUpscaleTest(t)
+	for _, item := range []struct {
+		name  string
+		input VideoUpscaleCreateInput
+		want  string
+	}{
+		{name: "quality", input: VideoUpscaleCreateInput{Filename: "source.mp4", ContentType: "video/mp4", Target: "1080p", OutputQualityMode: "cinema"}, want: "输出质量"},
+		{name: "interpolation", input: VideoUpscaleCreateInput{Filename: "source.mp4", ContentType: "video/mp4", Target: "1080p", FrameInterpolationMode: "2x"}, want: "插帧"},
+	} {
+		t.Run(item.name, func(t *testing.T) {
+			_, err := CreateVideoUpscaleJob(context.Background(), "user-a", strings.NewReader("video"), item.input)
+			if err == nil || !strings.Contains(err.Error(), item.want) {
+				t.Fatalf("error=%v want containing %q", err, item.want)
+			}
+		})
+	}
+}
+
+func TestVideoUpscaleFrameRatePrefersAverageAndFallsBackToNominal(t *testing.T) {
+	for _, item := range []struct {
+		avg, nominal string
+		want         float64
+	}{
+		{"24000/1001", "30/1", 24000.0 / 1001},
+		{"0/0", "30000/1001", 30000.0 / 1001},
+		{"bad", "25", 25},
+		{"121/1", "24/1", 24},
+		{"0/0", "0/0", 0},
+		{"240/1", "180/1", 0},
+	} {
+		if got := selectVideoUpscaleFrameRate(item.avg, item.nominal); math.Abs(got-item.want) > 1e-9 {
+			t.Fatalf("avg=%q nominal=%q got=%g want=%g", item.avg, item.nominal, got, item.want)
+		}
+	}
+}
+
+func TestVideoUpscaleCapabilitiesExposePricingAndOutputOptions(t *testing.T) {
+	setupVideoUpscaleTest(t)
+	result := VideoUpscaleCapabilities()
+	if result.Pricing.UnitPriceCNY != 2.2 || result.Pricing.RuleVersion == "" || len(result.Pricing.ResolutionTiers) != 4 || result.Pricing.ResolutionTiers[3].MaxShortEdge != nil || len(result.Pricing.FrameRateTiers) != 4 {
+		t.Fatalf("pricing=%#v", result.Pricing)
+	}
+	if result.DefaultOutputQualityMode != "compatible" || len(result.OutputQualityModes) != 3 || !result.PreserveAudioSupported || result.FrameInterpolation.Status != "available" || len(result.FrameInterpolation.Modes) != 5 || result.FrameInterpolation.Modes[0] != "keep" || result.FrameInterpolation.Modes[1] != "to25" || result.FrameInterpolation.Modes[2] != "to30" || len(result.FrameInterpolation.ProcessingModes) != 3 || result.FrameInterpolation.DefaultProcessingMode != "fast" || result.FrameInterpolation.MaxTargetFrameRate != 480 || result.FrameInterpolation.MaxSourceMultiplier != 6 || result.FrameInterpolation.Pricing.UnitPriceCNY != .5 || result.FrameInterpolation.Pricing.RuleVersion != videoInterpolationPricingRuleVersion || len(result.FrameInterpolation.Pricing.PixelTiers) != 4 {
+		t.Fatalf("capabilities=%#v", result)
 	}
 }
 
@@ -95,7 +234,7 @@ func TestRecoverInterruptedVideoUpscaleJobsOnlyResumesSubmittedRuns(t *testing.T
 	setupVideoUpscaleTest(t)
 	jobs := []model.VideoUpscaleJob{
 		{ID: "submitted", UserID: "user-a", Status: model.VideoUpscaleJobStatusProcessing, RunID: "run-1", CreatedAt: now(), UpdatedAt: now()},
-		{ID: "not-submitted", UserID: "user-a", Status: model.VideoUpscaleJobStatusUploading, VODVid: "vid-1", CreatedAt: now(), UpdatedAt: now()},
+		{ID: "not-submitted", UserID: "user-a", Status: model.VideoUpscaleJobStatusUploading, InputTOSURL: "tos://bucket/input.mp4", CreatedAt: now(), UpdatedAt: now()},
 	}
 	for _, job := range jobs {
 		if _, err := repository.SaveVideoUpscaleJob(job); err != nil {
@@ -114,8 +253,79 @@ func TestRecoverInterruptedVideoUpscaleJobsOnlyResumesSubmittedRuns(t *testing.T
 	if err != nil || !ok {
 		t.Fatalf("load interrupted job: ok=%v err=%v", ok, err)
 	}
-	if interrupted.Status != model.VideoUpscaleJobStatusFailed || interrupted.ErrorCode != "server_restarted" || interrupted.VODVid != "vid-1" {
-		t.Fatalf("non-submitted job should become retryable without losing Vid: %+v", interrupted)
+	if interrupted.Status != model.VideoUpscaleJobStatusFailed || interrupted.ErrorCode != "server_restarted" || interrupted.InputTOSURL != "tos://bucket/input.mp4" {
+		t.Fatalf("non-submitted job should become retryable without losing TOS input: %+v", interrupted)
+	}
+}
+
+func TestRecoverInterruptedVideoUpscaleJobsUsesDurableStageAndTaskID(t *testing.T) {
+	setupVideoUpscaleTest(t)
+	jobs := []model.VideoUpscaleJob{
+		{ID: "upscale", UserID: "user-a", Status: model.VideoUpscaleJobStatusProcessing, ProcessingStage: "upscale_processing", RunID: "run-1", CreatedAt: now(), UpdatedAt: now()},
+		{ID: "interpolation", UserID: "user-a", Status: model.VideoUpscaleJobStatusProcessing, ProcessingStage: "interpolation_processing", RunID: "run-2", InterpolationRunID: "interpolation-1", CreatedAt: now(), UpdatedAt: now()},
+		{ID: "uncertain", UserID: "user-a", Status: model.VideoUpscaleJobStatusProcessing, ProcessingStage: "interpolation_submitting", RunID: "run-3", CreatedAt: now(), UpdatedAt: now()},
+	}
+	for _, job := range jobs {
+		if _, err := repository.SaveVideoUpscaleJob(job); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var resumed []string
+	videoUpscaleJobStarter = func(id string) { resumed = append(resumed, id) }
+	if err := RecoverInterruptedVideoUpscaleJobs(); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(resumed, ",") != "upscale,interpolation" {
+		t.Fatalf("resumed=%v", resumed)
+	}
+	uncertain, _, _ := repository.GetVideoUpscaleJob("uncertain")
+	if uncertain.Status != model.VideoUpscaleJobStatusFailed || uncertain.ErrorCode != "submission_uncertain" {
+		t.Fatalf("uncertain=%#v", uncertain)
+	}
+}
+
+func TestRecoverInterruptedVideoUpscaleJobsResumesUpscaleSucceededForInterpolation(t *testing.T) {
+	setupVideoUpscaleTest(t)
+	job := model.VideoUpscaleJob{ID: "upscale-succeeded", UserID: "user-a", Status: model.VideoUpscaleJobStatusProcessing, ProcessingStage: "upscale_succeeded", RunID: "upscale-run", UpscaleResultTOSURL: "tos://bucket/upscaled.mp4", FrameInterpolationMode: "double", CreatedAt: now(), UpdatedAt: now()}
+	if _, err := repository.SaveVideoUpscaleJob(job); err != nil {
+		t.Fatal(err)
+	}
+	var resumed []string
+	videoUpscaleJobStarter = func(id string) { resumed = append(resumed, id) }
+	if err := RecoverInterruptedVideoUpscaleJobs(); err != nil {
+		t.Fatal(err)
+	}
+	stored, _, _ := repository.GetVideoUpscaleJob(job.ID)
+	if len(resumed) != 1 || resumed[0] != job.ID || stored.Status != model.VideoUpscaleJobStatusProcessing || stored.ErrorCode != "" {
+		t.Fatalf("resumed=%v stored=%#v", resumed, stored)
+	}
+}
+
+func TestRecoverInterruptedVideoUpscaleJobsResumesDownloadingFinalResult(t *testing.T) {
+	setupVideoUpscaleTest(t)
+	job := model.VideoUpscaleJob{ID: "downloading", UserID: "user-a", Status: model.VideoUpscaleJobStatusDownloading, ProcessingStage: "downloading", RunID: "upscale-run", InterpolationRunID: "interpolation-run", ResultSourceURL: "https://example.com/final.mp4", CreatedAt: now(), UpdatedAt: now()}
+	if _, err := repository.SaveVideoUpscaleJob(job); err != nil {
+		t.Fatal(err)
+	}
+	var resumed []string
+	videoUpscaleJobStarter = func(id string) { resumed = append(resumed, id) }
+	if err := RecoverInterruptedVideoUpscaleJobs(); err != nil {
+		t.Fatal(err)
+	}
+	stored, _, _ := repository.GetVideoUpscaleJob(job.ID)
+	if len(resumed) != 1 || resumed[0] != job.ID || stored.Status != model.VideoUpscaleJobStatusDownloading || stored.ErrorCode != "" {
+		t.Fatalf("resumed=%v stored=%#v", resumed, stored)
+	}
+}
+
+func TestRetryVideoUpscaleJobRejectsSubmissionUncertain(t *testing.T) {
+	setupVideoUpscaleTest(t)
+	job := model.VideoUpscaleJob{ID: "uncertain", UserID: "user-a", Status: model.VideoUpscaleJobStatusFailed, ErrorCode: "submission_uncertain", InputTOSURL: "tos://bucket/input.mp4", CreatedAt: now(), UpdatedAt: now()}
+	if _, err := repository.SaveVideoUpscaleJob(job); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RetryVideoUpscaleJob(context.Background(), "user-a", job.ID); err == nil || !strings.Contains(err.Error(), "重新创建") {
+		t.Fatalf("err=%v", err)
 	}
 }
 
@@ -131,7 +341,7 @@ func setupVideoUpscaleTest(t *testing.T) {
 	repository.ResetForTest()
 	_, err := repository.SaveSettings(model.Settings{Private: model.PrivateSetting{
 		VolcengineAsset: model.VolcengineAssetSetting{AccessKey: "ak", SecretKey: "sk"},
-		VideoUpscale:    model.VideoUpscaleSetting{Enabled: true, Provider: "volcengine", SpaceName: "vod-space"},
+		VideoUpscale:    model.VideoUpscaleSetting{Enabled: true, Provider: "volcengine-las", APIKey: "las-key", OutputTOSPath: "tos://bucket/output/"},
 	}}, now())
 	if err != nil {
 		t.Fatal(err)

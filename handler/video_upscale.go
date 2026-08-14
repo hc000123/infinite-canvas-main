@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/basketikun/infinite-canvas/model"
 	"github.com/basketikun/infinite-canvas/service"
@@ -32,14 +34,36 @@ func CreateVideoUpscaleJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
-	result, err := service.CreateVideoUpscaleJob(r.Context(), user.ID, file, service.VideoUpscaleCreateInput{
-		Filename: header.Filename, ContentType: header.Header.Get("Content-Type"), Target: r.FormValue("target"), ProjectID: r.FormValue("projectId"), CanvasID: r.FormValue("canvasId"), SourceNodeID: r.FormValue("sourceNodeId"), SourceAssetID: r.FormValue("sourceAssetId"),
-	})
+	preserveAudio, err := videoUpscalePreserveAudio(r.FormValue("preserveAudio"))
+	if err != nil {
+		Fail(w, err.Error())
+		return
+	}
+	input := videoUpscaleCreateInputFromRequest(r)
+	input.Filename, input.ContentType, input.PreserveAudio, input.PreserveAudioSet = header.Filename, header.Header.Get("Content-Type"), preserveAudio, true
+	result, err := service.CreateVideoUpscaleJob(r.Context(), user.ID, file, input)
 	if err != nil {
 		FailError(w, err)
 		return
 	}
 	OK(w, result)
+}
+
+func videoUpscaleCreateInputFromRequest(r *http.Request) service.VideoUpscaleCreateInput {
+	return service.VideoUpscaleCreateInput{
+		Target: r.FormValue("target"), ProjectID: r.FormValue("projectId"), CanvasID: r.FormValue("canvasId"), SourceNodeID: r.FormValue("sourceNodeId"), SourceAssetID: r.FormValue("sourceAssetId"), OutputQualityMode: r.FormValue("outputQualityMode"), FrameInterpolationMode: r.FormValue("frameInterpolationMode"), InterpolationMode: r.FormValue("interpolationMode"),
+	}
+}
+
+func videoUpscalePreserveAudio(raw string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "true":
+		return true, nil
+	case "false":
+		return false, nil
+	default:
+		return false, errors.New("保留音频选项不正确")
+	}
 }
 
 func VideoUpscaleJob(w http.ResponseWriter, r *http.Request, jobID string) {

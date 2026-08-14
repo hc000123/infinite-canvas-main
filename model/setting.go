@@ -136,12 +136,15 @@ type ImageUpscaleSetting struct {
 }
 
 type VideoUpscaleSetting struct {
-	Enabled      bool   `json:"enabled"`
-	Provider     string `json:"provider"`
-	SpaceName    string `json:"spaceName"`
-	Scenario     string `json:"scenario"`
-	EnhanceLevel string `json:"enhanceLevel"`
-	MaxTarget    string `json:"maxTarget"`
+	Enabled              bool   `json:"enabled"`
+	SubtitleEraseEnabled bool   `json:"subtitleEraseEnabled"`
+	Provider             string `json:"provider"`
+	APIKey               string `json:"apiKey"`
+	APIKeyConfigured     bool   `json:"apiKeyConfigured"`
+	OutputTOSPath        string `json:"outputTosPath"`
+	OutputQualityMode    string `json:"outputQualityMode"`
+	PreserveAudio        bool   `json:"preserveAudio"`
+	MaxTarget            string `json:"maxTarget"`
 }
 
 // PrivateSetting 私有配置。

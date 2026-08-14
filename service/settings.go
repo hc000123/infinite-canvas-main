@@ -56,6 +56,7 @@ func SaveSettings(settings model.Settings) (model.Settings, error) {
 	keepPrivateAuthSecrets(&settings, normalizedSaved)
 	keepPrivateVolcengineAssetSecrets(&settings, normalizedSaved)
 	keepPrivateImageUpscaleSecrets(&settings, normalizedSaved)
+	keepPrivateVideoUpscaleSecrets(&settings, normalizedSaved)
 	settings.Private.ImageUpscale.Managed = true
 	settings = normalizeSettings(settings)
 	if err := validateModelProtocolConflicts(settings.Private.Channels); err != nil {
@@ -721,6 +722,8 @@ func hidePrivateAPIKeys(settings model.Settings) model.Settings {
 	settings.Private.ImageUpscale.AccessKeyID = ""
 	settings.Private.ImageUpscale.AccessKeySecret = ""
 	settings.Private.ImageUpscale.SecurityToken = ""
+	settings.Private.VideoUpscale.APIKeyConfigured = strings.TrimSpace(settings.Private.VideoUpscale.APIKey) != ""
+	settings.Private.VideoUpscale.APIKey = ""
 	return settings
 }
 
@@ -796,6 +799,12 @@ func keepPrivateImageUpscaleSecrets(settings *model.Settings, saved model.Settin
 	}
 }
 
+func keepPrivateVideoUpscaleSecrets(settings *model.Settings, saved model.Settings) {
+	if value := strings.TrimSpace(settings.Private.VideoUpscale.APIKey); value == "" || isMaskedAPIKey(value) {
+		settings.Private.VideoUpscale.APIKey = saved.Private.VideoUpscale.APIKey
+	}
+}
+
 func normalizeVolcengineAssetSetting(setting model.VolcengineAssetSetting) model.VolcengineAssetSetting {
 	setting.AccessKey = strings.TrimSpace(setting.AccessKey)
 	setting.SecretKey = strings.TrimSpace(setting.SecretKey)
@@ -827,18 +836,20 @@ func normalizeImageUpscaleSetting(setting model.ImageUpscaleSetting) model.Image
 
 func normalizeVideoUpscaleSetting(setting model.VideoUpscaleSetting) model.VideoUpscaleSetting {
 	setting.Provider = strings.TrimSpace(setting.Provider)
-	if setting.Provider == "" {
-		setting.Provider = "volcengine"
+	if setting.Provider == "" || setting.Provider == "volcengine" {
+		setting.Provider = "volcengine-las"
 	}
-	setting.SpaceName = strings.TrimSpace(setting.SpaceName)
-	setting.Scenario = strings.TrimSpace(setting.Scenario)
-	if setting.Scenario == "" {
-		setting.Scenario = "aigc"
+	setting.APIKey = strings.TrimSpace(setting.APIKey)
+	setting.APIKeyConfigured = setting.APIKeyConfigured || setting.APIKey != ""
+	setting.OutputTOSPath = strings.TrimSpace(setting.OutputTOSPath)
+	if setting.OutputTOSPath != "" && !strings.HasSuffix(setting.OutputTOSPath, "/") {
+		setting.OutputTOSPath += "/"
 	}
-	setting.EnhanceLevel = strings.TrimSpace(setting.EnhanceLevel)
-	if setting.EnhanceLevel == "" {
-		setting.EnhanceLevel = "Standard"
+	setting.OutputQualityMode = strings.ToLower(strings.TrimSpace(setting.OutputQualityMode))
+	if setting.OutputQualityMode != "balanced" && setting.OutputQualityMode != "master" {
+		setting.OutputQualityMode = "compatible"
 	}
+	setting.PreserveAudio = true
 	setting.MaxTarget = strings.TrimSpace(setting.MaxTarget)
 	if setting.MaxTarget == "" {
 		setting.MaxTarget = "2k"

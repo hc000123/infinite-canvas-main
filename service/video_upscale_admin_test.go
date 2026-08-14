@@ -10,21 +10,20 @@ import (
 )
 
 type recordingVideoUpscaleSpaceReader struct {
-	asset model.VolcengineAssetSetting
 	video model.VideoUpscaleSetting
 	calls int
 	err   error
 }
 
-func (reader *recordingVideoUpscaleSpaceReader) CheckSpace(_ context.Context, asset model.VolcengineAssetSetting, video model.VideoUpscaleSetting) error {
-	reader.asset, reader.video, reader.calls = asset, video, reader.calls+1
+func (reader *recordingVideoUpscaleSpaceReader) Check(_ context.Context, video model.VideoUpscaleSetting) error {
+	reader.video, reader.calls = video, reader.calls+1
 	return reader.err
 }
 
-func TestAdminTestVideoUpscaleReusesSavedVolcengineCredentials(t *testing.T) {
+func TestAdminTestVideoUpscaleRestoresSavedLASAPIKey(t *testing.T) {
 	setupAITaskTestDB(t)
-	_, err := repository.SaveSettings(model.Settings{Private: model.PrivateSetting{VolcengineAsset: model.VolcengineAssetSetting{
-		AccessKey: "shared-ak", SecretKey: "shared-sk", Region: "cn-beijing",
+	_, err := repository.SaveSettings(model.Settings{Private: model.PrivateSetting{VideoUpscale: model.VideoUpscaleSetting{
+		APIKey: "saved-las-key", OutputTOSPath: "tos://bucket/output/",
 	}}}, now())
 	if err != nil {
 		t.Fatalf("seed settings: %v", err)
@@ -34,26 +33,26 @@ func TestAdminTestVideoUpscaleReusesSavedVolcengineCredentials(t *testing.T) {
 	activeVideoUpscaleSpaceReader = reader
 	t.Cleanup(func() { activeVideoUpscaleSpaceReader = previous })
 
-	result, err := AdminTestVideoUpscale(context.Background(), model.VideoUpscaleSetting{SpaceName: " vod-space "})
+	result, err := AdminTestVideoUpscale(context.Background(), model.VideoUpscaleSetting{APIKey: maskedAPIKey, OutputTOSPath: " tos://bucket/new-output/ "})
 	if err != nil {
 		t.Fatalf("AdminTestVideoUpscale returned error: %v", err)
 	}
-	if reader.calls != 1 || reader.asset.AccessKey != "shared-ak" || reader.asset.SecretKey != "shared-sk" || reader.video.SpaceName != "vod-space" {
+	if reader.calls != 1 || reader.video.APIKey != "saved-las-key" || reader.video.OutputTOSPath != "tos://bucket/new-output/" {
 		t.Fatalf("space reader call = %#v", reader)
 	}
-	if result.Provider != "volcengine" || !strings.Contains(result.Message, "未上传视频") {
+	if result.Provider != "volcengine-las" || !strings.Contains(result.Message, "未创建超分任务") {
 		t.Fatalf("result = %#v", result)
 	}
 }
 
-func TestAdminTestVideoUpscaleRequiresSpaceAndSharedCredentials(t *testing.T) {
+func TestAdminTestVideoUpscaleRequiresLASKeyAndOutputTOSPath(t *testing.T) {
 	setupAITaskTestDB(t)
 	reader := &recordingVideoUpscaleSpaceReader{}
 	previous := activeVideoUpscaleSpaceReader
 	activeVideoUpscaleSpaceReader = reader
 	t.Cleanup(func() { activeVideoUpscaleSpaceReader = previous })
 
-	for _, input := range []model.VideoUpscaleSetting{{SpaceName: ""}, {SpaceName: "vod-space"}} {
+	for _, input := range []model.VideoUpscaleSetting{{}, {APIKey: "las-key"}, {OutputTOSPath: "tos://bucket/output/"}} {
 		_, err := AdminTestVideoUpscale(context.Background(), input)
 		if err == nil {
 			t.Fatalf("AdminTestVideoUpscale(%#v) returned nil error", input)
