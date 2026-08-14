@@ -1,8 +1,12 @@
-import { Suspense } from "react";
-import { Spin } from "antd";
+import { redirect } from "next/navigation";
 
-import { AgentWorkspace } from "./agent-workspace";
+import { legacyAgentRedirectHref } from "../projects/agent-workspace-route";
 
-export default function AgentPage() {
-    return <Suspense fallback={<main className="studio-shell grid min-h-[calc(100dvh-3.5rem)] place-items-center"><Spin description="正在打开生产总控" /></main>}><AgentWorkspace /></Suspense>;
+type AgentPageProps = {
+    searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function AgentPage({ searchParams }: AgentPageProps) {
+    const query = await searchParams;
+    redirect(legacyAgentRedirectHref(query));
 }

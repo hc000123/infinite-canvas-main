@@ -15,6 +15,7 @@ export function CanvasToolButton({
     danger = false,
     disabled = false,
     size = "sm",
+    instantFeedback = false,
 }: {
     title?: string;
     label: string;
@@ -24,6 +25,7 @@ export function CanvasToolButton({
     danger?: boolean;
     disabled?: boolean;
     size?: "sm" | "md";
+    instantFeedback?: boolean;
 }) {
     const colorTheme = useThemeStore((state) => state.theme);
     const theme = canvasThemes[colorTheme];
@@ -38,10 +40,10 @@ export function CanvasToolButton({
     const tooltipText = title || label;
 
     return (
-        <Tooltip title={<span style={{ color: theme.node.text }}>{tooltipText}</span>} placement="top" mouseEnterDelay={0.2} classNames={{ root: "canvas-tool-tooltip" }} styles={{ container: { color: theme.node.text } }}>
+        <Tooltip title={<span style={{ color: theme.node.text }}>{tooltipText}</span>} placement="top" mouseEnterDelay={instantFeedback ? 0 : 0.2} classNames={{ root: "canvas-tool-tooltip" }} styles={{ container: { color: theme.node.text } }}>
             <button
                 type="button"
-                className={`group relative grid ${buttonSize} place-items-center transition disabled:cursor-not-allowed`}
+                className={`group relative grid ${buttonSize} place-items-center ${instantFeedback ? "transition-colors duration-75" : "transition"} disabled:cursor-not-allowed`}
                 style={{ color: textColor, opacity: disabled && !active ? 0.35 : 1 }}
                 disabled={disabled}
                 onClick={onClick}
@@ -50,7 +52,7 @@ export function CanvasToolButton({
                 aria-label={tooltipText}
             >
                 <span
-                    className={`grid ${iconSize} place-items-center transition`}
+                    className={`grid ${iconSize} place-items-center ${instantFeedback ? "transition-colors duration-75" : "transition"}`}
                     style={{
                         background: active ? theme.toolbar.activeBg : hoverActive ? theme.toolbar.itemHover : undefined,
                         color: active ? theme.accent : danger ? dangerColor : hoverActive ? theme.node.text : undefined,

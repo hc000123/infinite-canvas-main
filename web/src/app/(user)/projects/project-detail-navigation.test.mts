@@ -21,9 +21,33 @@ test("project script entry invokes the selected Skill without an Agent Plan", ()
     assert.doesNotMatch(page, /\n\s+运行剧本 Skill\n/);
     assert.match(page, /preflightScriptInvocation/);
     assert.match(page, /createInvocation/);
-    assert.match(board, /aria-label="剧本优化 Skill"/);
-    assert.match(board, /剧本 Skill/);
+    assert.match(board, /aria-label="剧本优化方案"/);
+    assert.doesNotMatch(board, />\s*剧本 Skill\s*</);
     assert.doesNotMatch(page, /createAgentPlan|Agent Plan|buildScriptSkillOverride/);
+});
+
+test("episode title itself opens the existing rename flow", () => {
+    const board = readProjectFile("./[id]/components/project-episode-board.tsx");
+
+    assert.match(board, /aria-label=\{`修改 \$\{episodeDisplayTitle\(row\)\} 标题`\}/);
+    assert.match(board, /setSelectedId\(row\.id\);\s+onEditTitle\(row\);/);
+    assert.doesNotMatch(board, /aria-label=\{`修改 \$\{episodeDisplayTitle\(selectedEpisode\)\} 标题`\}/);
+});
+
+test("original script area itself opens the existing editor", () => {
+    const board = readProjectFile("./[id]/components/project-episode-board.tsx");
+
+    assert.match(board, /aria-label=\{`编辑 \$\{episodeDisplayTitle\(selectedEpisode\)\} 剧本`\}/);
+    assert.match(board, /onClick=\{\(\) => setEditingScript\(true\)\}/);
+    assert.doesNotMatch(board, />\s*编辑剧本\s*</);
+});
+
+test("episode production starts with the episode rail and keeps create in that context", () => {
+    const board = readProjectFile("./[id]/components/project-episode-board.tsx");
+    const productionPanel = board.slice(board.indexOf("function ProjectEpisodeProductionPanel"), board.indexOf("function ProjectOverviewPanel"));
+
+    assert.doesNotMatch(productionPanel, /项目中心 \/|>分集制作<|进度 \{progress\}%/);
+    assert.match(productionPanel, /<aside[\s\S]*新建分集/);
 });
 
 test("episode import uses scene wording and has no import-time optimization action", () => {

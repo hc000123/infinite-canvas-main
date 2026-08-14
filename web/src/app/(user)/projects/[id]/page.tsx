@@ -12,7 +12,7 @@ import { useScriptStore } from "../../canvas/stores/use-script-store";
 import { useStoryboardStore } from "../../canvas/stores/use-storyboard-store";
 import { buildImportedEpisodeWriteInput, canvasEpisodeContextFromCreateBinding, canvasEpisodeContextFromEpisode, type CanvasCreateScriptBinding } from "../../canvas/utils/canvas-episode-context";
 import { episodeMainCanvas } from "../../canvas/utils/episode-canvas-hierarchy";
-import { canvasProjectPresetSummary, type CanvasProjectPreset } from "../../canvas/utils/canvas-project-preset";
+import type { CanvasProjectPreset } from "../../canvas/utils/canvas-project-preset";
 import { episodeProductionName } from "../../canvas/utils/script-management";
 import { videoWorkflowHref } from "../../original-workflow/video-workflow-routing";
 import { canvasIdsForCreativeProject, unfiledCanvasProjects } from "../creative-projects";
@@ -134,10 +134,6 @@ export default function CreativeProjectDetailPage() {
         [episodeRows],
     );
     const currentEpisode = useMemo(() => episodeRows.find((row) => row.filterStatus === "running") || episodeRows.find((row) => row.filterStatus === "draft") || episodeRows[episodeRows.length - 1], [episodeRows]);
-    const projectProgress = useMemo(() => {
-        if (!episodeRows.length) return 0;
-        return Math.round(episodeRows.reduce((total, row) => total + row.progress, 0) / episodeRows.length);
-    }, [episodeRows]);
     useEffect(() => {
         if (!episodeImportOpen) {
             return;
@@ -376,15 +372,11 @@ export default function CreativeProjectDetailPage() {
                 activeTab={activeTab}
                 currentEpisode={currentEpisode}
                 counts={episodeCounts}
-                description={project.description}
                 episodeFilter={episodeFilter}
                 filteredRows={filteredEpisodeRows}
-                progress={projectProgress}
                 canvases={projectCanvases}
                 unboundCanvases={unboundCanvases}
                 bindingCanvasId={bindingCanvasId}
-                projectTitle={project.title}
-                presetSummary={canvasProjectPresetSummary(project.preset)}
                 rows={episodeRows}
                 scriptSkillOptions={scriptSkills.options.map((option) => ({ value: option.skillVersionId, label: `${option.skillName} · v${option.version}` }))}
                 scriptSkillVersionIds={scriptSkills.episodeVersionIds}

@@ -154,6 +154,7 @@ function AssetsPageContent() {
         pageCount,
         previewAssetUsageReferences,
         projectContextFilter,
+        projectFolderRows,
         projectOptions,
         projectLibraryFilter,
         projectLibraryProjectTitles,
@@ -198,6 +199,7 @@ function AssetsPageContent() {
         storyboardTableShots,
         subjects,
     });
+    const activeContextFolderId = activeFolderId || projectFolderRows.find((item) => item.project.id === projectContextFilter)?.folder.id || undefined;
     const subjectSummaries = useMemo(() => buildAssetCenterSubjects({ subjects, variants, assets, workbenchImages, projectId: projectContextFilter }), [assets, projectContextFilter, subjects, variants, workbenchImages]);
     const inboxAssets = useMemo(() => {
         const filteredIds = new Set(filteredAssets.map((asset) => asset.id));
@@ -229,7 +231,7 @@ function AssetsPageContent() {
         updateFolder,
     });
     const { content, coverUrl, editingAsset, formKind, imageDraft, isAssetOpen, mediaDraft, tags, title, openCreate, openEdit, readCoverFile, readImageFile, readMediaFile, saveAsset, setIsAssetOpen, updateFormKind } = useAssetEditorActions({
-        activeFolderId: activeFolderId || undefined,
+        activeFolderId: activeContextFolderId,
         activeProjectId: projectContextFilter || undefined,
         addAsset,
         addAssetOnce,
@@ -352,6 +354,14 @@ function AssetsPageContent() {
         setSourceScope,
         setStoryboardGroupFilter,
     });
+    const changeProjectContext = (value: string) => {
+        assetFilterActions.changeProjectContextFilter(value);
+        const params = new URLSearchParams(searchParams.toString());
+        if (value) params.set("projectId", value);
+        else params.delete("projectId");
+        const query = params.toString();
+        router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    };
     const {
         addSelectedToProjectLibrary,
         applyBulkDelete,
@@ -392,7 +402,7 @@ function AssetsPageContent() {
         volcengineAssetEnabled,
     });
     const { handleUploadDragEnter, handleUploadDragLeave, handleUploadDragOver, handleUploadDrop, importAssetFiles, isDraggingUpload } = useAssetImportDropzone({
-        activeFolderId: activeFolderId || undefined,
+        activeFolderId: activeContextFolderId,
         activeFolderName,
         activeProjectId: projectContextFilter || undefined,
         addAssetOnce,
@@ -541,7 +551,7 @@ function AssetsPageContent() {
                         onImportClick={openProjectImport}
                         onKindFilterChange={assetFilterActions.changeKindFilter}
                         onKeywordChange={assetFilterActions.changeKeyword}
-                        onProjectChange={assetFilterActions.changeProjectContextFilter}
+                        onProjectChange={changeProjectContext}
                         onSortModeChange={assetFilterActions.changeSortMode}
                     />
 
@@ -561,7 +571,7 @@ function AssetsPageContent() {
                             onGenerationTaskFilterChange: assetFilterActions.changeGenerationTaskFilter,
                             onKindFilterChange: assetFilterActions.changeKindFilter,
                             onKeywordChange: assetFilterActions.changeKeyword,
-                            onProjectContextFilterChange: assetFilterActions.changeProjectContextFilter,
+                            onProjectContextFilterChange: changeProjectContext,
                             onProjectLibraryFilterChange: assetFilterActions.changeProjectLibraryFilter,
                             onReferenceVersionFilterChange: assetFilterActions.changeReferenceVersionFilter,
                             onSourceScopeChange: assetFilterActions.changeSourceScope,

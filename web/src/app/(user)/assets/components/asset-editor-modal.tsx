@@ -2,7 +2,7 @@
 
 import { Upload } from "lucide-react";
 import type { RefObject } from "react";
-import { Button, Form, Input, Modal, Select, Space, Tag, Typography, type FormInstance } from "antd";
+import { Button, Form, Input, Modal, Segmented, Select, Typography, type FormInstance } from "antd";
 
 import { formatBytes } from "@/lib/image-utils";
 import type { Asset, AssetCategory, AssetKind, AssetSubject, AudioAsset, ImageAsset, VideoAsset } from "@/stores/use-asset-store";
@@ -67,9 +67,6 @@ export function AssetEditorModal({
     projects,
     subjects,
     coverUrl,
-    title,
-    tags,
-    content,
     imageDraft,
     mediaDraft,
     coverInputRef,
@@ -83,34 +80,41 @@ export function AssetEditorModal({
     onReadMediaFile,
 }: AssetEditorModalProps) {
     return (
-        <Modal rootClassName="studio-modal" title={editingAsset ? "编辑资产" : "新增资产"} open={open} width={980} onCancel={onCancel} onOk={() => void onSave()} okText="保存" cancelText="取消" destroyOnHidden>
-            <div className="grid gap-6 pt-1 lg:grid-cols-[minmax(0,1fr)_320px]">
-                <Form form={form} layout="vertical" requiredMark={false} initialValues={{ kind: "text", tags: [] }}>
+        <Modal rootClassName="studio-modal" title={editingAsset ? "编辑资产" : "新增资产"} open={open} width={920} onCancel={onCancel} onOk={() => void onSave()} okText="保存" cancelText="取消" destroyOnHidden>
+            <div className="grid gap-5 pt-1 lg:grid-cols-[280px_minmax(0,1fr)]">
+                {formKind !== "text" ? (
+                    <AssetMediaInfo
+                        formKind={formKind}
+                        coverUrl={coverUrl}
+                        imageDraft={imageDraft}
+                        mediaDraft={mediaDraft}
+                        coverInputRef={coverInputRef}
+                        imageInputRef={imageInputRef}
+                        mediaInputRef={mediaInputRef}
+                    />
+                ) : null}
+                <Form className={formKind === "text" ? "lg:col-span-2" : ""} form={form} layout="vertical" requiredMark={false} initialValues={{ kind: "text", tags: [] }}>
                     <Form.Item name="kind" label="类型">
-                        <Select
+                        <Segmented
+                            block
                             options={[
                                 { label: "文本", value: "text" },
                                 { label: "图片", value: "image" },
                                 { label: "视频", value: "video" },
                                 { label: "音频", value: "audio" },
                             ]}
-                            onChange={onKindChange}
+                            onChange={(value) => onKindChange(value as AssetKind)}
                         />
                     </Form.Item>
-                    <Form.Item name="title" label="标题" rules={[{ required: true, message: "请输入标题" }]}>
-                        <Input size="large" placeholder="给素材起一个容易检索的名字" />
-                    </Form.Item>
-                    <Form.Item name="folderId" label="文件夹">
-                        <Select options={folderOptions} />
-                    </Form.Item>
-                    <Form.Item name="coverUrl" label="封面 URL">
-                        <Space.Compact className="w-full">
-                            <Input placeholder="可粘贴图片 URL，也可以上传本地封面" />
-                            <Button icon={<Upload className="size-3.5" />} onClick={() => coverInputRef.current?.click()}>
-                                上传
-                            </Button>
-                        </Space.Compact>
-                    </Form.Item>
+                    <Form.Item name="coverUrl" hidden><Input /></Form.Item>
+                    <div className="grid gap-4 sm:grid-cols-[minmax(0,1.4fr)_minmax(180px,0.6fr)]">
+                        <Form.Item name="title" label="名称" rules={[{ required: true, message: "请输入名称" }]}>
+                            <Input placeholder="输入便于检索的名称" />
+                        </Form.Item>
+                        <Form.Item name="folderId" label="文件夹">
+                            <Select options={folderOptions} />
+                        </Form.Item>
+                    </div>
                     <Form.Item name="tags" label="标签">
                         <Select mode="tags" tokenSeparators={[",", "，"]} placeholder="输入标签后回车" />
                     </Form.Item>
@@ -123,9 +127,12 @@ export function AssetEditorModal({
                             <Input placeholder="可选" />
                         </Form.Item>
                     </div>
-                    <AssetContentForm formKind={formKind} imageDraft={imageDraft} mediaDraft={mediaDraft} imageInputRef={imageInputRef} mediaInputRef={mediaInputRef} />
+                    {formKind === "text" ? (
+                        <Form.Item name="content" label="文本内容" rules={[{ required: true, message: "请输入文本内容" }]}>
+                            <Input.TextArea rows={8} placeholder="保存提示词、说明文案、参考描述等文本资产" />
+                        </Form.Item>
+                    ) : null}
                 </Form>
-                <AssetEditorPreview formKind={formKind} coverUrl={coverUrl} title={title} tags={tags} content={content} imageDraft={imageDraft} mediaDraft={mediaDraft} />
             </div>
             <input
                 ref={coverInputRef}
@@ -161,87 +168,50 @@ export function AssetEditorModal({
     );
 }
 
-function AssetContentForm({
+function AssetMediaInfo({
     formKind,
+    coverUrl,
     imageDraft,
     mediaDraft,
+    coverInputRef,
     imageInputRef,
     mediaInputRef,
 }: {
     formKind: AssetKind;
+    coverUrl: string;
     imageDraft: ImageDraft;
     mediaDraft: MediaDraft;
+    coverInputRef: RefObject<HTMLInputElement | null>;
     imageInputRef: RefObject<HTMLInputElement | null>;
     mediaInputRef: RefObject<HTMLInputElement | null>;
 }) {
-    if (formKind === "text") {
-        return (
-            <Form.Item name="content" label="文本内容" rules={[{ required: true, message: "请输入文本内容" }]}>
-                <Input.TextArea rows={8} placeholder="保存提示词、说明文案、参考描述等文本素材" />
-            </Form.Item>
-        );
-    }
-
-    if (formKind === "image") {
-        return (
-            <Form.Item label="图片内容" required>
-                <div className="rounded-md border border-dashed border-[var(--studio-border-strong)] bg-[var(--studio-panel-muted-bg)] p-4">
-                    <Button icon={<Upload className="size-4" />} onClick={() => imageInputRef.current?.click()}>
-                        选择图片文件
-                    </Button>
-                    <Typography.Text className="ml-3 text-sm !text-[var(--studio-text-muted)]">{imageDraft ? `${imageDraft.width}x${imageDraft.height} · ${formatBytes(imageDraft.bytes)}` : "未选择图片"}</Typography.Text>
-                </div>
-            </Form.Item>
-        );
-    }
-
+    const kindLabel = formKind === "image" ? "图片" : formKind === "video" ? "视频" : "音频";
+    const summary = imageDraft
+        ? `${imageDraft.width} × ${imageDraft.height} · ${formatBytes(imageDraft.bytes)}`
+        : mediaDraft
+          ? `${"width" in mediaDraft ? `${mediaDraft.width} × ${mediaDraft.height} · ` : ""}${formatBytes(mediaDraft.bytes)}`
+          : `尚未选择${kindLabel}`;
     return (
-        <Form.Item label={formKind === "video" ? "视频内容" : "音频内容"} required>
-            <div className="rounded-md border border-dashed border-[var(--studio-border-strong)] bg-[var(--studio-panel-muted-bg)] p-4">
-                <Button icon={<Upload className="size-4" />} onClick={() => mediaInputRef.current?.click()}>
-                    {formKind === "video" ? "选择视频文件" : "选择音频文件"}
-                </Button>
-                <Typography.Text className="ml-3 text-sm !text-[var(--studio-text-muted)]">{mediaDraft ? `${formatBytes(mediaDraft.bytes)} · ${mediaDraft.mimeType}` : formKind === "video" ? "未选择视频" : "未选择音频"}</Typography.Text>
-            </div>
-        </Form.Item>
-    );
-}
-
-function AssetEditorPreview({ formKind, coverUrl, title, tags, content, imageDraft, mediaDraft }: { formKind: AssetKind; coverUrl: string; title: string; tags: string[]; content: string; imageDraft: ImageDraft; mediaDraft: MediaDraft }) {
-    return (
-        <div className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4">
-            <Typography.Text strong className="!text-[var(--studio-text-primary)]">
-                预览
-            </Typography.Text>
+        <section className="self-start rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] p-4">
+            <Typography.Text strong className="!text-[var(--studio-text-primary)]">{kindLabel}信息</Typography.Text>
             <div className="mt-3 overflow-hidden rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-elevated-bg)]">
                 {formKind === "video" && mediaDraft ? (
                     <video src={mediaDraft.url} controls className="aspect-[4/3] w-full bg-black object-contain" />
                 ) : formKind === "audio" && mediaDraft ? (
-                    <div className="flex aspect-[4/3] items-center justify-center bg-[var(--studio-shell-bg)] p-5">
-                        <audio src={mediaDraft.url} controls className="w-full" />
-                    </div>
+                    <div className="flex aspect-[4/3] items-center justify-center bg-[var(--studio-shell-bg)] p-4"><audio src={mediaDraft.url} controls className="w-full" /></div>
                 ) : coverUrl || imageDraft?.dataUrl ? (
-                    <img src={coverUrl || imageDraft?.dataUrl} alt="" className="aspect-[4/3] w-full object-cover" />
+                    <img src={imageDraft?.dataUrl || coverUrl} alt="资产预览" className="aspect-[4/3] w-full object-cover" />
                 ) : (
-                    <div className="flex aspect-[4/3] items-center justify-center bg-[var(--studio-shell-bg)] p-5 text-center text-sm text-[var(--studio-text-muted)]">{content || "暂无封面"}</div>
+                    <div className="flex aspect-[4/3] items-center justify-center px-5 text-center text-sm text-[var(--studio-text-muted)]">选择{kindLabel}后在这里预览</div>
                 )}
-                <div className="p-4">
-                    <Typography.Text strong ellipsis className="block !text-[var(--studio-text-primary)]">
-                        {title || "未命名素材"}
-                    </Typography.Text>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                        {tags.length ? (
-                            tags.map((tag) => (
-                                <Tag key={tag} className="studio-tag">
-                                    {tag}
-                                </Tag>
-                            ))
-                        ) : (
-                            <Tag className="studio-tag">未打标签</Tag>
-                        )}
-                    </div>
-                </div>
             </div>
-        </div>
+            <Typography.Text className="mt-3 block text-xs !text-[var(--studio-text-muted)]">{summary}</Typography.Text>
+            <Button block className="mt-3" icon={<Upload className="size-4" />} onClick={() => (formKind === "image" ? imageInputRef.current?.click() : mediaInputRef.current?.click())}>
+                {imageDraft || mediaDraft ? `替换${kindLabel}` : `选择${kindLabel}`}
+            </Button>
+            {formKind !== "image" ? (
+                <Button block type="text" size="small" className="mt-1" onClick={() => coverInputRef.current?.click()}>设置可选封面</Button>
+            ) : null}
+        </section>
     );
 }

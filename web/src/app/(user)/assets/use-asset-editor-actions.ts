@@ -75,7 +75,7 @@ export function useAssetEditorActions({ activeFolderId, activeProjectId, addAsse
             kind: asset.kind,
             title: asset.title,
             coverUrl: asset.coverUrl,
-            folderId: asset.folderId || "",
+            folderId: asset.folderId || activeFolderId || "",
             tags: asset.tags || [],
             source: asset.source,
             note: asset.note,

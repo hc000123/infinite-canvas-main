@@ -39,27 +39,13 @@ test("node content keeps baseline progress and error routing", () => {
     assert.doesNotMatch(content, /deriveCanvasNodePresentation|NodeStatusOverlay|LogoBody/);
 });
 
-test("empty images use the logo while retaining baseline quick actions", () => {
+test("empty images stay minimal while retaining baseline quick actions", () => {
     const content = readCanvasFile("../components/canvas-node-content.tsx");
 
     assert.match(content, /function EmptyImageContent/);
-    assert.match(content, /<CanvasLogoPlaceholder/);
+    assert.doesNotMatch(content, /CanvasLogoPlaceholder|\/logo\.svg|等待图片内容/);
     assert.match(content, /onImageQuickAction\?\.\(node, "image-to-image"\)/);
     assert.match(content, /onImageQuickAction\?\.\(node, "upscale"\)/);
-});
-
-test("canvas logo placeholder uses a theme-colored mask", () => {
-    const logo = readCanvasFile("../components/canvas-logo-placeholder.tsx");
-
-    assert.equal((logo.match(/\/logo\.svg/g) || []).length, 1);
-    assert.match(logo, /aria-label=/);
-    assert.match(logo, /maskImage/);
-    assert.match(logo, /WebkitMaskImage/);
-    assert.match(logo, /theme\.node\.placeholder/);
-    assert.match(logo, /aria-hidden/);
-    assert.doesNotMatch(logo, /opacity-(?:[0-7]\d?|80)\b|opacity:\s*0\.[0-8]\b/);
-    assert.doesNotMatch(logo, /<img/);
-    assert.doesNotMatch(logo, /Clapperboard|clapper|场记板/i);
 });
 
 test("editorial canvas theme exposes warm surface, accent, and focus tokens", () => {

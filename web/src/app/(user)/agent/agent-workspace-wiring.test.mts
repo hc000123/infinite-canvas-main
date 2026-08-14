@@ -4,13 +4,12 @@ import test from "node:test";
 
 const read = (relative: string) => readFileSync(new URL(relative, import.meta.url), "utf8");
 
-test("places Agent between projects and canvas in the shared navigation", () => {
+test("removes Agent from the shared navigation without removing the compatibility route", () => {
     const source = read("../../../constant/navigation-tools.ts");
-    const projects = source.indexOf('slug: "projects"');
-    const agent = source.indexOf('slug: "agent"');
-    const canvas = source.indexOf('slug: "canvas"');
-    assert.ok(projects >= 0 && projects < agent && agent < canvas);
-    assert.match(source, /slug: "agent",\s*label: "生产总控",\s*shortLabel: "总控"/s);
+    const page = read("./page.tsx");
+    assert.doesNotMatch(source, /slug: "agent"|生产总控/);
+    assert.match(page, /legacyAgentRedirectHref/);
+    assert.match(page, /redirect\(/);
 });
 
 test("presents the Agent route as production control instead of an Agent definition center", () => {

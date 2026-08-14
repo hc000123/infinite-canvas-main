@@ -295,7 +295,6 @@ export function useAssetPageQuery({ assets, creativeProjects, folders, initialPr
     }, [canvasLibraryFilter, projectCanvasIds]);
 
     useEffect(() => {
-        if (!initialProjectId) return;
         setProjectContextFilter(initialProjectId);
         setFolderFilter("all");
     }, [initialProjectId]);

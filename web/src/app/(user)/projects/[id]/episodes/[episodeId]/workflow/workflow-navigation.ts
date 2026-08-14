@@ -12,7 +12,7 @@ export function workflowReturnTarget(projectId: string, query: WorkflowNavigatio
         if (url.origin !== INTERNAL_ORIGIN) return fallback;
         return {
             href: `${url.pathname}${url.search}${url.hash}`,
-            label: url.pathname === "/agent" ? "返回生产总控" : "返回项目",
+            label: "返回项目",
         };
     } catch {
         return fallback;

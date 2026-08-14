@@ -35,16 +35,12 @@ type ProjectEpisodeBoardProps = {
     activeTab: ProjectDetailTab;
     currentEpisode?: ProjectEpisodeBoardRow;
     counts: { all: number; done: number; draft: number; running: number };
-    description: string;
     episodeFilter: EpisodeFilter;
     filteredRows: ProjectEpisodeBoardRow[];
-    progress: number;
     canvases: CanvasProject[];
     unboundCanvases: CanvasProject[];
     bindingCanvasId: string;
     optimizingEpisodeIds: Record<string, string>;
-    projectTitle: string;
-    presetSummary: string;
     rows: ProjectEpisodeBoardRow[];
     scriptSkillOptions: Array<{ label: string; value: string }>;
     scriptSkillVersionIds: Record<string, string>;
@@ -72,16 +68,12 @@ export function ProjectEpisodeBoard({
     activeTab,
     currentEpisode,
     counts,
-    description,
     episodeFilter,
     filteredRows,
-    progress,
     canvases,
     unboundCanvases,
     bindingCanvasId,
     optimizingEpisodeIds,
-    projectTitle,
-    presetSummary,
     rows,
     scriptSkillOptions,
     scriptSkillVersionIds,
@@ -104,23 +96,15 @@ export function ProjectEpisodeBoard({
     onSaveEpisodeScript,
     onTabChange,
 }: ProjectEpisodeBoardProps) {
-    const currentText = currentEpisode ? `${episodeDisplayTitle(currentEpisode)} · ${currentEpisodeStatusText(currentEpisode)}` : "暂无分集";
     return (
-        <div className="mx-auto min-h-full max-w-[1680px] rounded-lg border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] shadow-[var(--studio-shadow)]">
+        <div className="mx-auto min-h-full max-w-[1680px] border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)]">
             <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--studio-border-subtle)] px-4 py-4 sm:px-8">
                 <nav aria-label="项目详情视图" className="order-1 flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-4 lg:order-none">
                     <ProjectDetailNavButton active={activeTab === "episodes"} icon={ListChecks} label="分集" onClick={() => onTabChange("episodes")} />
                     <ProjectDetailNavButton active={activeTab === "canvas"} icon={Maximize2} label="项目画布" onClick={() => onTabChange("canvas")} />
                 </nav>
 
-                <div className="order-2 flex w-full min-w-0 justify-start lg:order-none lg:w-auto lg:flex-1 lg:justify-center">
-                    <div className="w-full rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] px-4 py-2 text-left text-sm font-medium leading-6 text-[var(--studio-text-secondary)] sm:text-base lg:w-auto lg:max-w-full lg:text-center">
-                        <span className="text-[var(--studio-text-muted)]">当前制作到</span>
-                        <span className="ml-2 text-[var(--studio-text-primary)]">{currentText}</span>
-                    </div>
-                </div>
-
-                <div className="order-3 flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap lg:order-none">
+                <div className="order-2 ml-auto flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap lg:order-none">
                     <Button className="h-10 flex-1 px-4 sm:flex-none" onClick={onEditProject}>
                         编辑项目
                     </Button>
@@ -154,7 +138,6 @@ export function ProjectEpisodeBoard({
                     <ProjectEpisodeProductionPanel
                         counts={counts}
                         currentEpisode={currentEpisode}
-                        description={description}
                         episodeFilter={episodeFilter}
                         filteredRows={filteredRows}
                         onCreate={onImportEpisode}
@@ -167,8 +150,6 @@ export function ProjectEpisodeBoard({
                         onOpenEpisodeCanvas={onOpenEpisodeCanvas}
                         onSaveEpisodeScript={onSaveEpisodeScript}
                         optimizingEpisodeIds={optimizingEpisodeIds}
-                        progress={progress}
-                        projectTitle={projectTitle}
                         rows={rows}
                         scriptSkillOptions={scriptSkillOptions}
                         scriptSkillVersionIds={scriptSkillVersionIds}
@@ -185,7 +166,6 @@ export function ProjectEpisodeBoard({
 function ProjectEpisodeProductionPanel({
     counts,
     currentEpisode,
-    description,
     episodeFilter,
     filteredRows,
     onCreate,
@@ -198,8 +178,6 @@ function ProjectEpisodeProductionPanel({
     onOpenEpisodeCanvas,
     onSaveEpisodeScript,
     optimizingEpisodeIds,
-    progress,
-    projectTitle,
     rows,
     scriptSkillOptions,
     scriptSkillVersionIds,
@@ -209,7 +187,6 @@ function ProjectEpisodeProductionPanel({
 }: {
     counts: { all: number; done: number; draft: number; running: number };
     currentEpisode?: ProjectEpisodeBoardRow;
-    description: string;
     episodeFilter: EpisodeFilter;
     filteredRows: ProjectEpisodeBoardRow[];
     onCreate: () => void;
@@ -222,8 +199,6 @@ function ProjectEpisodeProductionPanel({
     onOpenEpisodeCanvas: (episodeId: string) => void;
     onSaveEpisodeScript: (episodeId: string, script: string) => void;
     optimizingEpisodeIds: Record<string, string>;
-    progress: number;
-    projectTitle: string;
     rows: ProjectEpisodeBoardRow[];
     scriptSkillOptions: Array<{ label: string; value: string }>;
     scriptSkillVersionIds: Record<string, string>;
@@ -254,32 +229,6 @@ function ProjectEpisodeProductionPanel({
 
     return (
         <section className="grid gap-3">
-            <div className="flex flex-col gap-3 border-b border-[var(--studio-border-subtle)] pb-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="min-w-0">
-                    <div className="text-xs font-semibold leading-5 text-[var(--studio-accent)]">项目中心 / {projectTitle}</div>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <h1 className="break-words text-2xl font-semibold leading-tight tracking-normal text-[var(--studio-text-primary)]">分集制作</h1>
-                        <span className="text-xs text-[var(--studio-text-muted)]">{description || "选择分集，编辑剧本或进入本集制作流程。"}</span>
-                    </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex min-w-[220px] items-center gap-3 rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] px-3 py-2">
-                        <span className="shrink-0 text-xs font-semibold text-[var(--studio-text-secondary)]">进度 {progress}%</span>
-                        <div className="h-1.5 min-w-20 flex-1 rounded-full bg-[var(--studio-elevated-bg)]">
-                            <div className="h-full rounded-full bg-[var(--studio-accent)]" style={{ width: `${progress}%` }} />
-                        </div>
-                        <div className="flex shrink-0 gap-2 text-xs text-[var(--studio-text-muted)]">
-                            <span>完成 {counts.done}</span>
-                            <span>进行 {counts.running}</span>
-                            <span>草稿 {counts.draft}</span>
-                        </div>
-                    </div>
-                    <Button type="primary" icon={<Plus className="size-4" />} onClick={onCreate}>
-                        新建分集
-                    </Button>
-                </div>
-            </div>
-
             <div className="grid min-h-[560px] gap-3 xl:grid-cols-[190px_minmax(0,1fr)_minmax(0,1fr)] 2xl:grid-cols-[210px_minmax(0,1fr)_minmax(0,1fr)]">
                 <aside className="rounded-md border border-[var(--studio-border-subtle)] bg-[var(--studio-panel-bg)] p-3">
                     <div className="flex items-center justify-between gap-3">
@@ -287,7 +236,9 @@ function ProjectEpisodeProductionPanel({
                             <h2 className="text-sm font-semibold text-[var(--studio-text-primary)]">集数</h2>
                             <p className="mt-1 text-xs text-[var(--studio-text-muted)]">共 {total} 集</p>
                         </div>
-                        <Tag className="m-0">{counts.all}</Tag>
+                        <Button size="small" type="primary" icon={<Plus className="size-3.5" />} onClick={onCreate}>
+                            新建分集
+                        </Button>
                     </div>
                     <div className="mt-3 grid grid-cols-2 gap-1.5">
                         <EpisodeFilterButton active={episodeFilter === "all"} label="全部" onClick={() => onFilterChange("all")} />
@@ -300,21 +251,30 @@ function ProjectEpisodeProductionPanel({
                             filteredRows.map((row) => {
                                 const selected = row.id === selectedEpisode?.id;
                                 return (
-                                    <button
+                                    <div
                                         key={row.id}
-                                        type="button"
-                                        aria-pressed={selected}
                                         className={`w-full cursor-pointer rounded-md border p-2.5 text-left transition-colors ${selected ? "border-[var(--studio-accent)] bg-[var(--studio-accent-soft)]" : "border-[var(--studio-border-subtle)] bg-[var(--studio-panel-muted-bg)] hover:border-[var(--studio-border-strong)] hover:bg-[var(--studio-hover-bg)]"}`}
                                         onClick={() => setSelectedId(row.id)}
                                     >
                                         <div className="flex items-start justify-between gap-2">
-                                            <span className="block min-w-0 flex-1 line-clamp-2 text-sm font-semibold leading-5 text-[var(--studio-text-primary)]">{episodeDisplayTitle(row)}</span>
+                                            <button
+                                                type="button"
+                                                className="min-w-0 flex-1 line-clamp-2 text-left text-sm font-semibold leading-5 text-[var(--studio-text-primary)] transition-colors hover:text-[var(--studio-accent)] focus-visible:outline-none focus-visible:text-[var(--studio-accent)]"
+                                                aria-label={`修改 ${episodeDisplayTitle(row)} 标题`}
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    setSelectedId(row.id);
+                                                    onEditTitle(row);
+                                                }}
+                                            >
+                                                {episodeDisplayTitle(row)}
+                                            </button>
                                         </div>
                                         <div className="mt-2 flex items-center justify-between gap-2">
                                             <span className="truncate text-xs text-[var(--studio-text-muted)]">{row.scriptPreview.trim() ? `${row.scriptPreview.trim().length} 字` : "暂无剧本"}</span>
                                             <EpisodeStatusBadge status={row.status} />
                                         </div>
-                                    </button>
+                                    </div>
                                 );
                             })
                         ) : (
@@ -336,25 +296,10 @@ function ProjectEpisodeProductionPanel({
                             </div>
                                     {selectedEpisode ? (
                                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                                    <Tag className="m-0" icon={<Wand2 className="size-3.5" />}>
-                                        剧本 Skill
-                                    </Tag>
-                                    <Select aria-label="剧本优化 Skill" size="small" loading={scriptSkillsLoading} value={selectedSkillVersionId || undefined} options={scriptSkillOptions} placeholder="选择 Skill 版本" className="min-w-44" onChange={(value) => onScriptSkillChange(selectedEpisode.id, value)} />
+                                    <Select aria-label="剧本优化方案" size="small" loading={scriptSkillsLoading} value={selectedSkillVersionId || undefined} options={scriptSkillOptions} placeholder="选择优化方案" className="min-w-44" onChange={(value) => onScriptSkillChange(selectedEpisode.id, value)} />
                                     <Button size="small" icon={<Wand2 className="size-3.5" />} loading={selectedOptimizing} disabled={!selectedScript || !selectedSkillVersionId} onClick={() => onOptimizeEpisodeScript(selectedEpisode.id, selectedSkillVersionId)}>
                                         剧本优化
                                     </Button>
-                                    <Button size="small" icon={<Edit3 className="size-3.5" />} disabled={selectedOptimizing} onClick={() => setEditingScript(true)}>
-                                        编辑剧本
-                                    </Button>
-                                    <button
-                                        type="button"
-                                        className="grid size-9 place-items-center rounded-md text-[var(--studio-text-muted)] transition hover:bg-[var(--studio-hover-bg)] hover:text-[var(--studio-accent)]"
-                                        title="修改标题"
-                                        aria-label={`修改 ${episodeDisplayTitle(selectedEpisode)} 标题`}
-                                        onClick={() => onEditTitle(selectedEpisode)}
-                                    >
-                                        <Edit3 className="size-4" />
-                                    </button>
                                 </div>
                             ) : null}
                         </div>
@@ -384,7 +329,15 @@ function ProjectEpisodeProductionPanel({
                                         </div>
                                     </div>
                                 ) : (
-                                    <pre className="max-h-[520px] whitespace-pre-wrap break-words font-sans text-sm leading-7 text-[var(--studio-text-secondary)]">{selectedScript || "暂无剧本正文。点击“编辑剧本”或“新建分集”补充本集剧本。"}</pre>
+                                    <button
+                                        type="button"
+                                        className="block min-h-[488px] w-full cursor-text text-left text-[var(--studio-text-secondary)] transition-colors hover:text-[var(--studio-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)] disabled:cursor-not-allowed disabled:opacity-70"
+                                        aria-label={`编辑 ${episodeDisplayTitle(selectedEpisode)} 剧本`}
+                                        disabled={selectedOptimizing}
+                                        onClick={() => setEditingScript(true)}
+                                    >
+                                        <span className="block max-h-[520px] whitespace-pre-wrap break-words font-sans text-sm leading-7">{selectedScript || "暂无剧本正文。点击剧本区域或“新建分集”补充本集剧本。"}</span>
+                                    </button>
                                 )
                             ) : (
                                 <div className="grid h-[520px] place-items-center text-center">
@@ -435,7 +388,7 @@ function ProjectEpisodeProductionPanel({
                                         <div>
                                             <Wand2 className="mx-auto size-10 animate-pulse text-[var(--studio-accent)]" />
                                             <h3 className="mt-4 text-lg font-semibold text-[var(--studio-text-primary)]">正在优化剧本</h3>
-                                            <p className="mt-2 text-sm leading-6 text-[var(--studio-text-secondary)]">当前 Skill 会在本页生成适配稿，不会自动跳转工作流。</p>
+                                            <p className="mt-2 text-sm leading-6 text-[var(--studio-text-secondary)]">当前优化方案会在本页生成适配稿，不会自动跳转工作流。</p>
                                         </div>
                                     </div>
                                 ) : selectedOptimizeError ? (
@@ -453,7 +406,7 @@ function ProjectEpisodeProductionPanel({
                                         <div>
                                             <Wand2 className="mx-auto size-10 text-[var(--studio-text-muted)]" />
                                             <h3 className="mt-4 text-lg font-semibold text-[var(--studio-text-primary)]">还没有优化稿</h3>
-                                            <p className="mt-2 text-sm leading-6 text-[var(--studio-text-secondary)]">选择剧本优化 Skill 后点击左侧“剧本优化”，这里会显示适配稿。</p>
+                                            <p className="mt-2 text-sm leading-6 text-[var(--studio-text-secondary)]">选择优化方案后点击左侧“剧本优化”，这里会显示适配稿。</p>
                                         </div>
                                     </div>
                                 )
@@ -967,13 +920,6 @@ function ProjectEpisodeEmpty({ onCreate, onCreateCanvas }: { onCreate: () => voi
 
 function episodeDisplayTitle(row: Pick<ProjectEpisodeBoardRow, "code" | "title">) {
     return episodeProductionName(row.code, row.title);
-}
-
-function currentEpisodeStatusText(row: ProjectEpisodeBoardRow) {
-    if (row.stage === "分镜") return "分镜审核中";
-    if (row.stage === "成片") return "成片完成";
-    if (row.stage === "剧本") return "剧本整理中";
-    return "尚未开始";
 }
 
 function formatEpisodeDate(value: string) {

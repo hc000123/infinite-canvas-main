@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Alert, Button, Input, Select, Spin } from "antd";
-import { ArrowLeft, LoaderCircle, Search } from "lucide-react";
+import { LoaderCircle, Search } from "lucide-react";
 
 import { listWorkflowRuns, type WorkflowRunListItem } from "@/services/api/workflow-runs";
 import { useUserStore } from "@/stores/use-user-store";
@@ -73,26 +73,20 @@ export function AgentWorkspace() {
 
     return (
         <main className="studio-shell h-full min-h-0 overflow-y-auto text-[var(--studio-text-primary)]">
-            <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-5 lg:py-8">
-                <header className="flex flex-wrap items-end justify-between gap-5 border-b border-[var(--studio-border-subtle)] pb-5">
-                    <div>
-                        <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--studio-text-muted)]">Production control</p>
-                        <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">生产总控</h1>
-                        <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--studio-text-secondary)]">跨项目查看生产进度，在每个阶段确认结果后再继续。视频生成始终由你手动启动。</p>
+            <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-5 lg:py-5">
+                <header className="flex flex-wrap items-center gap-3 border-b border-[var(--studio-border-subtle)] pb-3">
+                    <h1 className="mr-3 text-2xl font-semibold tracking-tight">生产总控</h1>
+                    <div aria-label="生产总控筛选" className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:justify-end">
+                        <Select className="min-w-44" value={projectId || "all"} options={[{ label: "所有项目", value: "all" }, ...views.map((project) => ({ label: project.title, value: project.id }))]} onChange={(value) => router.push(value === "all" ? "/agent" : `/agent?projectId=${encodeURIComponent(value)}`)} />
+                        {!projectId ? <Input allowClear className="max-w-64" prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />} placeholder="搜索项目名称" value={keyword} onChange={(event) => setKeyword(event.target.value)} /> : null}
+                        {!projectId ? <Select className="min-w-32" value={status} options={statusOptions} onChange={setStatus} /> : null}
+                        {remoteLoading ? <span className="inline-flex items-center gap-1.5 text-xs text-[var(--studio-text-muted)]"><LoaderCircle className="size-3.5 animate-spin" />同步运行状态</span> : null}
                     </div>
-                    {projectId ? <Button icon={<ArrowLeft className="size-4" />} onClick={() => router.push("/agent")}>所有项目</Button> : null}
                 </header>
-
-                <div className="mt-5 flex flex-wrap items-center gap-2">
-                    <Select className="min-w-48" value={projectId || "all"} options={[{ label: "所有项目", value: "all" }, ...views.map((project) => ({ label: project.title, value: project.id }))]} onChange={(value) => router.push(value === "all" ? "/agent" : `/agent?projectId=${encodeURIComponent(value)}`)} />
-                    {!projectId ? <Input allowClear className="max-w-72" prefix={<Search className="size-4 text-[var(--studio-text-muted)]" />} placeholder="搜索项目名称" value={keyword} onChange={(event) => setKeyword(event.target.value)} /> : null}
-                    {!projectId ? <Select className="min-w-36" value={status} options={statusOptions} onChange={setStatus} /> : null}
-                    {remoteLoading ? <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-[var(--studio-text-muted)]"><LoaderCircle className="size-3.5 animate-spin" />同步运行状态</span> : null}
-                </div>
 
                 {remoteError ? <Alert className="mt-4" type="warning" showIcon title="远程进度暂不可用" description={`${remoteError}。本地项目与分集仍可查看。`} /> : null}
 
-                <div className="mt-5 space-y-5">
+                <div className="mt-4 space-y-4">
                     {!projectId ? <AgentProjectOverview projects={visibleProjects} /> : selectedProject ? (
                         <>
                             <div className="flex flex-wrap items-end justify-between gap-3">
