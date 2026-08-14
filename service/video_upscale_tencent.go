@@ -14,7 +14,6 @@ import (
 
 	"github.com/basketikun/infinite-canvas/model"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
-	tcerrors "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	mps "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/mps/v20190612"
 	cos "github.com/tencentyun/cos-go-sdk-v5"
@@ -39,6 +38,7 @@ type tencentMPSPollInput struct {
 type tencentMPSAPI interface {
 	Submit(context.Context, tencentMPSSubmitInput) (taskID, requestID string, err error)
 	Poll(context.Context, tencentMPSPollInput) (VideoUpscalePollResult, error)
+	CheckTemplate(context.Context, int64) error
 }
 
 type tencentCOSAPI interface {
@@ -157,6 +157,20 @@ func (api *tencentCloudMPSAPI) Poll(ctx context.Context, input tencentMPSPollInp
 	return tencentMPSPollResponse(response, input)
 }
 
+func (api *tencentCloudMPSAPI) CheckTemplate(ctx context.Context, definition int64) error {
+	request := mps.NewDescribeTranscodeTemplatesRequest()
+	request.Definitions = []*int64{&definition}
+	request.TranscodeType = stringPointer("Enhance")
+	response, err := api.client.DescribeTranscodeTemplatesWithContext(ctx, request)
+	if err != nil {
+		return err
+	}
+	if response == nil || response.Response == nil || len(response.Response.TranscodeTemplateSet) == 0 {
+		return errors.New("Tencent MPS enhancement template is unavailable")
+	}
+	return nil
+}
+
 func tencentMPSPollResponse(response *mps.DescribeTaskDetailResponse, input tencentMPSPollInput) (VideoUpscalePollResult, error) {
 	if response == nil || response.Response == nil {
 		return VideoUpscalePollResult{}, errors.New("Tencent MPS poll response is empty")
@@ -239,22 +253,9 @@ func pointerString(value *string) string {
 	return strings.TrimSpace(*value)
 }
 
-func isTencentTaskNotFound(err error) bool {
-	var marker interface{ TencentTaskNotFound() bool }
-	if errors.As(err, &marker) && marker.TencentTaskNotFound() {
-		return true
-	}
-	var apiErr *tcerrors.TencentCloudSDKError
-	return errors.As(err, &apiErr) && strings.Contains(strings.ToLower(apiErr.Code), "notfound")
-}
-
-func checkTencentMPSConnection(ctx context.Context, mpsAPI tencentMPSAPI, cosAPI tencentCOSAPI, bucket string) error {
+func checkTencentMPSConnection(ctx context.Context, mpsAPI tencentMPSAPI, cosAPI tencentCOSAPI, _ string) error {
 	if err := cosAPI.HeadBucket(ctx); err != nil {
 		return err
 	}
-	_, err := mpsAPI.Poll(ctx, tencentMPSPollInput{TaskID: "connection-test-" + strings.ReplaceAll(newID("mps"), "_", "-"), Definition: 327004, Bucket: bucket})
-	if isTencentTaskNotFound(err) {
-		return nil
-	}
-	return err
+	return mpsAPI.CheckTemplate(ctx, 327004)
 }

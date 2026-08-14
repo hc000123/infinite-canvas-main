@@ -15,15 +15,18 @@ import (
 )
 
 type fakeTencentMPSAPI struct {
-	submit        tencentMPSSubmitInput
-	poll          tencentMPSPollInput
-	submitTaskID  string
-	submitRequest string
-	submitErr     error
-	pollResult    VideoUpscalePollResult
-	pollErr       error
-	submitCount   int
-	pollCount     int
+	submit          tencentMPSSubmitInput
+	poll            tencentMPSPollInput
+	submitTaskID    string
+	submitRequest   string
+	submitErr       error
+	pollResult      VideoUpscalePollResult
+	pollErr         error
+	submitCount     int
+	pollCount       int
+	checkDefinition int64
+	checkErr        error
+	checkCount      int
 }
 
 func (fake *fakeTencentMPSAPI) Submit(_ context.Context, input tencentMPSSubmitInput) (string, string, error) {
@@ -34,6 +37,11 @@ func (fake *fakeTencentMPSAPI) Submit(_ context.Context, input tencentMPSSubmitI
 func (fake *fakeTencentMPSAPI) Poll(_ context.Context, input tencentMPSPollInput) (VideoUpscalePollResult, error) {
 	fake.poll, fake.pollCount = input, fake.pollCount+1
 	return fake.pollResult, fake.pollErr
+}
+
+func (fake *fakeTencentMPSAPI) CheckTemplate(_ context.Context, definition int64) error {
+	fake.checkDefinition, fake.checkCount = definition, fake.checkCount+1
+	return fake.checkErr
 }
 
 type fakeTencentCOSAPI struct {
@@ -180,18 +188,12 @@ func TestTencentMPSWorkerSignsCOSResultBeforeDownload(t *testing.T) {
 }
 
 func TestTencentMPSConnectionCheckOnlyUsesReadOperations(t *testing.T) {
-	mpsAPI := &fakeTencentMPSAPI{pollErr: tencentTaskNotFoundError{}}
+	mpsAPI := &fakeTencentMPSAPI{}
 	cosAPI := &fakeTencentCOSAPI{}
 	if err := checkTencentMPSConnection(context.Background(), mpsAPI, cosAPI, "media-1300"); err != nil {
 		t.Fatal(err)
 	}
-	if mpsAPI.submitCount != 0 || mpsAPI.pollCount != 1 {
-		t.Fatalf("submit=%d poll=%d", mpsAPI.submitCount, mpsAPI.pollCount)
+	if mpsAPI.submitCount != 0 || mpsAPI.pollCount != 0 || mpsAPI.checkCount != 1 || mpsAPI.checkDefinition != 327004 {
+		t.Fatalf("submit=%d poll=%d check=%d definition=%d", mpsAPI.submitCount, mpsAPI.pollCount, mpsAPI.checkCount, mpsAPI.checkDefinition)
 	}
 }
-
-type tencentTaskNotFoundError struct{}
-
-func (tencentTaskNotFoundError) Error() string { return "task not found" }
-
-func (tencentTaskNotFoundError) TencentTaskNotFound() bool { return true }
