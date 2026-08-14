@@ -24,8 +24,14 @@ export function normalizeWorkflowRouteState(input: { shot?: string | null; stage
     return { shot, stage };
 }
 
-export function workflowRouteSearch(state: WorkflowRouteState) {
-    const params = new URLSearchParams({ stage: state.stage });
+export function workflowRouteSearch(state: WorkflowRouteState, currentSearch = "") {
+    const params = new URLSearchParams(currentSearch);
+    params.set("stage", state.stage);
     if (state.shot) params.set("shot", state.shot);
+    else params.delete("shot");
     return params.toString();
+}
+
+export function workflowRouteHref(projectId: string, episodeId: string, state: WorkflowRouteState, currentSearch = "") {
+    return `/projects/${encodeURIComponent(projectId)}/episodes/${encodeURIComponent(episodeId)}/workflow?${workflowRouteSearch(state, currentSearch)}`;
 }
