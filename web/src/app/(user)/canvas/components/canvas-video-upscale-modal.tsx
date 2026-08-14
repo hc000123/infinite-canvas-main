@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Alert, Button, Modal, Radio, Segmented, Switch } from "antd";
 import { CloudUpload, Sparkles } from "lucide-react";
 
-import type { VideoFrameInterpolationMode, VideoInterpolationProcessingMode, VideoUpscaleCapabilities, VideoUpscaleQualityMode, VideoUpscaleSubmitOptions, VideoUpscaleTarget } from "@/services/api/video-upscale";
+import type { TencentMPSEnhancementScene, VideoFrameInterpolationMode, VideoInterpolationProcessingMode, VideoUpscaleCapabilities, VideoUpscaleProviderID, VideoUpscaleQualityMode, VideoUpscaleSubmitOptions, VideoUpscaleTarget } from "@/services/api/video-upscale";
 import type { CanvasNodeData } from "../types";
 import { estimateVideoInterpolationCost, estimateVideoUpscaleCost, formatVideoUpscaleCost } from "../utils/video-upscale-cost";
 
@@ -20,58 +20,81 @@ const interpolationOptions: Array<{ label: string; value: VideoInterpolationProc
     { label: "高质量", value: "medium" },
 ];
 
+const providerOptions: Array<{ label: string; value: VideoUpscaleProviderID }> = [
+    { label: "火山 LAS", value: "volcengine-las" },
+    { label: "腾讯 MPS", value: "tencent-mps" },
+];
+
+const enhancementSceneOptions: Array<{ label: string; value: TencentMPSEnhancementScene }> = [
+    { label: "漫剧增强", value: "comic" },
+    { label: "真人增强", value: "live" },
+    { label: "老片修复", value: "restore" },
+];
+
 export function CanvasVideoUpscaleModal({ node, capabilities, loading, onClose, onSubmit }: { node: CanvasNodeData | null; capabilities: VideoUpscaleCapabilities | null; loading: boolean; onClose: () => void; onSubmit: (node: CanvasNodeData, options: VideoUpscaleSubmitOptions) => void }) {
     const width = Math.round(node?.metadata?.naturalWidth || node?.width || 0);
     const height = Math.round(node?.metadata?.naturalHeight || node?.height || 0);
     const shortEdge = Math.min(width, height);
+    const [provider, setProvider] = useState<VideoUpscaleProviderID>("volcengine-las");
+    const [enhancementScene, setEnhancementScene] = useState<TencentMPSEnhancementScene>("comic");
+    const providerCapability = capabilities?.providers.find((item) => item.id === provider);
     const availableTargets = useMemo<VideoUpscaleTarget[]>(() => {
-        if (!shortEdge) return capabilities?.targets || [];
-        if (shortEdge < 1080) return capabilities?.targets.includes("1080p") ? ["1080p"] : [];
-        if (shortEdge < 1440) return capabilities?.targets.includes("2k") ? ["2k"] : [];
+        const targets = providerCapability?.targets || [];
+        if (!shortEdge) return targets;
+        if (shortEdge < 1080) return targets.includes("1080p") ? ["1080p"] : [];
+        if (shortEdge < 1440) return targets.includes("2k") ? ["2k"] : [];
         return [];
-    }, [capabilities, shortEdge]);
+    }, [providerCapability?.targets, shortEdge]);
     const [target, setTarget] = useState<VideoUpscaleTarget>("1080p");
     const [outputQualityMode, setOutputQualityMode] = useState<VideoUpscaleQualityMode>("compatible");
     const [preserveAudio, setPreserveAudio] = useState(true);
     const [frameInterpolationMode, setFrameInterpolationMode] = useState<VideoFrameInterpolationMode>("keep");
     const [interpolationMode, setInterpolationMode] = useState<VideoInterpolationProcessingMode>("fast");
     useEffect(() => {
+        if (capabilities?.providers.length === 1) setProvider(capabilities.providers[0].id);
+        else if (capabilities?.providers.some((item) => item.id === capabilities.provider)) setProvider(capabilities.provider);
+    }, [node?.id, capabilities]);
+    useEffect(() => {
         setTarget(availableTargets[0] || "1080p");
+        setEnhancementScene(providerCapability?.defaultScene || providerCapability?.enhancementScenes[0] || "comic");
         setOutputQualityMode(capabilities?.defaultOutputQualityMode || capabilities?.outputQualityModes?.[0] || "compatible");
         setPreserveAudio(true);
         setFrameInterpolationMode("keep");
         setInterpolationMode(capabilities?.frameInterpolation.defaultProcessingMode || "fast");
-    }, [node?.id, availableTargets, capabilities?.defaultOutputQualityMode, capabilities?.outputQualityModes, capabilities?.frameInterpolation.defaultProcessingMode]);
+    }, [node?.id, provider, availableTargets, providerCapability?.defaultScene, providerCapability?.enhancementScenes, capabilities?.defaultOutputQualityMode, capabilities?.outputQualityModes, capabilities?.frameInterpolation.defaultProcessingMode]);
+    const isTencent = provider === "tencent-mps";
     const output = outputSize(width, height, target);
     const duration = node?.metadata?.videoUpscale?.inputDurationSeconds || Number(node?.metadata?.duration || node?.metadata?.seconds || 0);
     const frameRate = node?.metadata?.videoUpscale?.inputFrameRate || 0;
-    const upscaleEstimate = output && capabilities?.pricing ? estimateVideoUpscaleCost({ durationSeconds: duration, frameRate, outputWidth: output.width, outputHeight: output.height, pricing: capabilities.pricing }) : null;
+    const upscaleEstimate = !isTencent && output && capabilities?.pricing ? estimateVideoUpscaleCost({ durationSeconds: duration, frameRate, outputWidth: output.width, outputHeight: output.height, pricing: capabilities.pricing }) : null;
     const targetFrameRate = interpolationTargetFrameRate(frameRate, frameInterpolationMode);
     const interpolationEstimate = output && frameInterpolationMode !== "keep" && capabilities?.frameInterpolation.pricing
         ? estimateVideoInterpolationCost({ durationSeconds: duration, sourceFrameRate: frameRate, targetFrameRate, outputWidth: output.width, outputHeight: output.height, processingMode: interpolationMode, maxTargetFrameRate: capabilities.frameInterpolation.maxTargetFrameRate, maxSourceMultiplier: capabilities.frameInterpolation.maxSourceMultiplier, pricing: capabilities.frameInterpolation.pricing })
         : null;
     const totalCost = upscaleEstimate && (frameInterpolationMode === "keep" || interpolationEstimate) ? upscaleEstimate.costCny + (interpolationEstimate?.costCny || 0) : null;
     const enabled = capabilities?.enabled === true;
-    const interpolationAvailable = capabilities?.frameInterpolation.status === "available";
+    const interpolationAvailable = providerCapability?.interpolation === true && capabilities?.frameInterpolation.status === "available";
     const validInterpolationTarget = (value: number) => interpolationAvailable && (!frameRate || (value > frameRate && value <= (capabilities?.frameInterpolation.maxTargetFrameRate || 480) && value <= frameRate * (capabilities?.frameInterpolation.maxSourceMultiplier || 6)));
-    const canSubmit = enabled && availableTargets.includes(target);
-    const submitOptions: VideoUpscaleSubmitOptions = { target, outputQualityMode, preserveAudio, frameInterpolationMode, interpolationMode };
+    const canSubmit = enabled && Boolean(providerCapability) && availableTargets.includes(target);
+    const submitOptions: VideoUpscaleSubmitOptions = { provider, enhancementScene: isTencent ? enhancementScene : undefined, target, outputQualityMode, preserveAudio, frameInterpolationMode, interpolationMode };
 
     return (
         <Modal title="视频超分" open={Boolean(node)} onCancel={onClose} footer={null} width={560} centered destroyOnHidden>
             {node ? (
                 <div className="space-y-4">
-                    <Alert showIcon icon={<CloudUpload className="size-4" />} type="info" title="视频将上传到云端付费服务处理" description="将使用火山引擎完成增强。原视频节点不会被替换，结果会作为右侧新节点加入画布并归档到资产。" />
+                    <Alert showIcon icon={<CloudUpload className="size-4" />} type="info" title="视频将上传到云端付费服务处理" description={`将使用${isTencent ? "腾讯 MPS" : "火山 LAS"}完成增强。原视频节点不会被替换，结果会作为右侧新节点加入画布并归档到资产。`} />
                     <div className="grid grid-cols-4 gap-2 rounded-lg bg-[var(--studio-panel-muted-bg)] p-3 text-sm">
                         <Spec label="源规格" value={width && height ? `${width} × ${height}` : "待识别"} />
                         <Spec label="目标规格" value={output ? `${output.width} × ${output.height}` : target === "2k" ? "2K" : "1080p"} />
                         <Spec label="时长" value={duration ? `${formatNumber(duration)} 秒` : "待识别"} />
                         <Spec label="源帧率" value={frameRate ? `${formatNumber(frameRate)} fps` : "待识别"} />
                     </div>
+                    {(capabilities?.providers.length || 0) > 1 ? <OptionRow label="增强渠道"><Segmented aria-label="增强渠道" value={provider} options={providerOptions.filter((item) => capabilities?.providers.some((providerItem) => providerItem.id === item.value))} onChange={(value) => setProvider(value as VideoUpscaleProviderID)} /></OptionRow> : null}
+                    {isTencent ? <OptionRow label="增强场景"><Segmented aria-label="增强场景" value={enhancementScene} options={enhancementSceneOptions.filter((item) => providerCapability?.enhancementScenes.includes(item.value))} onChange={(value) => setEnhancementScene(value as TencentMPSEnhancementScene)} /></OptionRow> : null}
                     {availableTargets.length ? <OptionRow label="目标清晰度"><Segmented value={target} options={availableTargets.map((value) => ({ label: value === "2k" ? "2K" : "1080p", value }))} onChange={(value) => setTarget(value as VideoUpscaleTarget)} /></OptionRow> : null}
-                    <OptionRow label="输出质量"><Segmented aria-label="输出质量" value={outputQualityMode} options={qualityOptions.filter((item) => capabilities?.outputQualityModes?.includes(item.value) !== false)} onChange={(value) => setOutputQualityMode(value as VideoUpscaleQualityMode)} /></OptionRow>
-                    <OptionRow label="音频"><span className="flex items-center gap-2 text-sm"><Switch aria-label="保留原音频" size="small" checked={preserveAudio} disabled={!capabilities?.preserveAudioSupported} onChange={setPreserveAudio} />保留原音频</span></OptionRow>
-                    <div>
+                    {!isTencent ? <OptionRow label="输出质量"><Segmented aria-label="输出质量" value={outputQualityMode} options={qualityOptions.filter((item) => capabilities?.outputQualityModes?.includes(item.value) !== false)} onChange={(value) => setOutputQualityMode(value as VideoUpscaleQualityMode)} /></OptionRow> : null}
+                    {!isTencent ? <OptionRow label="音频"><span className="flex items-center gap-2 text-sm"><Switch aria-label="保留原音频" size="small" checked={preserveAudio} disabled={!capabilities?.preserveAudioSupported} onChange={setPreserveAudio} />保留原音频</span></OptionRow> : null}
+                    {!isTencent ? <div>
                         <div className="mb-2 text-sm font-medium">帧率</div>
                         <Radio.Group aria-label="帧率" value={frameInterpolationMode} onChange={(event) => setFrameInterpolationMode(event.target.value as VideoFrameInterpolationMode)} className="grid w-full gap-2">
                             <Radio value="keep">保持原帧率</Radio>
@@ -80,14 +103,15 @@ export function CanvasVideoUpscaleModal({ node, capabilities, loading, onClose, 
                             <Radio value="double" disabled={!interpolationAvailable || (frameRate > 0 && frameRate * 2 > (capabilities?.frameInterpolation.maxTargetFrameRate || 480))}>智能插帧 2×</Radio>
                             <Radio value="to60" disabled={!validInterpolationTarget(60)}>智能插帧至 60fps</Radio>
                         </Radio.Group>
-                    </div>
-                    {frameInterpolationMode !== "keep" ? <OptionRow label="插帧模式"><Segmented aria-label="插帧模式" value={interpolationMode} options={interpolationOptions.filter((item) => capabilities?.frameInterpolation.processingModes?.includes(item.value) !== false)} onChange={(value) => setInterpolationMode(value as VideoInterpolationProcessingMode)} /></OptionRow> : null}
-                    {frameInterpolationMode !== "keep" && !frameRate ? <Alert type="warning" showIcon title="等待服务端识别源帧率" description="识别成功前不会提交付费任务；若目标帧率不符合限制，任务会在云端处理前停止。" /> : null}
-                    <CostCard upscaleEstimate={upscaleEstimate} interpolationEstimate={interpolationEstimate} totalCost={totalCost} interpolationMode={interpolationMode} interpolationRequested={frameInterpolationMode !== "keep"} outputLabel={target === "2k" ? "2K（1440P 档）" : "1080P 档"} duration={duration} frameRate={frameRate} />
+                    </div> : null}
+                    {!isTencent && frameInterpolationMode !== "keep" ? <OptionRow label="插帧模式"><Segmented aria-label="插帧模式" value={interpolationMode} options={interpolationOptions.filter((item) => capabilities?.frameInterpolation.processingModes?.includes(item.value) !== false)} onChange={(value) => setInterpolationMode(value as VideoInterpolationProcessingMode)} /></OptionRow> : null}
+                    {!isTencent && frameInterpolationMode !== "keep" && !frameRate ? <Alert type="warning" showIcon title="等待服务端识别源帧率" description="识别成功前不会提交付费任务；若目标帧率不符合限制，任务会在云端处理前停止。" /> : null}
+                    {!isTencent ? <CostCard upscaleEstimate={upscaleEstimate} interpolationEstimate={interpolationEstimate} totalCost={totalCost} interpolationMode={interpolationMode} interpolationRequested={frameInterpolationMode !== "keep"} outputLabel={target === "2k" ? "2K（1440P 档）" : "1080P 档"} duration={duration} frameRate={frameRate} /> : null}
+                    {isTencent && providerCapability?.costNotice ? <Alert type="warning" showIcon title="腾讯云计费提示" description={providerCapability.costNotice} /> : null}
                     {shortEdge >= 1440 ? <Alert type="success" showIcon title="当前视频已达到 2K" description="无需继续超分，因此不会提交云端任务。" /> : null}
-                    {!enabled ? <Alert type="warning" showIcon title={capabilities ? "服务端尚未启用视频超分" : "暂时无法确认视频超分配置"} description="请让管理员在后台设置中启用视频超分并配置 LAS 与北京地域 TOS。" /> : null}
+                    {!enabled ? <Alert type="warning" showIcon title={capabilities ? "服务端尚未启用视频超分" : "暂时无法确认视频超分配置"} description="请让管理员在后台设置中启用并完成至少一个视频增强渠道的配置。" /> : null}
                     <Button type="primary" block size="large" icon={<Sparkles className="size-4" />} loading={loading} disabled={!canSubmit} onClick={() => onSubmit(node, submitOptions)}>
-                        {totalCost !== null ? `预计 ${formatVideoUpscaleCost(totalCost)} · 开始视频超分` : "暂无法预估 · 开始视频超分"}
+                        {isTencent ? "开始腾讯 MPS 增强" : totalCost !== null ? `预计 ${formatVideoUpscaleCost(totalCost)} · 开始视频超分` : "暂无法预估 · 开始视频超分"}
                     </Button>
                 </div>
             ) : null}

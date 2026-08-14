@@ -9,6 +9,7 @@ const overlays = await readFile(new URL("./canvas-page-overlays.tsx", import.met
 const actions = await readFile(new URL("../hooks/use-canvas-node-tool-actions.ts", import.meta.url), "utf8");
 const hook = await readFile(new URL("../hooks/use-canvas-video-upscale-actions.ts", import.meta.url), "utf8");
 const page = await readFile(new URL("../[id]/canvas-client-page.tsx", import.meta.url), "utf8");
+const api = await readFile(new URL("../../../../services/api/video-upscale.ts", import.meta.url), "utf8");
 
 test("only populated video nodes expose the video upscale action", () => {
     assert.match(toolbar, /if \(hasVideo\).*video-upscale/s);
@@ -26,6 +27,30 @@ test("modal exposes available interpolation choices and processing modes", () =>
     assert.match(modal, /value="to25" disabled=\{!validInterpolationTarget\(25\)\}/);
     assert.match(modal, /value="to30" disabled=\{!validInterpolationTarget\(30\)\}/);
     assert.match(modal, /value="to60" disabled=\{!validInterpolationTarget\(60\)\}/);
+});
+
+test("modal selects an available enhancement provider for each task", () => {
+    for (const text of ["火山 LAS", "腾讯 MPS", "漫剧增强", "真人增强", "老片修复"]) assert.match(modal, new RegExp(text));
+    assert.match(modal, /capabilities\?\.providers\.length === 1/);
+    assert.match(modal, /setProvider\(capabilities\.providers\[0\]\.id\)/);
+    assert.match(modal, /providerCapability\?\.defaultScene/);
+});
+
+test("Tencent tasks hide LAS-only controls and display the billing notice", () => {
+    assert.match(modal, /const isTencent = provider === "tencent-mps"/);
+    assert.match(modal, /!isTencent \? <OptionRow label="输出质量"/);
+    assert.match(modal, /!isTencent \? <OptionRow label="音频"/);
+    assert.match(modal, /!isTencent \? <div>/);
+    assert.match(modal, /!isTencent \? <CostCard/);
+    assert.match(modal, /providerCapability\?\.costNotice/);
+    assert.match(modal, /开始腾讯 MPS 增强/);
+});
+
+test("video upscale API submits the provider and Tencent enhancement scene", () => {
+    assert.match(api, /VideoUpscaleProviderID = "volcengine-las" \| "tencent-mps"/);
+    assert.match(api, /TencentMPSEnhancementScene = "comic" \| "live" \| "restore"/);
+    assert.match(api, /form\.append\("provider", input\.provider\)/);
+    assert.match(api, /form\.append\("enhancementScene", input\.enhancementScene \|\| ""\)/);
 });
 
 test("modal explains the estimate and sends all selections", () => {

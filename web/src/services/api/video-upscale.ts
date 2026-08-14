@@ -2,6 +2,8 @@ import { useUserStore } from "@/stores/use-user-store";
 import { apiGet, apiPostEmpty, apiPostForm } from "./request";
 
 export type VideoUpscaleJobStatus = "queued" | "uploading" | "processing" | "downloading" | "succeeded" | "failed";
+export type VideoUpscaleProviderID = "volcengine-las" | "tencent-mps";
+export type TencentMPSEnhancementScene = "comic" | "live" | "restore";
 export type VideoUpscaleTarget = "1080p" | "2k";
 export type VideoUpscaleQualityMode = "compatible" | "balanced" | "master";
 export type VideoFrameInterpolationMode = "keep" | "to25" | "to30" | "double" | "to60";
@@ -22,7 +24,16 @@ export type VideoInterpolationPricingRules = {
 
 export type VideoUpscaleCapabilities = {
     enabled: boolean;
-    provider: string;
+    provider: VideoUpscaleProviderID;
+    providers: Array<{
+        id: VideoUpscaleProviderID;
+        name: string;
+        targets: VideoUpscaleTarget[];
+        enhancementScenes: TencentMPSEnhancementScene[];
+        defaultScene: TencentMPSEnhancementScene | "";
+        costNotice: string;
+        interpolation: boolean;
+    }>;
     targets: VideoUpscaleTarget[];
     maxInputBytes: number;
     cloudProcessing: true;
@@ -43,7 +54,7 @@ export type VideoUpscaleCapabilities = {
 
 export type VideoUpscaleJob = {
     id: string; projectId: string; canvasId: string; sourceNodeId: string; sourceAssetId: string;
-    provider: string; runId: string; providerRequestId: string; target: VideoUpscaleTarget;
+    provider: VideoUpscaleProviderID; runId: string; providerRequestId: string; target: VideoUpscaleTarget; enhancementScene: TencentMPSEnhancementScene | ""; tencentTemplateId: number;
     status: VideoUpscaleJobStatus; progress: number; attempt: number; processingStage: string; inputWidth: number; inputHeight: number; inputDurationSeconds: number; inputFrameRate: number; inputMimeType: string; inputBytes: number;
     outputWidth: number; outputHeight: number; outputQualityMode: VideoUpscaleQualityMode; preserveAudio: boolean; frameInterpolationMode: VideoFrameInterpolationMode; interpolationMode: VideoInterpolationProcessingMode | ""; interpolationTargetFrameRate: number; interpolationRunId: string;
     estimatedBillableMinutes: number; estimatedCostCny: number; costEstimateAvailable: boolean; pricingRuleVersion: string;
@@ -52,7 +63,7 @@ export type VideoUpscaleJob = {
     createdAt: string; startedAt: string; completedAt: string; updatedAt: string;
 };
 
-export type VideoUpscaleSubmitOptions = { target: VideoUpscaleTarget; outputQualityMode: VideoUpscaleQualityMode; preserveAudio: boolean; frameInterpolationMode: VideoFrameInterpolationMode; interpolationMode: VideoInterpolationProcessingMode };
+export type VideoUpscaleSubmitOptions = { provider: VideoUpscaleProviderID; enhancementScene?: TencentMPSEnhancementScene; target: VideoUpscaleTarget; outputQualityMode: VideoUpscaleQualityMode; preserveAudio: boolean; frameInterpolationMode: VideoFrameInterpolationMode; interpolationMode: VideoInterpolationProcessingMode };
 export type CreateVideoUpscaleJobInput = VideoUpscaleSubmitOptions & { file: Blob; filename: string; projectId: string; canvasId: string; sourceNodeId: string; sourceAssetId?: string };
 const token = () => useUserStore.getState().token;
 
@@ -60,6 +71,7 @@ export function getVideoUpscaleCapabilities() { return apiGet<VideoUpscaleCapabi
 export function createVideoUpscaleJob(input: CreateVideoUpscaleJobInput) {
     const form = new FormData();
     form.append("file", input.file, input.filename); form.append("target", input.target); form.append("projectId", input.projectId); form.append("canvasId", input.canvasId); form.append("sourceNodeId", input.sourceNodeId); form.append("sourceAssetId", input.sourceAssetId || "");
+    form.append("provider", input.provider); form.append("enhancementScene", input.enhancementScene || "");
     form.append("outputQualityMode", input.outputQualityMode); form.append("preserveAudio", String(input.preserveAudio)); form.append("frameInterpolationMode", input.frameInterpolationMode); form.append("interpolationMode", input.interpolationMode);
     return apiPostForm<VideoUpscaleJob>("/api/v1/video-upscale/jobs", form, token());
 }
