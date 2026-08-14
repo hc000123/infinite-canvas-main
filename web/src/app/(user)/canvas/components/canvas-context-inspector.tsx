@@ -66,6 +66,7 @@ type CanvasContextInspectorProps = {
     onCrop: (node: CanvasNodeData) => void;
     onAngle: (node: CanvasNodeData) => void;
     onUpscale: (node: CanvasNodeData) => void;
+    onSubtitleErase: (node: CanvasNodeData) => void;
     onViewImage: (node: CanvasNodeData) => void;
 };
 
@@ -117,6 +118,7 @@ export function CanvasContextInspector({
     onCrop,
     onAngle,
     onUpscale,
+    onSubtitleErase,
     onViewImage,
 }: CanvasContextInspectorProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
@@ -230,6 +232,7 @@ export function CanvasContextInspector({
                     onCrop={onCrop}
                     onAngle={onAngle}
                     onUpscale={onUpscale}
+                    onSubtitleErase={onSubtitleErase}
                     onViewImage={onViewImage}
                 />
             ) : selectedProductionPackage ? (

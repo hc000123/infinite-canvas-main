@@ -36,6 +36,7 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
     const arkParams = isVideoNode ? arkParamLabel(node) : "";
     const upscale = node?.metadata?.imageUpscale;
     const videoUpscale = node?.metadata?.videoUpscale;
+    const subtitleErase = node?.metadata?.subtitleErase;
 
     const title = (
         <div className="flex items-center justify-between gap-4 pr-12">
@@ -89,6 +90,15 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
                             {videoUpscale?.providerRequestId ? <InfoRow label="服务商请求" value={videoUpscale.providerRequestId} /> : null}
                             {videoUpscale?.durationMs !== undefined ? <InfoRow label="处理耗时" value={formatSecondSpan(Math.round(videoUpscale.durationMs / 1000))} /> : null}
                             {videoUpscale?.errorCode ? <InfoRow label="超分错误码" value={videoUpscale.errorCode} /> : null}
+                            {subtitleErase ? <InfoRow label="字幕擦除任务" value={subtitleErase.jobId} /> : null}
+                            {subtitleErase ? <InfoRow label="字幕擦除状态" value={`${upscaleStatusLabel(subtitleErase.status)} · ${subtitleErase.progress}% · 第 ${subtitleErase.attempt} 次`} /> : null}
+                            {subtitleErase ? <InfoRow label="字幕擦除服务商" value={subtitleErase.provider} /> : null}
+                            {subtitleErase ? <InfoRow label="字幕擦除输入" value={`${subtitleErase.inputWidth} × ${subtitleErase.inputHeight} · ${subtitleErase.inputDurationSeconds}s`} /> : null}
+                            {subtitleErase?.outputWidth && subtitleErase.outputHeight ? <InfoRow label="字幕擦除输出" value={`${subtitleErase.outputWidth} × ${subtitleErase.outputHeight}`} /> : null}
+                            {subtitleErase?.estimatedCostCny !== undefined ? <InfoRow label="字幕擦除预估费用" value={`¥${subtitleErase.estimatedCostCny.toFixed(2)}`} /> : null}
+                            {subtitleErase?.runId ? <InfoRow label="字幕擦除 LAS Task ID" value={subtitleErase.runId} /> : null}
+                            {subtitleErase?.durationMs !== undefined ? <InfoRow label="字幕擦除耗时" value={formatSecondSpan(Math.round(subtitleErase.durationMs / 1000))} /> : null}
+                            {subtitleErase?.errorCode ? <InfoRow label="字幕擦除错误码" value={subtitleErase.errorCode} /> : null}
                             {isVideoNode && node.metadata?.model ? <InfoRow label="模型" value={node.metadata.model} /> : null}
                             {isVideoNode && videoParams ? <InfoRow label="视频参数" value={videoParams} /> : null}
                             {isVideoNode && arkParams ? <InfoRow label="Ark 参数" value={arkParams} /> : null}

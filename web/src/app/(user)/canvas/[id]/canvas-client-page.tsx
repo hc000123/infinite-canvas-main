@@ -47,6 +47,7 @@ import { useCanvasVideoTaskRecovery } from "../hooks/use-canvas-video-task-recov
 import { useCanvasMediaVersionActions } from "../hooks/use-canvas-media-version-actions";
 import { useCanvasImageUpscaleActions } from "../hooks/use-canvas-image-upscale-actions";
 import { useCanvasVideoUpscaleActions } from "../hooks/use-canvas-video-upscale-actions";
+import { useCanvasVideoSubtitleEraseActions } from "../hooks/use-canvas-video-subtitle-erase-actions";
 import { useCanvasViewportGeometry } from "../hooks/use-canvas-viewport-geometry";
 import { useCanvasWorkspaceStores } from "../hooks/use-canvas-workspace-stores";
 import { shouldWriteGeneratedAsset } from "../utils/canvas-generated-asset-writeback";
@@ -784,6 +785,20 @@ function InfiniteCanvasPage() {
         setSelectedConnectionId,
         setSelectedNodeIds,
     });
+    const videoSubtitleErase = useCanvasVideoSubtitleEraseActions({
+        addCanvasNodeToAssets,
+        cacheUploadedCanvasMedia,
+        canvasId,
+        connectionsRef,
+        message,
+        nodes,
+        nodesRef,
+        projectId: workspaceProjectId,
+        setConnections,
+        setNodes,
+        setSelectedConnectionId,
+        setSelectedNodeIds,
+    });
 
     const { cropImageNode, generateAngleNode, handleGenerateNode, handleRefreshVideoTask, nodeToolActions } = useCanvasNodeExecutionActions({
         flow: {
@@ -877,10 +892,12 @@ function InfiniteCanvasPage() {
             openNodeCapability: canvasCapability.openNodeCapability,
             openImageUpscale: imageUpscale.open,
             openVideoUpscale: videoUpscale.open,
+            openVideoSubtitleErase: videoSubtitleErase.open,
             openTextEditor,
             refreshNodeVolcengineReview,
             retryImageUpscale: imageUpscale.retry,
             retryVideoUpscale: videoUpscale.retry,
+            retryVideoSubtitleErase: videoSubtitleErase.retry,
             saveNodeAsset,
             setAngleNodeId,
             setCropNodeId,
@@ -1106,6 +1123,9 @@ function InfiniteCanvasPage() {
                     videoUpscaleNode={videoUpscale.node}
                     videoUpscaleCapabilities={videoUpscale.capabilities}
                     videoUpscaleSubmitting={videoUpscale.submitting}
+                    videoSubtitleEraseNode={videoSubtitleErase.node}
+                    videoSubtitleEraseCapabilities={videoSubtitleErase.capabilities}
+                    videoSubtitleEraseSubmitting={videoSubtitleErase.submitting}
                     projectId={workspaceProjectId}
                     projectTitle={workspaceProjectTitle}
                     episodeId={currentProject?.episodeId}
@@ -1127,6 +1147,7 @@ function InfiniteCanvasPage() {
                     onClosePreview={renderActions.closePreview}
                     onCloseUpscale={imageUpscale.close}
                     onCloseVideoUpscale={videoUpscale.close}
+                    onCloseVideoSubtitleErase={videoSubtitleErase.close}
                     onCloseScriptManager={renderActions.closeScriptManager}
                     onCloseStoryboardManager={renderActions.closeStoryboardManager}
                     onCreateBriefImageConfig={createBriefImageConfigNode}
@@ -1135,6 +1156,7 @@ function InfiniteCanvasPage() {
                     onImageInputChange={handleImageInputChange}
                     onUpscaleImageNode={imageUpscale.submit}
                     onUpscaleVideoNode={videoUpscale.submit}
+                    onSubtitleEraseNode={videoSubtitleErase.submit}
                     onOpenStoryboardGroup={renderActions.openStoryboardGroup}
                     onSaveTextNode={handleNodeContentChange}
                 />

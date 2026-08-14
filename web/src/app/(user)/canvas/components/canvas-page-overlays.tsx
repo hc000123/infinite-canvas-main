@@ -18,6 +18,8 @@ import { CanvasImageUpscaleModal } from "./canvas-image-upscale-modal";
 import type { ImageUpscaleCapabilities } from "@/services/api/image-upscale";
 import type { VideoUpscaleCapabilities, VideoUpscaleSubmitOptions } from "@/services/api/video-upscale";
 import { CanvasVideoUpscaleModal } from "./canvas-video-upscale-modal";
+import type { VideoSubtitleEraseCapabilities } from "@/services/api/video-subtitle-erase";
+import { CanvasVideoSubtitleEraseModal } from "./canvas-video-subtitle-erase-modal";
 
 type Props = {
     angleNode: CanvasNodeData | null;
@@ -39,6 +41,9 @@ type Props = {
     videoUpscaleNode: CanvasNodeData | null;
     videoUpscaleCapabilities: VideoUpscaleCapabilities | null;
     videoUpscaleSubmitting: boolean;
+    videoSubtitleEraseNode: CanvasNodeData | null;
+    videoSubtitleEraseCapabilities: VideoSubtitleEraseCapabilities | null;
+    videoSubtitleEraseSubmitting: boolean;
     projectId: string;
     projectTitle: string;
     episodeId?: string;
@@ -61,6 +66,7 @@ type Props = {
     onClosePreview: () => void;
     onCloseUpscale: () => void;
     onCloseVideoUpscale: () => void;
+    onCloseVideoSubtitleErase: () => void;
     onCloseScriptManager: () => void;
     onCloseStoryboardManager: () => void;
     onCreateBriefImageConfig: (brief: ImageBrief, canvasId?: string) => void;
@@ -69,6 +75,7 @@ type Props = {
     onImageInputChange: (event: ChangeEvent<HTMLInputElement>) => void;
     onUpscaleImageNode: (node: CanvasNodeData, scale: 2 | 4) => void;
     onUpscaleVideoNode: (node: CanvasNodeData, options: VideoUpscaleSubmitOptions) => void;
+    onSubtitleEraseNode: (node: CanvasNodeData) => void;
     onOpenStoryboardGroup: (groupId: string) => void;
     onSaveTextNode: (nodeId: string, content: string) => void;
 };
@@ -93,6 +100,9 @@ export function CanvasPageOverlays({
     videoUpscaleNode,
     videoUpscaleCapabilities,
     videoUpscaleSubmitting,
+    videoSubtitleEraseNode,
+    videoSubtitleEraseCapabilities,
+    videoSubtitleEraseSubmitting,
     projectId,
     projectTitle,
     episodeId,
@@ -115,6 +125,7 @@ export function CanvasPageOverlays({
     onClosePreview,
     onCloseUpscale,
     onCloseVideoUpscale,
+    onCloseVideoSubtitleErase,
     onCloseScriptManager,
     onCloseStoryboardManager,
     onCreateBriefImageConfig,
@@ -123,6 +134,7 @@ export function CanvasPageOverlays({
     onImageInputChange,
     onUpscaleImageNode,
     onUpscaleVideoNode,
+    onSubtitleEraseNode,
     onOpenStoryboardGroup,
     onSaveTextNode,
 }: Props) {
@@ -151,6 +163,8 @@ export function CanvasPageOverlays({
             <CanvasImageUpscaleModal node={upscaleNode} capabilities={upscaleCapabilities} loading={upscaleSubmitting} onClose={onCloseUpscale} onSubmit={onUpscaleImageNode} />
 
             <CanvasVideoUpscaleModal node={videoUpscaleNode} capabilities={videoUpscaleCapabilities} loading={videoUpscaleSubmitting} onClose={onCloseVideoUpscale} onSubmit={onUpscaleVideoNode} />
+
+            <CanvasVideoSubtitleEraseModal node={videoSubtitleEraseNode} capabilities={videoSubtitleEraseCapabilities} loading={videoSubtitleEraseSubmitting} onClose={onCloseVideoSubtitleErase} onSubmit={onSubtitleEraseNode} />
 
             <ClearCanvasConfirmModal open={clearConfirmOpen} onCancel={onCloseClearConfirm} onConfirm={onClearCanvas} />
 

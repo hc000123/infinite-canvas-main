@@ -13,8 +13,10 @@ export function useCanvasNodeToolActions({
     handleRetryNode,
     openImageUpscale,
     openVideoUpscale,
+    openVideoSubtitleErase,
     retryImageUpscale,
     retryVideoUpscale,
+    retryVideoSubtitleErase,
     handleUploadRequest,
     openNodeCapability,
     openTextEditor,
@@ -38,8 +40,10 @@ export function useCanvasNodeToolActions({
     handleRetryNode: (node: CanvasNodeData) => Promise<void> | void;
     openImageUpscale: (node: CanvasNodeData) => Promise<void> | void;
     openVideoUpscale: (node: CanvasNodeData) => Promise<void> | void;
+    openVideoSubtitleErase: (node: CanvasNodeData) => Promise<void> | void;
     retryImageUpscale: (node: CanvasNodeData) => Promise<void> | void;
     retryVideoUpscale: (node: CanvasNodeData) => Promise<void> | void;
+    retryVideoSubtitleErase: (node: CanvasNodeData) => Promise<void> | void;
     handleUploadRequest: (nodeId?: string) => void;
     openNodeCapability: (node: CanvasNodeData) => void;
     openTextEditor: (node: CanvasNodeData) => void;
@@ -74,8 +78,9 @@ export function useCanvasNodeToolActions({
             onCrop: (node) => setCropNodeId(node.id),
             onAngle: (node) => setAngleNodeId(node.id),
             onUpscale: (node) => void (node.type === CanvasNodeType.Video ? openVideoUpscale(node) : openImageUpscale(node)),
+            onSubtitleErase: (node) => void openVideoSubtitleErase(node),
             onViewImage: (node) => setPreviewNodeId(node.id),
-            onRetry: (node) => void (node.metadata?.videoUpscale ? retryVideoUpscale(node) : node.metadata?.imageUpscale ? retryImageUpscale(node) : handleRetryNode(node)),
+            onRetry: (node) => void (node.metadata?.subtitleErase ? retryVideoSubtitleErase(node) : node.metadata?.videoUpscale ? retryVideoUpscale(node) : node.metadata?.imageUpscale ? retryImageUpscale(node) : handleRetryNode(node)),
             onToggleFreeResize: (node) => toggleNodeFreeResize(node.id),
             onDelete: (node) => deleteNodes(new Set([node.id])),
         }),
@@ -89,12 +94,14 @@ export function useCanvasNodeToolActions({
             handleRetryNode,
             openImageUpscale,
             openVideoUpscale,
+            openVideoSubtitleErase,
             handleUploadRequest,
             openTextEditor,
             openNodeCapability,
             refreshNodeVolcengineReview,
             retryImageUpscale,
             retryVideoUpscale,
+            retryVideoSubtitleErase,
             saveNodeAsset,
             setAngleNodeId,
             setCropNodeId,

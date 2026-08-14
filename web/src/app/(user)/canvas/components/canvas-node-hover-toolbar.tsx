@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode } from "react";
-import { AudioLines, Camera, Download, FolderPlus, Image as ImageIcon, Info, Lock, LockOpen, Maximize2, Minus, Pencil, Plus, RefreshCw, Scissors, Settings2, ShieldCheck, Sparkles, Trash2, Upload, Video } from "lucide-react";
+import { AudioLines, Camera, Download, Eraser, FolderPlus, Image as ImageIcon, Info, Lock, LockOpen, Maximize2, Minus, Pencil, Plus, RefreshCw, Scissors, Settings2, ShieldCheck, Sparkles, Trash2, Upload, Video } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { canSubmitVolcengineReview } from "@/services/volcengine-asset-metadata";
@@ -37,6 +37,7 @@ export type CanvasNodeHoverToolbarActions = {
     onCrop: (node: CanvasNodeData) => void;
     onAngle: (node: CanvasNodeData) => void;
     onUpscale: (node: CanvasNodeData) => void;
+    onSubtitleErase: (node: CanvasNodeData) => void;
     onViewImage: (node: CanvasNodeData) => void;
     onRetry: (node: CanvasNodeData) => void;
     onToggleFreeResize: (node: CanvasNodeData) => void;
@@ -250,6 +251,7 @@ function appendMediaManagementActions(items: NodeToolbarAction[], context: NodeT
     if (hasImage) items.push({ type: "button", key: "crop", title: "裁剪并生成新节点", label: "裁剪", icon: <Scissors className="size-4" />, onClick: () => actions.onCrop(node) });
     if (hasImage) items.push({ type: "button", key: "upscale", title: "使用云端服务放大图片", label: "超分", icon: <Sparkles className="size-4" />, onClick: () => actions.onUpscale(node) });
     if (hasVideo) items.push({ type: "button", key: "video-upscale", title: "使用云端服务增强视频清晰度", label: "视频超分", icon: <Sparkles className="size-4" />, onClick: () => actions.onUpscale(node) });
+    if (hasVideo) items.push({ type: "button", key: "subtitle-erase", title: "使用云端服务擦除画面内嵌硬字幕", label: "擦字幕", icon: <Eraser className="size-4" />, onClick: () => actions.onSubtitleErase(node) });
     if (hasImage) items.push({ type: "button", key: "angle", title: "生成角度", label: "多角度", icon: <Camera className="size-4" />, onClick: () => actions.onAngle(node) });
     if (hasImage) items.push({ type: "button", key: "view-image", title: "查看图片详情", label: "查看大图", icon: <Maximize2 className="size-4" />, onClick: () => actions.onViewImage(node) });
 }
