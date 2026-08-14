@@ -15,6 +15,17 @@ type recordingVideoUpscaleSpaceReader struct {
 	err   error
 }
 
+type recordingTencentMPSConnectionChecker struct {
+	setting model.TencentMPSVideoSetting
+	calls   int
+	err     error
+}
+
+func (checker *recordingTencentMPSConnectionChecker) Check(_ context.Context, setting model.TencentMPSVideoSetting) error {
+	checker.setting, checker.calls = setting, checker.calls+1
+	return checker.err
+}
+
 func (reader *recordingVideoUpscaleSpaceReader) Check(_ context.Context, video model.VideoUpscaleSetting) error {
 	reader.video, reader.calls = video, reader.calls+1
 	return reader.err
@@ -60,5 +71,31 @@ func TestAdminTestVideoUpscaleRequiresLASKeyAndOutputTOSPath(t *testing.T) {
 	}
 	if reader.calls != 0 {
 		t.Fatalf("space reader called %d times for invalid settings", reader.calls)
+	}
+}
+
+func TestAdminTestTencentMPSVideoRestoresSecretsWithoutPaidSubmit(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := repository.SaveSettings(model.Settings{Private: model.PrivateSetting{TencentMPSVideo: model.TencentMPSVideoSetting{
+		SecretID: "saved-id", SecretKey: "saved-key", COSBucket: "media-1300000000", COSRegion: "ap-beijing",
+	}}}, now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	checker := &recordingTencentMPSConnectionChecker{}
+	previous := activeTencentMPSConnectionChecker
+	activeTencentMPSConnectionChecker = checker
+	t.Cleanup(func() { activeTencentMPSConnectionChecker = previous })
+	result, err := AdminTestTencentMPSVideo(context.Background(), model.TencentMPSVideoSetting{
+		SecretID: maskedAPIKey, SecretKey: maskedAPIKey, COSBucket: " media-1300000000 ", COSRegion: " ap-shanghai ", InputPrefix: " custom/input ", OutputPrefix: " custom/output ",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if checker.calls != 1 || checker.setting.SecretID != "saved-id" || checker.setting.SecretKey != "saved-key" || checker.setting.COSRegion != "ap-shanghai" || checker.setting.InputPrefix != "custom/input/" || checker.setting.OutputPrefix != "custom/output/" {
+		t.Fatalf("checker=%#v", checker)
+	}
+	if result.Provider != "tencent-mps" || !strings.Contains(result.Message, "未创建") {
+		t.Fatalf("result=%#v", result)
 	}
 }

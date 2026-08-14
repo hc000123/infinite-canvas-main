@@ -93,6 +93,17 @@ func AdminTestVideoUpscale(w http.ResponseWriter, r *http.Request) {
 	OK(w, result)
 }
 
+func AdminTestTencentMPSVideo(w http.ResponseWriter, r *http.Request) {
+	var setting model.TencentMPSVideoSetting
+	_ = json.NewDecoder(r.Body).Decode(&setting)
+	result, err := service.AdminTestTencentMPSVideo(r.Context(), setting)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
 func UserStartJimengLogin(w http.ResponseWriter, r *http.Request) {
 	user, ok := service.UserFromContext(r.Context())
 	if !ok {

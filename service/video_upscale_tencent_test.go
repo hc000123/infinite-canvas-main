@@ -178,3 +178,20 @@ func TestTencentMPSWorkerSignsCOSResultBeforeDownload(t *testing.T) {
 		t.Fatalf("downloaded=%q signedKey=%q", downloadedURL, cloud.signedKey)
 	}
 }
+
+func TestTencentMPSConnectionCheckOnlyUsesReadOperations(t *testing.T) {
+	mpsAPI := &fakeTencentMPSAPI{pollErr: tencentTaskNotFoundError{}}
+	cosAPI := &fakeTencentCOSAPI{}
+	if err := checkTencentMPSConnection(context.Background(), mpsAPI, cosAPI, "media-1300"); err != nil {
+		t.Fatal(err)
+	}
+	if mpsAPI.submitCount != 0 || mpsAPI.pollCount != 1 {
+		t.Fatalf("submit=%d poll=%d", mpsAPI.submitCount, mpsAPI.pollCount)
+	}
+}
+
+type tencentTaskNotFoundError struct{}
+
+func (tencentTaskNotFoundError) Error() string { return "task not found" }
+
+func (tencentTaskNotFoundError) TencentTaskNotFound() bool { return true }

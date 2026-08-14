@@ -240,6 +240,21 @@ func pointerString(value *string) string {
 }
 
 func isTencentTaskNotFound(err error) bool {
+	var marker interface{ TencentTaskNotFound() bool }
+	if errors.As(err, &marker) && marker.TencentTaskNotFound() {
+		return true
+	}
 	var apiErr *tcerrors.TencentCloudSDKError
 	return errors.As(err, &apiErr) && strings.Contains(strings.ToLower(apiErr.Code), "notfound")
+}
+
+func checkTencentMPSConnection(ctx context.Context, mpsAPI tencentMPSAPI, cosAPI tencentCOSAPI, bucket string) error {
+	if err := cosAPI.HeadBucket(ctx); err != nil {
+		return err
+	}
+	_, err := mpsAPI.Poll(ctx, tencentMPSPollInput{TaskID: "connection-test-" + strings.ReplaceAll(newID("mps"), "_", "-"), Definition: 327004, Bucket: bucket})
+	if isTencentTaskNotFound(err) {
+		return nil
+	}
+	return err
 }

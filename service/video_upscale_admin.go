@@ -17,9 +17,15 @@ type videoUpscaleConnectionChecker interface {
 	Check(context.Context, model.VideoUpscaleSetting) error
 }
 
+type tencentMPSConnectionChecker interface {
+	Check(context.Context, model.TencentMPSVideoSetting) error
+}
+
 var activeVideoUpscaleSpaceReader videoUpscaleConnectionChecker = realVideoUpscaleConnectionChecker{}
+var activeTencentMPSConnectionChecker tencentMPSConnectionChecker = realTencentMPSConnectionChecker{}
 
 type realVideoUpscaleConnectionChecker struct{}
+type realTencentMPSConnectionChecker struct{}
 
 func AdminTestVideoUpscale(ctx context.Context, input model.VideoUpscaleSetting) (VideoUpscaleConnectionResult, error) {
 	saved, err := repository.GetSettings()
@@ -51,4 +57,36 @@ func (realVideoUpscaleConnectionChecker) Check(ctx context.Context, video model.
 		return nil
 	}
 	return err
+}
+
+func AdminTestTencentMPSVideo(ctx context.Context, input model.TencentMPSVideoSetting) (VideoUpscaleConnectionResult, error) {
+	saved, err := repository.GetSettings()
+	if err != nil {
+		return VideoUpscaleConnectionResult{}, err
+	}
+	settings := model.Settings{Private: model.PrivateSetting{TencentMPSVideo: input}}
+	keepPrivateTencentMPSVideoSecrets(&settings, normalizeSettings(saved))
+	setting := normalizeTencentMPSVideoSetting(settings.Private.TencentMPSVideo)
+	if setting.SecretID == "" || setting.SecretKey == "" {
+		return VideoUpscaleConnectionResult{}, safeMessageError{message: "请先填写腾讯云 SecretId 和 SecretKey"}
+	}
+	if setting.COSBucket == "" || strings.ContainsAny(setting.COSBucket, "/:") || !strings.HasPrefix(setting.COSRegion, "ap-") {
+		return VideoUpscaleConnectionResult{}, safeMessageError{message: "请填写有效的腾讯 COS Bucket 和地域，例如 media-1300000000 / ap-beijing"}
+	}
+	if err := activeTencentMPSConnectionChecker.Check(ctx, setting); err != nil {
+		return VideoUpscaleConnectionResult{}, safeMessageError{message: "腾讯 MPS 连接测试失败，请检查密钥、MPS 开通授权、COS Bucket 和地域"}
+	}
+	return VideoUpscaleConnectionResult{Provider: "tencent-mps", Message: "腾讯 MPS 与 COS 配置验证成功，未上传视频，也未创建增强任务"}, nil
+}
+
+func (realTencentMPSConnectionChecker) Check(ctx context.Context, setting model.TencentMPSVideoSetting) error {
+	mpsAPI, err := newTencentCloudMPSAPI(setting)
+	if err != nil {
+		return err
+	}
+	cosAPI, err := newTencentCloudCOSAPI(setting)
+	if err != nil {
+		return err
+	}
+	return checkTencentMPSConnection(ctx, mpsAPI, cosAPI, setting.COSBucket)
 }
