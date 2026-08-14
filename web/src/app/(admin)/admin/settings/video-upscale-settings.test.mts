@@ -30,3 +30,11 @@ test("admin API reserves a safe video upscale connection-test route", () => {
     assert.match(api, /AdminPrivateVideoUpscaleSettings/);
     assert.match(api, /\/api\/admin\/settings\/video-upscale-test/);
 });
+
+test("LAS video processing exposes an independent subtitle erase switch on the shared credentials", () => {
+	assert.match(api, /AdminPrivateVideoUpscaleSettings[\s\S]*subtitleEraseEnabled: boolean/);
+	assert.match(component, /LAS 视频处理/);
+	assert.match(component, /\["private",\s*"videoUpscale",\s*"subtitleEraseEnabled"\]/);
+	assert.match(component, /启用字幕擦除/);
+	assert.match(component, /视频超分、智能插帧和字幕擦除共用同一 LAS API Key/);
+});

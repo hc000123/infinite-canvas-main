@@ -470,6 +470,7 @@ export type AdminPrivateImageUpscaleSettings = {
 
 export type AdminPrivateVideoUpscaleSettings = {
     enabled: boolean;
+    subtitleEraseEnabled: boolean;
     provider: "volcengine-las";
     apiKey: string;
     apiKeyConfigured: boolean;

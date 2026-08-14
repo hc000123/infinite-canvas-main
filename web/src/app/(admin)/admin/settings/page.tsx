@@ -67,7 +67,7 @@ const emptySettings: AdminSettings = {
         auth: {},
         volcengineAsset: { enabled: false, accessKey: "", secretKey: "", accessKeyConfigured: false, secretKeyConfigured: false, projectName: "default", region: "cn-beijing", assetGroupId: "", publicAssetBaseUrl: "" },
         imageUpscale: { managed: false, enabled: false, provider: "aliyun", accessKeyId: "", accessKeySecret: "", securityToken: "", accessKeyIdConfigured: false, accessKeySecretConfigured: false, securityTokenConfigured: false },
-        videoUpscale: { enabled: false, provider: "volcengine-las", apiKey: "", apiKeyConfigured: false, outputTosPath: "", outputQualityMode: "compatible", preserveAudio: true, maxTarget: "2k" },
+        videoUpscale: { enabled: false, subtitleEraseEnabled: false, provider: "volcengine-las", apiKey: "", apiKeyConfigured: false, outputTosPath: "", outputQualityMode: "compatible", preserveAudio: true, maxTarget: "2k" },
     },
 };
 const emptyChannel: AdminModelChannel = {
@@ -1076,6 +1076,7 @@ function isImageUpscaleKeyConfigured(setting: Partial<AdminSettings["private"]["
 function normalizePrivateVideoUpscaleSetting(setting: Partial<AdminSettings["private"]["videoUpscale"]> = {}): AdminSettings["private"]["videoUpscale"] {
     return {
         enabled: setting.enabled === true,
+        subtitleEraseEnabled: setting.subtitleEraseEnabled === true,
         provider: "volcengine-las",
         apiKey: setting.apiKey || "",
         apiKeyConfigured: setting.apiKeyConfigured === true,
@@ -1322,6 +1323,7 @@ function buildPrivateConfigWarnings(channels: AdminModelChannel[], volcengineAss
         if (!videoUpscale.apiKeyConfigured && !videoUpscale.apiKey.trim()) warnings.push("视频超分已开启，但 LAS API Key 未配置。");
         if (!videoUpscale.outputTosPath.trim()) warnings.push("视频超分已开启，但北京地域 TOS 输出目录未配置。");
     }
+    if (videoUpscale.subtitleEraseEnabled && !videoUpscale.enabled) warnings.push("字幕擦除已开启，但视频 LAS 处理尚未启用。");
     return warnings;
 }
 

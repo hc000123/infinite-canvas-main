@@ -23,17 +23,17 @@ export function VideoUpscaleSettingsSection({ setting, credentials, testing, onT
             label: (
                 <Flex vertical gap={4}>
                     <Flex align="center" gap={8} wrap>
-                        <Typography.Text strong>视频超分</Typography.Text>
+                        <Typography.Text strong>LAS 视频处理</Typography.Text>
                         <Tag color={setting.enabled ? "success" : "default"}>{setting.enabled ? "已开启" : "未开启"}</Tag>
                         <Tag color={lasKeyReady ? "success" : "default"}>{lasKeyReady ? "LAS 密钥已配置" : "LAS 密钥待配置"}</Tag>
                     </Flex>
-                    <Typography.Text type="secondary" className="text-xs">火山引擎 LAS 视频超分；操作方式与图片超分一致，原视频节点保持不变。</Typography.Text>
+                    <Typography.Text type="secondary" className="text-xs">火山引擎 LAS 视频超分、智能插帧与字幕擦除；所有结果都生成派生节点，原视频保持不变。</Typography.Text>
                 </Flex>
             ),
             children: (
                 <Flex vertical gap={14}>
                     <Flex align="center" justify="space-between" gap={12} wrap>
-                        <Typography.Text type="secondary">TOS 复用“火山素材审核”的北京地域 AK/SK；LAS API Key 独立保存。连接测试只校验身份，不上传视频、不创建超分任务。</Typography.Text>
+                        <Typography.Text type="secondary">TOS 复用“火山素材审核”的北京地域 AK/SK；视频超分、智能插帧和字幕擦除共用同一 LAS API Key。连接测试只校验身份，不上传视频、不创建付费任务。</Typography.Text>
                         <Typography.Link href="https://operator.las.cn-beijing.volces.com" target="_blank" rel="noreferrer">LAS 北京服务地址 <ExportOutlined className="ml-1 text-xs" /></Typography.Link>
                     </Flex>
                     <Space size={8} wrap>
@@ -43,7 +43,10 @@ export function VideoUpscaleSettingsSection({ setting, credentials, testing, onT
                     </Space>
                     <Row gutter={16}>
                         <Col xs={24} md={6}>
-                            <Form.Item name={["private", "videoUpscale", "enabled"]} label="启用视频超分" valuePropName="checked"><Switch /></Form.Item>
+                            <Form.Item name={["private", "videoUpscale", "enabled"]} label="启用视频超分与插帧" valuePropName="checked"><Switch /></Form.Item>
+                        </Col>
+                        <Col xs={24} md={6}>
+                            <Form.Item name={["private", "videoUpscale", "subtitleEraseEnabled"]} label="启用字幕擦除" valuePropName="checked"><Switch /></Form.Item>
                         </Col>
                         <Col xs={24} md={9}>
                             <Form.Item name={["private", "videoUpscale", "apiKey"]} label="LAS API Key" extra={setting.apiKeyConfigured ? "已保存；留空不会覆盖。" : "从 LAS 算子服务获取。"}><Input.Password autoComplete="new-password" placeholder={setting.apiKeyConfigured ? "已配置，留空保持不变" : "las-..."} /></Form.Item>
