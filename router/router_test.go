@@ -96,6 +96,23 @@ func TestVideoUpscaleRoutesRequireAuth(t *testing.T) {
 	}
 }
 
+func TestVideoSubtitleEraseRoutesRequireAuth(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := New()
+	for _, item := range []struct{ method, path string }{
+		{http.MethodGet, "/api/v1/video-subtitle-erase/capabilities"},
+		{http.MethodPost, "/api/v1/video-subtitle-erase/jobs"},
+		{http.MethodGet, "/api/v1/video-subtitle-erase/jobs/job-1"},
+		{http.MethodPost, "/api/v1/video-subtitle-erase/jobs/job-1/retry"},
+	} {
+		recorder := httptest.NewRecorder()
+		app.ServeHTTP(recorder, httptest.NewRequest(item.method, item.path, nil))
+		if recorder.Code == http.StatusNotFound || !strings.Contains(recorder.Body.String(), `"code":1001`) {
+			t.Fatalf("video subtitle erase route missing auth: %s %s body=%s", item.method, item.path, recorder.Body.String())
+		}
+	}
+}
+
 func TestAdminImageUpscaleTestRouteRequiresAdminAuth(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	app := New()
