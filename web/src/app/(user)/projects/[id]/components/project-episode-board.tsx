@@ -410,9 +410,14 @@ function ProjectEpisodeProductionPanel({
                                 <div className="flex shrink-0 items-center gap-2">
                                     {selectedOptimizedScript ? <Tag className="m-0">{selectedOptimizedScript.length} 字</Tag> : null}
                                     {selectedEpisode ? (
-                                        <Button size="small" icon={<Maximize2 className="size-3.5" />} disabled={selectedOptimizing} onClick={() => onOpenEpisodeCanvas(selectedEpisode.id)}>
-                                            {selectedEpisode.primaryCanvasId ? "进入画布" : "创建画布"}
-                                        </Button>
+                                        <>
+                                            <Button size="small" icon={<Maximize2 className="size-3.5" />} disabled={selectedOptimizing} onClick={() => onOpenEpisodeCanvas(selectedEpisode.id)}>
+                                                {selectedEpisode.primaryCanvasId ? "进入画布" : "创建画布"}
+                                            </Button>
+                                            <Button size="small" type="primary" icon={<ArrowRight className="size-3.5" />} disabled={selectedOptimizing} onClick={() => onOpenEpisode(selectedEpisode.id)}>
+                                                制作本集
+                                            </Button>
+                                        </>
                                     ) : null}
                                     {selectedEpisode && (selectedOptimizedScript || selectedOptimizeError) ? (
                                         <Button size="small" icon={<Trash2 className="size-3.5" />} disabled={selectedOptimizing} onClick={() => onClearOptimizedScript(selectedEpisode.id)}>
