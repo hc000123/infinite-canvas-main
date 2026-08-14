@@ -293,6 +293,16 @@
         box-shadow: 0 0 0 2px var(--studio-focus-ring);
     }
 
+    .studio-spine-collapse:disabled {
+        cursor: default;
+        opacity: 0.6;
+    }
+
+    .studio-spine-collapse:disabled:hover {
+        background: transparent;
+        color: var(--studio-text-muted);
+    }
+
     .studio-spine-footer > div {
         display: flex;
         width: 100%;
@@ -302,8 +312,9 @@
         gap: 0.125rem;
     }
 
-    .studio-spine-footer .studio-version-action {
+    .studio-spine-footer button[title="查看版本更新"] {
         width: 2.75rem !important;
+        min-width: 2.75rem !important;
     }
 
     .studio-app-spine[data-collapsed="true"] .studio-spine-label {
@@ -350,10 +361,6 @@
             padding: 0;
         }
 
-        .studio-spine-collapse {
-            display: none !important;
-        }
-
         .studio-spine-label {
             display: none;
         }
@@ -371,7 +378,7 @@
             gap: 0.25rem;
         }
 
-        .studio-spine-footer .studio-version-action {
+        .studio-spine-footer button[title="查看版本更新"] {
             display: none !important;
         }
     }

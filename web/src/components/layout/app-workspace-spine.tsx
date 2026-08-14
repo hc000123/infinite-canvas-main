@@ -17,10 +17,21 @@ export function AppWorkspaceSpine() {
     const searchParams = useSearchParams();
     const canvasProjects = useCanvasStore((state) => state.projects);
     const [collapsed, setCollapsed] = useState(false);
+    const [compactViewport, setCompactViewport] = useState(false);
+    const effectiveCollapsed = collapsed || compactViewport;
+    const collapseLabel = compactViewport ? "窄屏固定收起" : effectiveCollapsed ? "展开全局工作区" : "收起全局工作区";
     const projectId = workspaceProjectId(pathname, searchParams);
 
     useEffect(() => {
         setCollapsed(readCollapsedPreference());
+    }, []);
+
+    useEffect(() => {
+        const media = window.matchMedia("(max-width: 899px)");
+        const syncViewport = () => setCompactViewport(media.matches);
+        syncViewport();
+        media.addEventListener("change", syncViewport);
+        return () => media.removeEventListener("change", syncViewport);
     }, []);
 
     const toggleCollapsed = () => {
@@ -43,7 +54,7 @@ export function AppWorkspaceSpine() {
     };
 
     return (
-        <aside aria-label="全局工作区" data-collapsed={collapsed} className="studio-app-spine flex shrink-0 flex-col border-r border-[var(--studio-border-subtle)] bg-[var(--studio-spine-bg)]">
+        <aside aria-label="全局工作区" data-collapsed={effectiveCollapsed} className="studio-app-spine flex shrink-0 flex-col border-r border-[var(--studio-border-subtle)] bg-[var(--studio-spine-bg)]">
             <Link href="/projects" aria-label="眨眼之间" className="studio-spine-brand flex h-14 shrink-0 items-center gap-2 border-b border-[var(--studio-border-subtle)] px-4 text-sm font-semibold text-[var(--studio-text-primary)]">
                 <span className="grid size-6 place-items-center rounded border border-[var(--studio-border-strong)] text-[11px] text-[var(--studio-accent)]">眨</span>
                 <span className="studio-spine-label">眨眼之间</span>
@@ -59,12 +70,12 @@ export function AppWorkspaceSpine() {
                     );
                 })}
             </nav>
-            <button type="button" className="studio-spine-collapse mx-2" onClick={toggleCollapsed} aria-label={collapsed ? "展开全局工作区" : "收起全局工作区"} aria-expanded={!collapsed} title={collapsed ? "展开全局工作区" : "收起全局工作区"}>
-                {collapsed ? <PanelLeftOpen className="size-4" aria-hidden /> : <PanelLeftClose className="size-4" aria-hidden />}
+            <button type="button" className="studio-spine-collapse mx-2" onClick={toggleCollapsed} aria-label={collapseLabel} aria-expanded={!effectiveCollapsed} title={collapseLabel} disabled={compactViewport}>
+                {effectiveCollapsed ? <PanelLeftOpen className="size-4" aria-hidden /> : <PanelLeftClose className="size-4" aria-hidden />}
                 <span className="studio-spine-label">收起侧栏</span>
             </button>
             <div className="studio-spine-footer mt-auto border-t border-[var(--studio-border-subtle)] px-2 py-3">
-                <UserStatusActions hideVersion={collapsed} compactVersion />
+                <UserStatusActions hideVersion={effectiveCollapsed} />
             </div>
         </aside>
     );
