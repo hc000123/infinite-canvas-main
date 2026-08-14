@@ -46,6 +46,9 @@ func run() error {
 	if err := service.RecoverInterruptedVideoUpscaleJobs(); err != nil {
 		return err
 	}
+	if err := service.RecoverInterruptedVideoSubtitleEraseJobs(); err != nil {
+		return err
+	}
 	service.StartPromptSyncScheduler()
 	signalContext, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stopSignals()

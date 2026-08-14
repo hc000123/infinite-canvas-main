@@ -59,11 +59,14 @@ type lasTaskResponse struct {
 		TaskStatus   string `json:"task_status"`
 		BusinessCode string `json:"business_code"`
 		ErrorMessage string `json:"error_msg"`
+		RequestID    string `json:"request_id"`
 	} `json:"metadata"`
 	Data struct {
-		OutputVideoTOSURL string `json:"output_video_tos_url"`
-		OutputVideoURL    string `json:"output_video_url"`
-		Processed         *bool  `json:"processed"`
+		OutputVideoTOSURL string  `json:"output_video_tos_url"`
+		OutputVideoURL    string  `json:"output_video_url"`
+		VideoURL          string  `json:"video_url"`
+		Duration          float64 `json:"duration"`
+		Processed         *bool   `json:"processed"`
 	} `json:"data"`
 }
 

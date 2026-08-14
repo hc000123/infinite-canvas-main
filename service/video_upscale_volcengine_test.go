@@ -100,6 +100,24 @@ func TestLASPollUsesOperatorAndParsesInterpolationResponse(t *testing.T) {
 	}
 }
 
+func TestLASPollParsesSubtitleEraseResponse(t *testing.T) {
+	transport := &captureLASRoundTripper{}
+	client := &lasClient{apiKey: "key", client: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		_ = json.NewDecoder(request.Body).Decode(&transport.body)
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(bytes.NewBufferString(`{"metadata":{"task_id":"task-1","task_status":"COMPLETED","request_id":"request-1"},"data":{"video_url":"https://example.com/erased.mp4","duration":12.34}}`))}, nil
+	})}}
+	result, err := client.Poll(context.Background(), "las_subtitle_erase", "task-1")
+	if err != nil || transport.body["operator_id"] != "las_subtitle_erase" || result.Metadata.RequestID != "request-1" || result.Data.VideoURL != "https://example.com/erased.mp4" || result.Data.Duration != 12.34 {
+		t.Fatalf("body=%#v result=%#v err=%v", transport.body, result, err)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return function(request)
+}
+
 func TestProcessVideoUpscaleJobResumesDurableVidAndRunID(t *testing.T) {
 	setupVideoUpscaleTest(t)
 	config.Cfg.PublicAssetDir = filepath.Join(t.TempDir(), "public")
