@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from "react";
 import { nanoid } from "nanoid";
 
-import { createVideoUpscaleJob, getVideoUpscaleCapabilities, getVideoUpscaleJob, retryVideoUpscaleJob, type VideoUpscaleCapabilities, type VideoUpscaleJob } from "@/services/api/video-upscale";
+import { createVideoUpscaleJob, getVideoUpscaleCapabilities, getVideoUpscaleJob, retryVideoUpscaleJob, type VideoUpscaleCapabilities, type VideoUpscaleJob, type VideoUpscaleSubmitOptions } from "@/services/api/video-upscale";
 import { getMediaBlob, uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import type { CanvasConnection, CanvasNodeData, CanvasNodeMetadata } from "../types";
 import { applyVideoUpscaleJobToNode, buildVideoUpscaleDraft, videoUpscaleJobActive } from "../utils/canvas-video-upscale";
@@ -152,14 +152,14 @@ export function useCanvasVideoUpscaleActions({
     }, []);
 
     const submit = useCallback(
-        async (node: CanvasNodeData, target: "1080p" | "2k") => {
+        async (node: CanvasNodeData, options: VideoUpscaleSubmitOptions) => {
             if (!node.metadata?.content || submittingRef.current) return;
             submittingRef.current = true;
             setSubmitting(true);
             try {
                 const blob = node.metadata.storageKey ? await getMediaBlob(node.metadata.storageKey) : await fetch(node.metadata.content).then((response) => response.blob());
                 if (!blob) throw new Error("没有找到原始视频文件");
-                const job = await createVideoUpscaleJob({ file: blob, filename: `${node.title || "video"}.${videoExtension(blob.type)}`, target, projectId, canvasId, sourceNodeId: node.id, sourceAssetId: node.metadata.sourceAssetId });
+                const job = await createVideoUpscaleJob({ file: blob, filename: `${node.title || "video"}.${videoExtension(blob.type)}`, ...options, projectId, canvasId, sourceNodeId: node.id, sourceAssetId: node.metadata.sourceAssetId });
                 const childId = nanoid();
                 const draft = buildVideoUpscaleDraft(node, childId, job, nodesRef.current);
                 setNodes((current) => {

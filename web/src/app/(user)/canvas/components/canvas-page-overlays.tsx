@@ -16,7 +16,7 @@ import { StoryboardManagerDrawer } from "./storyboard-manager-drawer";
 import { CanvasTextEditorModal } from "./canvas-text-editor-modal";
 import { CanvasImageUpscaleModal } from "./canvas-image-upscale-modal";
 import type { ImageUpscaleCapabilities } from "@/services/api/image-upscale";
-import type { VideoUpscaleCapabilities } from "@/services/api/video-upscale";
+import type { VideoUpscaleCapabilities, VideoUpscaleSubmitOptions } from "@/services/api/video-upscale";
 import { CanvasVideoUpscaleModal } from "./canvas-video-upscale-modal";
 
 type Props = {
@@ -68,7 +68,7 @@ type Props = {
     onGenerateAngleNode: (node: CanvasNodeData, params: CanvasImageAngleParams) => void;
     onImageInputChange: (event: ChangeEvent<HTMLInputElement>) => void;
     onUpscaleImageNode: (node: CanvasNodeData, scale: 2 | 4) => void;
-    onUpscaleVideoNode: (node: CanvasNodeData, target: "1080p" | "2k") => void;
+    onUpscaleVideoNode: (node: CanvasNodeData, options: VideoUpscaleSubmitOptions) => void;
     onOpenStoryboardGroup: (groupId: string) => void;
     onSaveTextNode: (nodeId: string, content: string) => void;
 };

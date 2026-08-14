@@ -9,22 +9,21 @@ const component = readFileSync(join(root, "components/video-upscale-settings-sec
 const page = readFileSync(join(root, "page.tsx"), "utf8");
 const api = readFileSync(join(root, "../../../../services/api/admin.ts"), "utf8");
 
-test("video upscale uses its private setting path and shared Volcengine credential flags", () => {
-    assert.match(component, /\["private",\s*"videoUpscale",\s*"enabled"\]/);
-    assert.match(component, /accessKeyConfigured/);
-    assert.match(component, /secretKeyConfigured/);
-    assert.doesNotMatch(component, /Input\.Password/);
-    assert.match(page, /privateVolcengineAsset/);
-    assert.match(page, /privateVideoUpscale/);
+test("video upscale uses its private setting path and LAS credential flag", () => {
+	assert.match(component, /\["private",\s*"videoUpscale",\s*"enabled"\]/);
+	assert.match(component, /apiKeyConfigured/);
+	assert.match(component, /Input\.Password/);
+	assert.match(page, /privateVideoUpscale/);
 });
 
-test("video upscale exposes fixed VOD settings and the official console link", () => {
-    assert.match(component, /\["private",\s*"videoUpscale",\s*"spaceName"\]/);
-    assert.match(component, /AIGC/);
-    assert.match(component, /Standard/);
-    assert.match(component, /1080p/);
-    assert.match(component, /2K/);
-    assert.match(component, /console\.volcengine\.com\/vod/);
+test("video upscale exposes LAS and Beijing TOS settings", () => {
+	assert.match(component, /\["private",\s*"videoUpscale",\s*"outputTosPath"\]/);
+	assert.match(component, /LAS/);
+	assert.match(component, /tos:\/\//);
+	assert.match(component, /compatible/);
+	assert.match(component, /1080p/);
+	assert.match(component, /2K/);
+	assert.match(component, /operator\.las\.cn-beijing\.volces\.com/);
 });
 
 test("admin API reserves a safe video upscale connection-test route", () => {

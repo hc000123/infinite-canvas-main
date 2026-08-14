@@ -8,7 +8,6 @@ import { formatBytes } from "@/lib/image-utils";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasNodeType, type CanvasNodeData } from "../types";
 import { shouldShowCanvasNodeProgress } from "../utils/canvas-node-status";
-import { CanvasLogoPlaceholder } from "./canvas-logo-placeholder";
 import { GeneratedPromptToggle, MediaReviewStatusBadge } from "./canvas-media-node-controls";
 import { VideoNodeContent } from "./canvas-video-node-content";
 import { VideoTaskProgressPanel } from "./canvas-video-task-progress-panel";
@@ -231,10 +230,7 @@ function ImageNodeContent(props: NodeContentRendererProps) {
 
 function EmptyImageContent({ node, theme, isBatchRoot, batchCount, batchExpanded, batchOpening, batchRecovering, onToggleBatch, onImageQuickAction }: NodeContentRendererProps) {
     const content = (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-5 px-8" style={{ color: theme.node.placeholder }}>
-            <div className="h-16 w-16 overflow-hidden rounded-[4px]">
-                <CanvasLogoPlaceholder label={`${node.title || "图片节点"}等待图片内容`} />
-            </div>
+        <div className="flex h-full w-full flex-col items-center justify-center px-8" style={{ color: theme.node.placeholder }}>
             <div className="w-full max-w-[220px] space-y-2 self-start">
                 <div className="text-xs font-medium" style={{ color: theme.node.muted }}>
                     尝试：

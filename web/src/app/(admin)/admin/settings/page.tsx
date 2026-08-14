@@ -67,7 +67,7 @@ const emptySettings: AdminSettings = {
         auth: {},
         volcengineAsset: { enabled: false, accessKey: "", secretKey: "", accessKeyConfigured: false, secretKeyConfigured: false, projectName: "default", region: "cn-beijing", assetGroupId: "", publicAssetBaseUrl: "" },
         imageUpscale: { managed: false, enabled: false, provider: "aliyun", accessKeyId: "", accessKeySecret: "", securityToken: "", accessKeyIdConfigured: false, accessKeySecretConfigured: false, securityTokenConfigured: false },
-        videoUpscale: { enabled: false, provider: "volcengine", spaceName: "", scenario: "aigc", enhanceLevel: "Standard", maxTarget: "2k" },
+        videoUpscale: { enabled: false, provider: "volcengine-las", apiKey: "", apiKeyConfigured: false, outputTosPath: "", outputQualityMode: "compatible", preserveAudio: true, maxTarget: "2k" },
     },
 };
 const emptyChannel: AdminModelChannel = {
@@ -1076,10 +1076,12 @@ function isImageUpscaleKeyConfigured(setting: Partial<AdminSettings["private"]["
 function normalizePrivateVideoUpscaleSetting(setting: Partial<AdminSettings["private"]["videoUpscale"]> = {}): AdminSettings["private"]["videoUpscale"] {
     return {
         enabled: setting.enabled === true,
-        provider: "volcengine",
-        spaceName: setting.spaceName?.trim() || "",
-        scenario: "aigc",
-        enhanceLevel: "Standard",
+        provider: "volcengine-las",
+        apiKey: setting.apiKey || "",
+        apiKeyConfigured: setting.apiKeyConfigured === true,
+        outputTosPath: setting.outputTosPath?.trim() || "",
+        outputQualityMode: setting.outputQualityMode === "balanced" || setting.outputQualityMode === "master" ? setting.outputQualityMode : "compatible",
+        preserveAudio: true,
         maxTarget: "2k",
     };
 }
@@ -1317,7 +1319,8 @@ function buildPrivateConfigWarnings(channels: AdminModelChannel[], volcengineAss
     if (videoUpscale.enabled) {
         if (!isVolcengineAssetKeyConfigured(volcengineAsset, "accessKey")) warnings.push("视频超分已开启，但共享 Access Key 未配置。请在“火山素材审核”卡片填写访问密钥。");
         if (!isVolcengineAssetKeyConfigured(volcengineAsset, "secretKey")) warnings.push("视频超分已开启，但共享 Secret Key 未配置。请在“火山素材审核”卡片填写密钥。");
-        if (!videoUpscale.spaceName.trim()) warnings.push("视频超分已开启，但 VOD 空间名称未配置。请在“视频超分”卡片填写空间名称。");
+        if (!videoUpscale.apiKeyConfigured && !videoUpscale.apiKey.trim()) warnings.push("视频超分已开启，但 LAS API Key 未配置。");
+        if (!videoUpscale.outputTosPath.trim()) warnings.push("视频超分已开启，但北京地域 TOS 输出目录未配置。");
     }
     return warnings;
 }

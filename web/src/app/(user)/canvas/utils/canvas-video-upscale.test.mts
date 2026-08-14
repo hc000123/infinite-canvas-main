@@ -6,7 +6,7 @@ import { buildCanvasVideoProgress } from "./canvas-video-progress.ts";
 import type { CanvasNodeData } from "../types.ts";
 
 const source: CanvasNodeData = { id: "video-source", type: "video" as CanvasNodeData["type"], title: "原视频", position: { x: 20, y: 30 }, width: 320, height: 180, metadata: { content: "blob:source", storageKey: "video:source", sourceAssetId: "asset-1", naturalWidth: 1280, naturalHeight: 720 } };
-const queuedJob = { id: "job-1", provider: "volcengine", vid: "", runId: "", providerRequestId: "", target: "1080p" as const, scenario: "aigc" as const, enhanceLevel: "Standard" as const, status: "queued" as const, progress: 5, attempt: 1, projectId: "project", canvasId: "canvas", sourceNodeId: source.id, sourceAssetId: "asset-1", inputWidth: 1280, inputHeight: 720, inputDurationSeconds: 6, inputMimeType: "video/mp4", inputBytes: 12, outputWidth: 1920, outputHeight: 1080, resultUrl: "", resultMimeType: "", resultBytes: 0, errorCode: "", errorMessage: "", cloudProcessing: true as const, createdAt: "start", startedAt: "", completedAt: "", updatedAt: "start" };
+const queuedJob = { id: "job-1", provider: "volcengine", vid: "", runId: "", interpolationRunId: "interp-1", providerRequestId: "", target: "1080p" as const, scenario: "aigc" as const, enhanceLevel: "Standard" as const, status: "queued" as const, progress: 5, attempt: 1, processingStage: "interpolation_processing", projectId: "project", canvasId: "canvas", sourceNodeId: source.id, sourceAssetId: "asset-1", inputWidth: 1280, inputHeight: 720, inputDurationSeconds: 6, inputFrameRate: 24, inputMimeType: "video/mp4", inputBytes: 12, outputWidth: 1920, outputHeight: 1080, outputQualityMode: "balanced" as const, preserveAudio: true, frameInterpolationMode: "double" as const, interpolationMode: "fast" as const, interpolationTargetFrameRate: 48, estimatedBillableMinutes: 0.3, estimatedCostCny: 0.66, costEstimateAvailable: true, pricingRuleVersion: "las-2026-08", estimatedInterpolationBillableMinutes: 0.3, estimatedInterpolationCostCny: 0.15, interpolationCostEstimateAvailable: true, interpolationPricingRuleVersion: "las-interpolation-2026-08", estimatedTotalCostCny: 0.81, resultUrl: "", resultMimeType: "", resultBytes: 0, errorCode: "", errorMessage: "", cloudProcessing: true as const, createdAt: "start", startedAt: "", completedAt: "", updatedAt: "start" };
 
 test("builds one connected right-side video draft without changing the source", () => {
     const before = structuredClone(source);
@@ -17,6 +17,13 @@ test("builds one connected right-side video draft without changing the source", 
     assert.equal(connection.toNodeId, node.id);
     assert.ok(node.position.x >= source.position.x + source.width);
     assert.equal(node.metadata?.videoUpscale?.jobId, queuedJob.id);
+    assert.equal(node.metadata?.videoUpscale?.inputFrameRate, 24);
+    assert.equal(node.metadata?.videoUpscale?.outputQualityMode, "balanced");
+    assert.equal(node.metadata?.videoUpscale?.estimatedCostCny, 0.66);
+    assert.equal(node.metadata?.videoUpscale?.interpolationRunId, "interp-1");
+    assert.equal(node.metadata?.videoUpscale?.interpolationTargetFrameRate, 48);
+    assert.equal(node.metadata?.videoUpscale?.estimatedTotalCostCny, 0.81);
+    assert.equal("upscaleResultTosUrl" in (node.metadata?.videoUpscale || {}), false);
 });
 
 test("updates progress failure and success in place", () => {
@@ -45,5 +52,12 @@ test("video node progress uses the video upscale lifecycle", () => {
         const progress = buildCanvasVideoProgress({ status: "loading", videoUpscale: { ...buildVideoUpscaleDraft(source, "child", queuedJob, [source]).node.metadata!.videoUpscale!, status, progress: percent } }, "loading");
         assert.equal(progress.label, label);
         assert.equal(progress.percent, percent);
+    }
+});
+
+test("canvas metadata accepts common fixed interpolation targets", () => {
+    for (const mode of ["to25", "to30"] as const) {
+        const metadata = buildVideoUpscaleDraft(source, `child-${mode}`, { ...queuedJob, frameInterpolationMode: mode, interpolationTargetFrameRate: mode === "to25" ? 25 : 30 }, [source]).node.metadata?.videoUpscale;
+        assert.equal(metadata?.frameInterpolationMode, mode);
     }
 });

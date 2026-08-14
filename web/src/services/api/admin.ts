@@ -470,10 +470,12 @@ export type AdminPrivateImageUpscaleSettings = {
 
 export type AdminPrivateVideoUpscaleSettings = {
     enabled: boolean;
-    provider: "volcengine";
-    spaceName: string;
-    scenario: "aigc";
-    enhanceLevel: "Standard";
+    provider: "volcengine-las";
+    apiKey: string;
+    apiKeyConfigured: boolean;
+    outputTosPath: string;
+    outputQualityMode: "compatible" | "balanced" | "master";
+    preserveAudio: true;
     maxTarget: "2k";
 };
 
@@ -515,7 +517,7 @@ export async function testAdminImageUpscale(token: string, setting: AdminPrivate
 }
 
 export async function testAdminVideoUpscale(token: string, setting: AdminPrivateVideoUpscaleSettings) {
-    return apiPost<{ provider: "volcengine"; message: string }>("/api/admin/settings/video-upscale-test", setting, token);
+    return apiPost<{ provider: "volcengine-las"; message: string }>("/api/admin/settings/video-upscale-test", setting, token);
 }
 
 export type AdminChannelActionRequest = {

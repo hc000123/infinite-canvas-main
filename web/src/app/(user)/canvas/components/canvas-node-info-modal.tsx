@@ -85,7 +85,7 @@ export function CanvasNodeInfoModal({ node, open, onClose }: { node: CanvasNodeD
                             {videoUpscale ? <InfoRow label="云端处理" value="是，视频会进入火山引擎基础设施" /> : null}
                             {videoUpscale ? <InfoRow label="输入规格" value={`${videoUpscale.inputWidth} × ${videoUpscale.inputHeight} · ${videoUpscale.inputDurationSeconds}s`} /> : null}
                             {videoUpscale?.outputWidth && videoUpscale.outputHeight ? <InfoRow label="输出规格" value={`${videoUpscale.outputWidth} × ${videoUpscale.outputHeight}`} /> : null}
-                            {videoUpscale?.runId ? <InfoRow label="火山 RunId" value={videoUpscale.runId} /> : null}
+                            {videoUpscale?.runId ? <InfoRow label="LAS Task ID" value={videoUpscale.runId} /> : null}
                             {videoUpscale?.providerRequestId ? <InfoRow label="服务商请求" value={videoUpscale.providerRequestId} /> : null}
                             {videoUpscale?.durationMs !== undefined ? <InfoRow label="处理耗时" value={formatSecondSpan(Math.round(videoUpscale.durationMs / 1000))} /> : null}
                             {videoUpscale?.errorCode ? <InfoRow label="超分错误码" value={videoUpscale.errorCode} /> : null}
