@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { App, Empty, Form, Input, Modal } from "antd";
 
 import { uploadImage } from "@/services/image-storage";
@@ -12,6 +12,7 @@ import { useScriptStore } from "../canvas/stores/use-script-store";
 import type { ProductionBibleItem } from "../canvas/utils/production-bible";
 import { normalizeCanvasAssetTitles } from "./asset-canvas-title";
 import { buildAssetCenterSubjects, unorganizedAssets, type AssetCenterSubjectSummary } from "./asset-gallery";
+import { assetSubjectHref } from "./asset-navigation";
 import { assetEpisodeTitle } from "./asset-episode";
 import { buildAssetImageRevisionHref } from "./asset-image-revision";
 import type { AssetFormValues } from "./components/asset-editor-modal";
@@ -53,6 +54,7 @@ export default function AssetsPage() {
 function AssetsPageContent() {
     const { message, modal } = App.useApp();
     const router = useRouter();
+    const pathname = usePathname();
     const searchParams = useSearchParams();
     const scriptEpisodes = useScriptStore((state) => state.episodes);
     const requestedAssetId = searchParams.get("assetId") || "";
@@ -248,7 +250,7 @@ function AssetsPageContent() {
         if (!subjectCreateCategory) return;
         const subjectId = ensureSubject({ projectId: values.projectId, category: subjectCreateCategory, name: values.name, note: values.note?.trim(), tags: [] });
         setSubjectCreateCategory(null);
-        router.push(`/assets/${subjectId}`);
+        router.push(assetSubjectHref(subjectId, pathname, searchParams.toString()));
     };
     const createProjectFolder = () => {
         if (!projectContextFilter) return message.warning("请先选择资产所属项目");

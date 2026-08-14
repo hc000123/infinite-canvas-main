@@ -263,7 +263,7 @@ function InfiniteCanvasPage() {
         setSelectedConnectionId,
         setContextMenu,
     });
-    const { cleanupCanvasFiles, clearFocusParam, navigateCanvasPage, navigateToProjects, openProjectsHome, showCanvasSuccess, showImageGenerationError, showVideoGenerationWarning } = useCanvasPageCallbacks({
+    const { cleanupCanvasFiles, clearFocusParam, navigateCanvasPage, navigateToProjects, showCanvasSuccess, showImageGenerationError, showVideoGenerationWarning } = useCanvasPageCallbacks({
         canvasId,
         cleanupAssetImages,
         getCleanupHistory,
@@ -957,7 +957,6 @@ function InfiniteCanvasPage() {
                     capacity={capacity}
                     returnLabel={currentProject?.parentCanvasId ? "返回主画布" : returnTarget.label}
                     onReturnParent={returnFromCanvas}
-                    onHome={openProjectsHome}
                     onCreateProject={createAndOpenCanvas}
                     onOpenChildCanvas={(id) => navigateCanvasPage(`/canvas/${id}`)}
                     onDeleteProject={deleteCurrentProject}

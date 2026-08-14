@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, Ellipsis, FolderOpen, Home, Keyboard, Layers3, LayoutGrid, Menu as MenuIcon, Plus, Redo2, Save, Trash2, Undo2, Upload } from "lucide-react";
+import { ArrowLeft, Ellipsis, FolderOpen, Keyboard, Layers3, LayoutGrid, Menu as MenuIcon, Plus, Redo2, Save, Trash2, Undo2, Upload } from "lucide-react";
 import { Button, Dropdown, Menu as AntMenu, Modal, type MenuProps } from "antd";
 
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -22,7 +22,6 @@ export function CanvasTopBar({
     capacity,
     returnLabel,
     onReturnParent,
-    onHome,
     onCreateProject,
     canCreateChildCanvas,
     childCanvases,
@@ -50,7 +49,6 @@ export function CanvasTopBar({
     capacity: CanvasCapacitySnapshot;
     returnLabel: string;
     onReturnParent: () => void;
-    onHome: () => void;
     onCreateProject: () => void;
     canCreateChildCanvas: boolean;
     childCanvases: Array<{ id: string; title: string }>;
@@ -118,9 +116,6 @@ export function CanvasTopBar({
                                     selectable={false}
                                     onClick={() => setMenuOpen(false)}
                                     items={[
-                                        { key: "parent", icon: <ArrowLeft className="size-4" />, label: returnLabel, onClick: onReturnParent },
-                                        { key: "projects", icon: <Home className="size-4" />, label: "项目中心", onClick: onHome },
-                                        { type: "divider" },
                                         {
                                             key: "new",
                                             disabled: hasEpisode && !canCreateChildCanvas,
