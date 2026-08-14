@@ -208,14 +208,14 @@ func RetryVideoUpscaleJob(ctx context.Context, userID, jobID string) (model.Vide
 	if err != nil {
 		return model.VideoUpscaleJob{}, err
 	}
-	if _, err := currentVideoUpscaleProvider(job); err != nil {
-		return model.VideoUpscaleJob{}, err
-	}
 	if job.Status != model.VideoUpscaleJobStatusFailed {
 		return model.VideoUpscaleJob{}, safeMessageError{message: "当前视频超分任务不能重试"}
 	}
 	if job.ErrorCode == "submission_uncertain" {
 		return model.VideoUpscaleJob{}, safeMessageError{message: "无法确认上次付费提交结果，请重新创建任务并再次确认费用"}
+	}
+	if _, err := currentVideoUpscaleProvider(job); err != nil {
+		return model.VideoUpscaleJob{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return model.VideoUpscaleJob{}, err
