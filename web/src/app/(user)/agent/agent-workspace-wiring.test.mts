@@ -58,7 +58,7 @@ test("keeps all-project and project drill-down in Agent while redirecting episod
     assert.match(source, /AgentProjectOverview/);
     assert.match(source, /AgentEpisodeOverview/);
     assert.doesNotMatch(source, /AgentStageGates/);
-    assert.match(source, /router\.replace\(agentEpisodeHref\(selectedEpisode\)\)/);
+    assert.match(source, /router\.replace\(agentEpisodeHref\(selectedEpisode,/);
     assert.doesNotMatch(source, /<EpisodeWorkflowWorkbench/);
 });
 

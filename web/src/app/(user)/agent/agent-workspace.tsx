@@ -28,6 +28,8 @@ export function AgentWorkspace() {
     const searchParams = useSearchParams();
     const projectId = searchParams.get("projectId") || "";
     const episodeId = searchParams.get("episodeId") || "";
+    const legacyShot = searchParams.get("shot");
+    const legacyStage = searchParams.get("stage");
     const token = useUserStore((state) => state.token);
     const projectsHydrated = useCreativeProjectStore((state) => state.hydrated);
     const allProjects = useCreativeProjectStore((state) => state.projects);
@@ -63,8 +65,8 @@ export function AgentWorkspace() {
     const selectedEpisode = selectedProject?.episodes.find((episode) => episode.id === episodeId);
 
     useEffect(() => {
-        if (selectedEpisode) router.replace(agentEpisodeHref(selectedEpisode));
-    }, [router, selectedEpisode]);
+        if (selectedEpisode) router.replace(agentEpisodeHref(selectedEpisode, { shot: legacyShot, stage: legacyStage }));
+    }, [legacyShot, legacyStage, router, selectedEpisode]);
 
     if (!projectsHydrated || !scriptsHydrated) return <main className="studio-shell grid min-h-[calc(100dvh-3.5rem)] place-items-center"><Spin description="正在读取生产总控" /></main>;
     if (selectedEpisode) return <main className="studio-shell grid h-full place-items-center"><Spin description="正在打开本集制作" /></main>;

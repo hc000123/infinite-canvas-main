@@ -83,6 +83,15 @@ test("production control task opens canonical workflow and returns to control", 
     assert.equal(url.searchParams.get("returnLabel"), "返回生产总控");
 });
 
+test("legacy production-control links preserve valid stage and shot", () => {
+    const view = { id: "e1", projectId: "p1", currentStageKey: "storyboard" } as AgentEpisodeView;
+    const preserved = new URL(agentEpisodeHref(view, { shot: "P02", stage: "prompt" }), "https://workspace.test");
+    const fallback = new URL(agentEpisodeHref(view, { stage: "unknown" }), "https://workspace.test");
+    assert.equal(preserved.searchParams.get("stage"), "prompt");
+    assert.equal(preserved.searchParams.get("shot"), "P02");
+    assert.equal(fallback.searchParams.get("stage"), "storyboard");
+});
+
 test("merges local video packages into episode and project progress", () => {
     const run = {
         id: "run-1", projectId: project.id, episodeId: episode.id, workflowId: "video", workflowVersion: "2", currentStageId: "shot-prompt", status: "active" as const, reviewCount: 0, warningCount: 0, createdAt: "", updatedAt: "2026-08-08T10:00:00Z",
