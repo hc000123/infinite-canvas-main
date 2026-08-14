@@ -56,7 +56,6 @@ type ProjectEpisodeBoardProps = {
     onCreateCanvas: () => void;
     onEditCanvasPreset: (canvasId: string) => void;
     onEditEpisodeTitle: (row: ProjectEpisodeBoardRow) => void;
-    onOpenAgentWorkspace: () => void;
     onOpenProjectCache: () => void;
     onEditProject: () => void;
     onFilterChange: (filter: EpisodeFilter) => void;
@@ -94,7 +93,6 @@ export function ProjectEpisodeBoard({
     onCreateCanvas,
     onEditCanvasPreset,
     onEditEpisodeTitle,
-    onOpenAgentWorkspace,
     onOpenProjectCache,
     onEditProject,
     onFilterChange,
@@ -123,9 +121,6 @@ export function ProjectEpisodeBoard({
                 </div>
 
                 <div className="order-3 flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap lg:order-none">
-                    <Button type="primary" className="h-10 flex-1 px-4 sm:flex-none" icon={<Bot className="size-4" />} onClick={onOpenAgentWorkspace}>
-                        进入生产总控
-                    </Button>
                     <Button className="h-10 flex-1 px-4 sm:flex-none" onClick={onEditProject}>
                         编辑项目
                     </Button>
@@ -263,8 +258,8 @@ function ProjectEpisodeProductionPanel({
                 <div className="min-w-0">
                     <div className="text-xs font-semibold leading-5 text-[var(--studio-accent)]">项目中心 / {projectTitle}</div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <h1 className="break-words text-2xl font-semibold leading-tight tracking-normal text-[var(--studio-text-primary)]">分集生产入口</h1>
-                        <span className="text-xs text-[var(--studio-text-muted)]">{description || "确认剧本后进入视频工作流。"}</span>
+                        <h1 className="break-words text-2xl font-semibold leading-tight tracking-normal text-[var(--studio-text-primary)]">分集制作</h1>
+                        <span className="text-xs text-[var(--studio-text-muted)]">{description || "选择分集，编辑剧本或进入本集制作流程。"}</span>
                     </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
@@ -420,7 +415,7 @@ function ProjectEpisodeProductionPanel({
                                                 {selectedEpisode.primaryCanvasId ? "进入画布" : "创建画布"}
                                             </Button>
                                             <Button size="small" type="primary" icon={<ArrowRight className="size-3.5" />} disabled={selectedOptimizing} onClick={() => onOpenEpisode(selectedEpisode.id)}>
-                                                进入工作流
+                                                制作本集
                                             </Button>
                                         </>
                                     ) : null}
@@ -856,7 +851,7 @@ function ProjectEpisodeTable({
                                     </span>
                                     <span className={`sticky right-0 z-10 flex flex-wrap justify-end gap-2 border-l border-[var(--studio-border-subtle)] py-1 pl-4 ${isRunning ? "bg-[var(--studio-accent-soft)]" : "bg-[var(--studio-panel-muted-bg)]"}`}>
                                         <Button size="small" onClick={() => onOpenEpisode(row.id)}>
-                                            视频工作流
+                                            制作本集
                                         </Button>
                                         {primaryCanvasId ? (
                                             <Button size="small" icon={<Maximize2 className="size-3.5" />} onClick={() => onOpenCanvas(primaryCanvasId)}>
@@ -918,7 +913,7 @@ function ProjectEpisodeMobileCard({
                 <span className="w-10 text-right text-sm font-semibold text-[var(--studio-text-muted)]">{row.progress}%</span>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-2">
-                <Button onClick={() => onOpenEpisode(row.id)}>视频工作流</Button>
+                <Button onClick={() => onOpenEpisode(row.id)}>制作本集</Button>
                 <Button disabled={!row.primaryCanvasId} icon={<Maximize2 className="size-3.5" />} onClick={() => row.primaryCanvasId && onOpenCanvas(row.primaryCanvasId)}>
                     画布
                 </Button>

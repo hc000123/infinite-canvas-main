@@ -94,6 +94,6 @@ test("an empty script snapshot blocks the acceptance manifest", () => {
     assert.match(manifest.shots[0].issues.join("；"), /剧本快照缺失/);
 });
 
-test("canonical workflow href uses the Agent workspace", () => {
-    assert.equal(videoWorkflowHref(1, "p1", "e1"), "/agent?projectId=p1&episodeId=e1&stage=script");
+test("canonical workflow href uses the episode workflow route", () => {
+    assert.equal(videoWorkflowHref(1, "p1", "e1"), "/projects/p1/episodes/e1/workflow?stage=script");
 });
