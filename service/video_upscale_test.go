@@ -292,6 +292,25 @@ func TestVideoUpscaleCapabilitiesExposeConfiguredProviders(t *testing.T) {
 	}
 }
 
+func TestVideoUpscaleCapabilitiesExposeOnlyEnabledTencentTemplates(t *testing.T) {
+	setupVideoUpscaleTest(t)
+	saveTencentTemplateSettings(t, []model.TencentMPSTemplateSetting{
+		{Definition: 400001, DisplayName: "可用方案", Scene: "custom", Target: "1080p", Width: 1920, Height: 1080, Enabled: true, Supported: true},
+		{Definition: 400002, DisplayName: "关闭方案", Target: "2k", Enabled: false, Supported: true},
+	})
+	result := VideoUpscaleCapabilities()
+	for _, provider := range result.Providers {
+		if provider.ID != "tencent-mps" {
+			continue
+		}
+		if len(provider.Templates) != 1 || provider.Templates[0].Definition != 400001 || provider.Templates[0].DisplayName != "可用方案" {
+			t.Fatalf("provider=%#v", provider)
+		}
+		return
+	}
+	t.Fatalf("Tencent provider missing: %#v", result.Providers)
+}
+
 func TestVideoUpscaleTargetDimensionsPreserveAspectRatio(t *testing.T) {
 	for _, item := range []struct {
 		width, height int

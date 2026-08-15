@@ -46,11 +46,14 @@ test("Tencent tasks hide LAS-only controls and display the billing notice", () =
     assert.match(modal, /开始腾讯 MPS 增强/);
 });
 
-test("video upscale API submits the provider and Tencent enhancement scene", () => {
+test("video upscale API exposes and submits Tencent enhancement templates", () => {
     assert.match(api, /VideoUpscaleProviderID = "volcengine-las" \| "tencent-mps"/);
-    assert.match(api, /TencentMPSEnhancementScene = "comic" \| "live" \| "restore"/);
+    assert.match(api, /TencentMPSEnhancementScene = "comic" \| "live" \| "restore" \| "custom"/);
+    assert.match(api, /type TencentMPSTemplateCapability/);
+    assert.match(api, /templates: TencentMPSTemplateCapability\[\]/);
     assert.match(api, /form\.append\("provider", input\.provider\)/);
     assert.match(api, /form\.append\("enhancementScene", input\.enhancementScene \|\| ""\)/);
+    assert.match(api, /form\.append\("tencentTemplateId", input\.tencentTemplateId \? String\(input\.tencentTemplateId\) : ""\)/);
 });
 
 test("modal explains the estimate and sends all selections", () => {

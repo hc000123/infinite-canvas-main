@@ -288,13 +288,25 @@ type VideoUpscaleCapabilitiesResult struct {
 }
 
 type VideoUpscaleProviderCapability struct {
-	ID                string   `json:"id"`
-	Name              string   `json:"name"`
-	Targets           []string `json:"targets"`
-	EnhancementScenes []string `json:"enhancementScenes"`
-	DefaultScene      string   `json:"defaultScene"`
-	CostNotice        string   `json:"costNotice"`
-	Interpolation     bool     `json:"interpolation"`
+	ID                string                         `json:"id"`
+	Name              string                         `json:"name"`
+	Targets           []string                       `json:"targets"`
+	EnhancementScenes []string                       `json:"enhancementScenes"`
+	DefaultScene      string                         `json:"defaultScene"`
+	CostNotice        string                         `json:"costNotice"`
+	Interpolation     bool                           `json:"interpolation"`
+	Templates         []TencentMPSTemplateCapability `json:"templates"`
+}
+
+type TencentMPSTemplateCapability struct {
+	Definition  int64  `json:"definition"`
+	DisplayName string `json:"displayName"`
+	Scene       string `json:"scene"`
+	Target      string `json:"target"`
+	Width       int    `json:"width"`
+	Height      int    `json:"height"`
+	Codec       string `json:"codec"`
+	FPS         int64  `json:"fps"`
 }
 
 type VideoUpscalePricingRules struct {
@@ -347,6 +359,7 @@ func VideoUpscaleCapabilities() VideoUpscaleCapabilitiesResult {
 		providers = append(providers, VideoUpscaleProviderCapability{
 			ID: "tencent-mps", Name: "腾讯 MPS", Targets: []string{"1080p", "2k"}, EnhancementScenes: []string{"comic", "live", "restore"}, DefaultScene: private.TencentMPSVideo.DefaultScene,
 			CostNotice: "腾讯 MPS 将按视频增强与转码分别计费，实际费用以腾讯云账单为准。",
+			Templates:  enabledTencentMPSTemplateCapabilities(private.TencentMPSVideo),
 		})
 	}
 	provider := "volcengine-las"
@@ -358,6 +371,20 @@ func VideoUpscaleCapabilities() VideoUpscaleCapabilitiesResult {
 		Pricing: videoUpscalePricingRules(), OutputQualityModes: []string{"compatible", "balanced", "master"}, DefaultOutputQualityMode: firstNonEmpty(private.VideoUpscale.OutputQualityMode, "compatible"), PreserveAudioSupported: true,
 		FrameInterpolation: videoUpscaleFrameInterpolationCapability(),
 	}
+}
+
+func enabledTencentMPSTemplateCapabilities(setting model.TencentMPSVideoSetting) []TencentMPSTemplateCapability {
+	result := []TencentMPSTemplateCapability{}
+	for _, item := range normalizeTencentMPSTemplates(setting.Templates) {
+		if !item.Enabled || !item.Supported {
+			continue
+		}
+		result = append(result, TencentMPSTemplateCapability{
+			Definition: item.Definition, DisplayName: item.DisplayName, Scene: item.Scene, Target: item.Target,
+			Width: item.Width, Height: item.Height, Codec: item.Codec, FPS: item.FPS,
+		})
+	}
+	return result
 }
 
 func videoUpscaleFrameInterpolationCapability() VideoUpscaleFrameInterpolationCapability {
