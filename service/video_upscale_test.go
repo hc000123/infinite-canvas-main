@@ -469,6 +469,7 @@ func setupVideoUpscaleTest(t *testing.T) {
 	oldProbe, oldStarter, oldMax := videoUpscaleMetadataProbe, videoUpscaleJobStarter, videoUpscaleMaxInputBytes
 	config.Cfg.StorageDriver = "sqlite"
 	config.Cfg.DatabaseDSN = filepath.Join(tmp, "test.db")
+	config.Cfg.PublicAssetDir = filepath.Join(tmp, "public-assets")
 	config.Cfg.VideoUpscaleWorkDir = filepath.Join(tmp, "work")
 	videoUpscaleMaxInputBytes = 1024
 	repository.ResetForTest()
