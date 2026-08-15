@@ -133,6 +133,16 @@ func TestAdminVideoUpscaleTestRouteRequiresAdminAuth(t *testing.T) {
 	}
 }
 
+func TestAdminTencentMPSTemplateSyncRouteRequiresAdminAuth(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := New()
+	recorder := httptest.NewRecorder()
+	app.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/admin/settings/tencent-mps-templates/sync", strings.NewReader(`{}`)))
+	if recorder.Code == http.StatusNotFound || !strings.Contains(recorder.Body.String(), `"code":1001`) {
+		t.Fatalf("admin Tencent MPS template sync route missing auth: status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestProjectCacheSelectionRouteRequiresAuth(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	app := New()

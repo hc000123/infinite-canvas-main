@@ -21,11 +21,17 @@ type tencentMPSConnectionChecker interface {
 	Check(context.Context, model.TencentMPSVideoSetting) error
 }
 
+type tencentMPSTemplateFetcher interface {
+	Fetch(context.Context, model.TencentMPSVideoSetting) ([]model.TencentMPSTemplateSetting, error)
+}
+
 var activeVideoUpscaleSpaceReader videoUpscaleConnectionChecker = realVideoUpscaleConnectionChecker{}
 var activeTencentMPSConnectionChecker tencentMPSConnectionChecker = realTencentMPSConnectionChecker{}
+var activeTencentMPSTemplateFetcher tencentMPSTemplateFetcher = realTencentMPSTemplateFetcher{}
 
 type realVideoUpscaleConnectionChecker struct{}
 type realTencentMPSConnectionChecker struct{}
+type realTencentMPSTemplateFetcher struct{}
 
 func AdminTestVideoUpscale(ctx context.Context, input model.VideoUpscaleSetting) (VideoUpscaleConnectionResult, error) {
 	saved, err := repository.GetSettings()
@@ -89,4 +95,33 @@ func (realTencentMPSConnectionChecker) Check(ctx context.Context, setting model.
 		return err
 	}
 	return checkTencentMPSConnection(ctx, mpsAPI, cosAPI, setting.COSBucket)
+}
+
+func AdminSyncTencentMPSTemplates(ctx context.Context, input model.TencentMPSVideoSetting) ([]model.TencentMPSTemplateSetting, error) {
+	saved, err := repository.GetSettings()
+	if err != nil {
+		return nil, err
+	}
+	settings := model.Settings{Private: model.PrivateSetting{TencentMPSVideo: input}}
+	keepPrivateTencentMPSVideoSecrets(&settings, normalizeSettings(saved))
+	setting := normalizeTencentMPSVideoSetting(settings.Private.TencentMPSVideo)
+	if !setting.Enabled {
+		return nil, safeMessageError{message: "请先启用腾讯 MPS 视频增强"}
+	}
+	if setting.SecretID == "" || setting.SecretKey == "" {
+		return nil, safeMessageError{message: "请先填写腾讯云 SecretId 和 SecretKey"}
+	}
+	remote, err := activeTencentMPSTemplateFetcher.Fetch(ctx, setting)
+	if err != nil {
+		return nil, safeMessageError{message: "腾讯增强模板同步失败，请检查密钥、MPS 开通授权和地域"}
+	}
+	return mergeTencentMPSTemplates(setting.Templates, remote), nil
+}
+
+func (realTencentMPSTemplateFetcher) Fetch(ctx context.Context, setting model.TencentMPSVideoSetting) ([]model.TencentMPSTemplateSetting, error) {
+	api, err := newTencentCloudMPSAPI(setting)
+	if err != nil {
+		return nil, err
+	}
+	return listTencentMPSEnhancementTemplates(ctx, api.client)
 }

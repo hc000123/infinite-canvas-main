@@ -1,11 +1,19 @@
 package service
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/basketikun/infinite-canvas/model"
+	mps "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/mps/v20190612"
 )
+
+type tencentMPSTemplateAPI interface {
+	DescribeTranscodeTemplatesWithContext(context.Context, *mps.DescribeTranscodeTemplatesRequest) (*mps.DescribeTranscodeTemplatesResponse, error)
+}
 
 func defaultTencentMPSTemplates() []model.TencentMPSTemplateSetting {
 	return []model.TencentMPSTemplateSetting{
@@ -90,4 +98,85 @@ func normalizeTencentTemplateTarget(value string) string {
 		return value
 	}
 	return ""
+}
+
+func listTencentMPSEnhancementTemplates(ctx context.Context, api tencentMPSTemplateAPI) ([]model.TencentMPSTemplateSetting, error) {
+	result := []model.TencentMPSTemplateSetting{}
+	seen := map[int64]bool{}
+	for offset := uint64(0); offset < 500; offset += 100 {
+		limit := uint64(100)
+		request := mps.NewDescribeTranscodeTemplatesRequest()
+		request.TranscodeType, request.Offset, request.Limit = stringPointer("Enhance"), &offset, &limit
+		response, err := api.DescribeTranscodeTemplatesWithContext(ctx, request)
+		if err != nil {
+			return nil, err
+		}
+		if response == nil || response.Response == nil {
+			return nil, errors.New("Tencent MPS template response is empty")
+		}
+		for _, upstream := range response.Response.TranscodeTemplateSet {
+			item, ok := tencentMPSTemplateSetting(upstream)
+			if ok && !seen[item.Definition] {
+				seen[item.Definition] = true
+				result = append(result, item)
+			}
+		}
+		if response.Response.TotalCount == nil || offset+limit >= *response.Response.TotalCount {
+			break
+		}
+	}
+	return result, nil
+}
+
+func tencentMPSTemplateSetting(upstream *mps.TranscodeTemplate) (model.TencentMPSTemplateSetting, bool) {
+	if upstream == nil {
+		return model.TencentMPSTemplateSetting{}, false
+	}
+	definition, err := strconv.ParseInt(pointerString(upstream.Definition), 10, 64)
+	if err != nil || definition <= 0 {
+		return model.TencentMPSTemplateSetting{}, false
+	}
+	item := model.TencentMPSTemplateSetting{
+		Definition: definition, UpstreamName: pointerString(upstream.Name), DisplayName: pointerString(upstream.Name),
+		SourceType: pointerString(upstream.Type), Scene: tencentTemplateSceneForDefinition(definition),
+		RemoveAudio: upstream.RemoveAudio != nil && *upstream.RemoveAudio != 0,
+	}
+	if video := upstream.VideoTemplate; video != nil {
+		if video.Width != nil {
+			item.Width = int(*video.Width)
+		}
+		if video.Height != nil {
+			item.Height = int(*video.Height)
+		}
+		item.Codec = pointerString(video.Codec)
+		if video.Fps != nil {
+			item.FPS = *video.Fps
+		}
+		item.Target = tencentTemplateTargetForDimensions(item.Width, item.Height)
+		item.Supported = item.Target != "" && !item.RemoveAudio && (upstream.RemoveVideo == nil || *upstream.RemoveVideo == 0)
+	}
+	return normalizeTencentMPSTemplates([]model.TencentMPSTemplateSetting{item})[0], true
+}
+
+func tencentTemplateTargetForDimensions(width, height int) string {
+	longEdge, shortEdge := width, height
+	if longEdge < shortEdge {
+		longEdge, shortEdge = shortEdge, longEdge
+	}
+	if longEdge == 1920 && shortEdge == 1080 {
+		return "1080p"
+	}
+	if longEdge == 2560 && shortEdge == 1440 {
+		return "2k"
+	}
+	return ""
+}
+
+func tencentTemplateSceneForDefinition(definition int64) string {
+	for _, item := range defaultTencentMPSTemplates() {
+		if item.Definition == definition {
+			return item.Scene
+		}
+	}
+	return "custom"
 }

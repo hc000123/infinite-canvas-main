@@ -309,6 +309,7 @@ func New() *gin.Engine {
 	admin.POST("/settings/image-upscale-test", gin.WrapF(handler.AdminTestImageUpscale))
 	admin.POST("/settings/video-upscale-test", gin.WrapF(handler.AdminTestVideoUpscale))
 	admin.POST("/settings/tencent-mps-video-test", gin.WrapF(handler.AdminTestTencentMPSVideo))
+	admin.POST("/settings/tencent-mps-templates/sync", gin.WrapF(handler.AdminSyncTencentMPSTemplates))
 	admin.GET("/prompt-categories", gin.WrapF(handler.AdminPromptCategories))
 	admin.POST("/prompt-categories/sync", gin.WrapF(handler.AdminSyncPromptCategories))
 	admin.GET("/prompts", gin.WrapF(handler.AdminPrompts))

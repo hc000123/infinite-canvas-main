@@ -21,6 +21,18 @@ type recordingTencentMPSConnectionChecker struct {
 	err     error
 }
 
+type recordingTencentMPSTemplateFetcher struct {
+	setting model.TencentMPSVideoSetting
+	items   []model.TencentMPSTemplateSetting
+	calls   int
+	err     error
+}
+
+func (fetcher *recordingTencentMPSTemplateFetcher) Fetch(_ context.Context, setting model.TencentMPSVideoSetting) ([]model.TencentMPSTemplateSetting, error) {
+	fetcher.setting, fetcher.calls = setting, fetcher.calls+1
+	return fetcher.items, fetcher.err
+}
+
 func (checker *recordingTencentMPSConnectionChecker) Check(_ context.Context, setting model.TencentMPSVideoSetting) error {
 	checker.setting, checker.calls = setting, checker.calls+1
 	return checker.err
@@ -97,5 +109,28 @@ func TestAdminTestTencentMPSVideoRestoresSecretsWithoutPaidSubmit(t *testing.T) 
 	}
 	if result.Provider != "tencent-mps" || !strings.Contains(result.Message, "未创建") {
 		t.Fatalf("result=%#v", result)
+	}
+}
+
+func TestAdminSyncTencentMPSTemplatesRestoresSecretsWithoutPaidSubmit(t *testing.T) {
+	setupAITaskTestDB(t)
+	_, err := repository.SaveSettings(model.Settings{Private: model.PrivateSetting{TencentMPSVideo: model.TencentMPSVideoSetting{
+		Enabled: true, SecretID: "saved-id", SecretKey: "saved-key", COSBucket: "media-1300000000", COSRegion: "ap-beijing",
+	}}}, now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	fetcher := &recordingTencentMPSTemplateFetcher{items: []model.TencentMPSTemplateSetting{{Definition: 400001, DisplayName: "清晰化", Target: "1080p", Supported: true}}}
+	previous := activeTencentMPSTemplateFetcher
+	activeTencentMPSTemplateFetcher = fetcher
+	t.Cleanup(func() { activeTencentMPSTemplateFetcher = previous })
+	result, err := AdminSyncTencentMPSTemplates(context.Background(), model.TencentMPSVideoSetting{
+		Enabled: true, SecretID: maskedAPIKey, SecretKey: maskedAPIKey, COSBucket: "media-1300000000", COSRegion: "ap-guangzhou",
+	})
+	if err != nil || fetcher.calls != 1 || fetcher.setting.SecretID != "saved-id" || fetcher.setting.SecretKey != "saved-key" || len(result) != 1 {
+		t.Fatalf("result=%#v fetcher=%#v err=%v", result, fetcher, err)
+	}
+	if result[0].Enabled {
+		t.Fatalf("newly synchronized template should be disabled: %#v", result[0])
 	}
 }
