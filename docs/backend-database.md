@@ -85,7 +85,7 @@
 | 字段组 | 说明 |
 | ---- | ---- |
 | `id / user_id / project_id / canvas_id / source_node_id / source_asset_id` | 任务身份、用户所有权和画布来源坐标；查询接口按 `user_id` 隔离。 |
-| `provider / enhancement_scene / tencent_template_id` | 固化本次任务的 `volcengine-las / tencent-mps` 渠道；腾讯任务额外固化 `comic / live / restore` 场景及对应 MPS 模板 ID。 |
+| `provider / enhancement_scene / tencent_template_id / tencent_template_name` | 固化本次任务的 `volcengine-las / tencent-mps` 渠道；腾讯任务额外固化管理员启用快照中的 `comic / live / restore / custom` 场景、MPS 模板 ID 和提交时显示名。 |
 | `cloud_bucket / cloud_region / cloud_input_prefix / cloud_output_prefix / tencent_output_object` | 腾讯任务创建时冻结的 COS 存储位置与输出对象；这些私有路径不出现在 JSON 响应中。 |
 | `input_tos_url / output_tos_path / run_id / interpolation_run_id / provider_request_id` | 云端输入输出位置、当前增强 Task ID、可选 LAS 插帧 Task ID 和安全请求追踪；私有路径不出现在 JSON 响应中。 |
 | `target / output_quality_mode / preserve_audio / frame_interpolation_mode / interpolation_mode / interpolation_target_frame_rate` | 固化本次任务的 `1080p / 2k` 与后处理参数。LAS 可使用输出质量、音频和插帧选项；腾讯 MPS 强制保持源帧率和音频，不执行 LAS 插帧。 |
@@ -364,7 +364,7 @@ Workflow Adapter 不新增数据库表，也不调用模型。Adapter 定义保�
 | `videoUpscale`    | object   | 火山 LAS 视频超分、插帧和字幕擦除私有配置                  |
 | `tencentMpsVideo` | object   | 腾讯 MPS 视频增强与 COS 私有配置                              |
 
-`tencentMpsVideo` 保存 `enabled`、脱敏保留的 `secretId / secretKey`、`cosBucket / cosRegion`、`inputPrefix / outputPrefix` 和 `defaultScene`。前缀默认为 `video-upscale/input/` 与 `video-upscale/output/`，默认场景为 `comic`；公开能力接口只返回已启用渠道、目标清晰度、场景和计费提示，不返回密钥或 COS 路径。
+`tencentMpsVideo` 保存 `enabled`、脱敏保留的 `secretId / secretKey`、`cosBucket / cosRegion`、`inputPrefix / outputPrefix`、`defaultScene` 和 `templates` 模板快照。模板快照记录腾讯 Definition ID、上游名称、管理员显示名、来源、启用状态、场景、目标规格、编解码参数和支持状态；新同步发现默认关闭，首版只有 1080p / 2K 且保留音频的模板可启用。`POST /api/admin/settings/tencent-mps-templates/sync` 只读取 `DescribeTranscodeTemplates` 并返回合并预览，不自动保存，也不创建 MPS 处理任务。公开能力接口只返回已启用且受支持模板的 ID、显示名、场景和输出规格，不返回禁用模板、密钥或 COS 路径。
 
 `channels` 每项字段：
 
