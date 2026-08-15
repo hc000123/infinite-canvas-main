@@ -148,16 +148,33 @@ type VideoUpscaleSetting struct {
 }
 
 type TencentMPSVideoSetting struct {
-	Enabled             bool   `json:"enabled"`
-	SecretID            string `json:"secretId"`
-	SecretKey           string `json:"secretKey"`
-	SecretIDConfigured  bool   `json:"secretIdConfigured"`
-	SecretKeyConfigured bool   `json:"secretKeyConfigured"`
-	COSBucket           string `json:"cosBucket"`
-	COSRegion           string `json:"cosRegion"`
-	InputPrefix         string `json:"inputPrefix"`
-	OutputPrefix        string `json:"outputPrefix"`
-	DefaultScene        string `json:"defaultScene"`
+	Enabled             bool                        `json:"enabled"`
+	SecretID            string                      `json:"secretId"`
+	SecretKey           string                      `json:"secretKey"`
+	SecretIDConfigured  bool                        `json:"secretIdConfigured"`
+	SecretKeyConfigured bool                        `json:"secretKeyConfigured"`
+	COSBucket           string                      `json:"cosBucket"`
+	COSRegion           string                      `json:"cosRegion"`
+	InputPrefix         string                      `json:"inputPrefix"`
+	OutputPrefix        string                      `json:"outputPrefix"`
+	DefaultScene        string                      `json:"defaultScene"`
+	Templates           []TencentMPSTemplateSetting `json:"templates"`
+}
+
+type TencentMPSTemplateSetting struct {
+	Definition   int64  `json:"definition"`
+	UpstreamName string `json:"upstreamName"`
+	DisplayName  string `json:"displayName"`
+	SourceType   string `json:"sourceType"`
+	Enabled      bool   `json:"enabled"`
+	Scene        string `json:"scene"`
+	Target       string `json:"target"`
+	Width        int    `json:"width"`
+	Height       int    `json:"height"`
+	Codec        string `json:"codec"`
+	FPS          int64  `json:"fps"`
+	RemoveAudio  bool   `json:"removeAudio"`
+	Supported    bool   `json:"supported"`
 }
 
 // PrivateSetting 私有配置。

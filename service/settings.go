@@ -888,6 +888,7 @@ func normalizeTencentMPSVideoSetting(setting model.TencentMPSVideoSetting) model
 	if setting.DefaultScene != "live" && setting.DefaultScene != "restore" {
 		setting.DefaultScene = "comic"
 	}
+	setting.Templates = normalizeTencentMPSTemplates(setting.Templates)
 	return setting
 }
 
