@@ -297,7 +297,7 @@ export function ModelChannelWizard({
             open={open}
             width={920}
             closable={!busy}
-            maskClosable={!busy}
+            mask={{ closable: !busy }}
             keyboard={!busy}
             onCancel={() => { if (!busy) { invalidateDiscovery(); onCancel(); } }}
             destroyOnHidden

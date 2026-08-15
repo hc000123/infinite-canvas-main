@@ -140,7 +140,7 @@ export default function AdminSettingsPage() {
     const privateVolcengineAsset = Form.useWatch(["private", "volcengineAsset"], form) || emptySettings.private.volcengineAsset;
     const privateImageUpscale = Form.useWatch(["private", "imageUpscale"], form) || emptySettings.private.imageUpscale;
     const privateVideoUpscale = Form.useWatch(["private", "videoUpscale"], form) || emptySettings.private.videoUpscale;
-    const privateTencentMPSVideo = Form.useWatch(["private", "tencentMpsVideo"], form) || emptySettings.private.tencentMpsVideo;
+    const privateTencentMPSVideo = Form.useWatch(["private", "tencentMpsVideo"], { form, preserve: true }) || emptySettings.private.tencentMpsVideo;
     const publicImageModelOptions = useMemo(() => buildCapabilityModelOptions(publicModels, channels, "image"), [channels, publicModels]);
     const publicVideoModelOptions = useMemo(() => buildCapabilityModelOptions(publicModels, channels, "video"), [channels, publicModels]);
     const publicTextModels = useMemo(() => filterModelsByCapability(publicModels, channels, "text"), [channels, publicModels]);

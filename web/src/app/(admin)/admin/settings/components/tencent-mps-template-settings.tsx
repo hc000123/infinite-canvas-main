@@ -3,7 +3,7 @@ import { Button, Flex, Form, Input, Segmented, Switch, Tag, Typography } from "a
 import type { AdminSettings, AdminTencentMPSTemplate } from "@/services/api/admin";
 
 type Props = {
-    templates: AdminTencentMPSTemplate[];
+    templates?: AdminTencentMPSTemplate[];
     syncing: boolean;
     onSync: () => void;
 };
@@ -15,7 +15,7 @@ const sceneOptions = [
     { label: "自定义", value: "custom" },
 ];
 
-export function TencentMPSTemplateSettings({ templates, syncing, onSync }: Props) {
+export function TencentMPSTemplateSettings({ templates = [], syncing, onSync }: Props) {
     const form = Form.useFormInstance<AdminSettings>();
     const update = (index: number, patch: Partial<AdminTencentMPSTemplate>) => {
         form.setFieldValue(["private", "tencentMpsVideo", "templates"], templates.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));

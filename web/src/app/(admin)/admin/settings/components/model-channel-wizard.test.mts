@@ -11,6 +11,11 @@ test("channel wizard exposes four named steps", () => {
     ["选择渠道类型", "连接信息", "配置模型", "确认使用范围"].forEach((label) => assert.match(source, new RegExp(label)));
 });
 
+test("channel wizard uses the current Ant Design modal mask API", () => {
+    assert.doesNotMatch(source, /maskClosable/);
+    assert.match(source, /mask=\{\{ closable: !busy \}\}/);
+});
+
 test("model step supports manual names and Ark endpoint mappings", () => {
     assert.match(source, /mode="tags"/);
     assert.match(source, /手动输入模型名称/);
