@@ -20,6 +20,7 @@ import {
     fetchAdminSettings,
     fetchChannelModels,
     saveAdminSettings,
+    syncAdminTencentMPSTemplates,
     testAdminImageUpscale,
     testAdminTencentMPSVideo,
     testAdminVideoUpscale,
@@ -28,6 +29,7 @@ import {
     type AdminModelCost,
     type AdminSettings,
 } from "@/services/api/admin";
+import { mergeTencentTemplateSettings } from "./tencent-mps-template-settings";
 import { VOLCENGINE_ASSET_CONFIG_NOTICE } from "@/services/volcengine-asset-config";
 import { useConfigStore } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -69,7 +71,7 @@ const emptySettings: AdminSettings = {
         volcengineAsset: { enabled: false, accessKey: "", secretKey: "", accessKeyConfigured: false, secretKeyConfigured: false, projectName: "default", region: "cn-beijing", assetGroupId: "", publicAssetBaseUrl: "" },
         imageUpscale: { managed: false, enabled: false, provider: "aliyun", accessKeyId: "", accessKeySecret: "", securityToken: "", accessKeyIdConfigured: false, accessKeySecretConfigured: false, securityTokenConfigured: false },
         videoUpscale: { enabled: false, subtitleEraseEnabled: false, provider: "volcengine-las", apiKey: "", apiKeyConfigured: false, outputTosPath: "", outputQualityMode: "compatible", preserveAudio: true, maxTarget: "2k" },
-        tencentMpsVideo: { enabled: false, secretId: "", secretKey: "", secretIdConfigured: false, secretKeyConfigured: false, cosBucket: "", cosRegion: "ap-beijing", inputPrefix: "video-upscale/input/", outputPrefix: "video-upscale/output/", defaultScene: "comic" },
+        tencentMpsVideo: { enabled: false, secretId: "", secretKey: "", secretIdConfigured: false, secretKeyConfigured: false, cosBucket: "", cosRegion: "ap-beijing", inputPrefix: "video-upscale/input/", outputPrefix: "video-upscale/output/", defaultScene: "comic", templates: [] },
     },
 };
 const emptyChannel: AdminModelChannel = {
@@ -127,6 +129,7 @@ export default function AdminSettingsPage() {
     const [isTestingImageUpscale, setIsTestingImageUpscale] = useState(false);
     const [isTestingVideoUpscale, setIsTestingVideoUpscale] = useState(false);
     const [isTestingTencentMPSVideo, setIsTestingTencentMPSVideo] = useState(false);
+    const [isSyncingTencentTemplates, setIsSyncingTencentTemplates] = useState(false);
     const [isDeletingChannel, setIsDeletingChannel] = useState(false);
     const [isEnterpriseVideoFocus, setIsEnterpriseVideoFocus] = useState(false);
     const [modelCosts, setModelCosts] = useState<AdminModelCost[]>([]);
@@ -260,6 +263,21 @@ export default function AdminSettingsPage() {
             message.error(error instanceof Error ? error.message : "腾讯 MPS 连接测试失败");
         } finally {
             setIsTestingTencentMPSVideo(false);
+        }
+    };
+
+    const syncTencentTemplates = async () => {
+        if (!token) return;
+        const setting = normalizePrivateTencentMPSVideoSetting(form.getFieldValue(["private", "tencentMpsVideo"]));
+        setIsSyncingTencentTemplates(true);
+        try {
+            const remote = await syncAdminTencentMPSTemplates(token, setting);
+            form.setFieldValue(["private", "tencentMpsVideo", "templates"], mergeTencentTemplateSettings(setting.templates, remote));
+            message.success(`已读取 ${remote.length} 个腾讯增强模板，请确认后保存设置`);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "腾讯增强模板同步失败");
+        } finally {
+            setIsSyncingTencentTemplates(false);
         }
     };
 
@@ -686,7 +704,7 @@ export default function AdminSettingsPage() {
                         <Form form={form} layout="vertical" initialValues={emptySettings} requiredMark={false}>
                             <Flex vertical gap={12}>
                                 <ImageUpscaleSettingsSection form={form} setting={privateImageUpscale} testing={isTestingImageUpscale} onTest={testImageUpscale} />
-                                <VideoUpscaleSettingsSection setting={privateVideoUpscale} tencentSetting={privateTencentMPSVideo} credentials={privateVolcengineAsset} testing={isTestingVideoUpscale} testingTencent={isTestingTencentMPSVideo} onTest={testVideoUpscale} onTestTencent={testTencentMPSVideo} />
+                                <VideoUpscaleSettingsSection setting={privateVideoUpscale} tencentSetting={privateTencentMPSVideo} credentials={privateVolcengineAsset} testing={isTestingVideoUpscale} testingTencent={isTestingTencentMPSVideo} syncingTencentTemplates={isSyncingTencentTemplates} onTest={testVideoUpscale} onTestTencent={testTencentMPSVideo} onSyncTencentTemplates={syncTencentTemplates} />
                                 <Collapse
                                     defaultActiveKey={[]}
                                     items={[{
@@ -1119,6 +1137,7 @@ function normalizePrivateTencentMPSVideoSetting(setting: Partial<AdminSettings["
         inputPrefix: normalizedObjectPrefix(setting.inputPrefix, "video-upscale/input/"),
         outputPrefix: normalizedObjectPrefix(setting.outputPrefix, "video-upscale/output/"),
         defaultScene: scene === "live" || scene === "restore" ? scene : "comic",
+        templates: Array.isArray(setting.templates) ? setting.templates : [],
     };
 }
 

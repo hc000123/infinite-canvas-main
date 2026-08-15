@@ -480,6 +480,22 @@ export type AdminPrivateVideoUpscaleSettings = {
     maxTarget: "2k";
 };
 
+export type AdminTencentMPSTemplate = {
+    definition: number;
+    upstreamName: string;
+    displayName: string;
+    sourceType: "Preset" | "Custom";
+    enabled: boolean;
+    scene: "comic" | "live" | "restore" | "custom";
+    target: "1080p" | "2k" | "";
+    width: number;
+    height: number;
+    codec: string;
+    fps: number;
+    removeAudio: boolean;
+    supported: boolean;
+};
+
 export type AdminPrivateTencentMPSVideoSettings = {
     enabled: boolean;
     secretId: string;
@@ -491,6 +507,7 @@ export type AdminPrivateTencentMPSVideoSettings = {
     inputPrefix: string;
     outputPrefix: string;
     defaultScene: "comic" | "live" | "restore";
+    templates: AdminTencentMPSTemplate[];
 };
 
 export type AdminPublicSettings = {
@@ -537,6 +554,10 @@ export async function testAdminVideoUpscale(token: string, setting: AdminPrivate
 
 export async function testAdminTencentMPSVideo(token: string, setting: AdminPrivateTencentMPSVideoSettings) {
     return apiPost<{ provider: "tencent-mps"; message: string }>("/api/admin/settings/tencent-mps-video-test", setting, token);
+}
+
+export async function syncAdminTencentMPSTemplates(token: string, setting: AdminPrivateTencentMPSVideoSettings) {
+    return apiPost<AdminTencentMPSTemplate[]>("/api/admin/settings/tencent-mps-templates/sync", setting, token);
 }
 
 export type AdminChannelActionRequest = {

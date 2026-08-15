@@ -2,6 +2,7 @@ import { CloudUploadOutlined, ExportOutlined } from "@ant-design/icons";
 import { Button, Col, Collapse, Divider, Flex, Form, Input, Row, Segmented, Select, Space, Switch, Tag, Typography } from "antd";
 
 import type { AdminSettings } from "@/services/api/admin";
+import { TencentMPSTemplateSettings } from "./tencent-mps-template-settings";
 
 type Props = {
     setting: AdminSettings["private"]["videoUpscale"];
@@ -9,11 +10,13 @@ type Props = {
     credentials: Pick<AdminSettings["private"]["volcengineAsset"], "accessKey" | "secretKey" | "accessKeyConfigured" | "secretKeyConfigured">;
     testing: boolean;
     testingTencent: boolean;
+    syncingTencentTemplates: boolean;
     onTest: () => void;
     onTestTencent: () => void;
+    onSyncTencentTemplates: () => void;
 };
 
-export function VideoUpscaleSettingsSection({ setting, tencentSetting, credentials, testing, testingTencent, onTest, onTestTencent }: Props) {
+export function VideoUpscaleSettingsSection({ setting, tencentSetting, credentials, testing, testingTencent, syncingTencentTemplates, onTest, onTestTencent, onSyncTencentTemplates }: Props) {
     const accessKeyReady = credentials.accessKeyConfigured || Boolean(credentials.accessKey);
     const secretKeyReady = credentials.secretKeyConfigured || Boolean(credentials.secretKey);
     const lasKeyReady = setting.apiKeyConfigured || Boolean(setting.apiKey);
@@ -91,6 +94,7 @@ export function VideoUpscaleSettingsSection({ setting, tencentSetting, credentia
                         <Col xs={24} md={12}><Form.Item name={["private", "tencentMpsVideo", "inputPrefix"]} label="COS 输入目录"><Input placeholder="video-upscale/input/" /></Form.Item></Col>
                         <Col xs={24} md={12}><Form.Item name={["private", "tencentMpsVideo", "outputPrefix"]} label="COS 输出目录"><Input placeholder="video-upscale/output/" /></Form.Item></Col>
                     </Row>
+                    <TencentMPSTemplateSettings templates={tencentSetting.templates} syncing={syncingTencentTemplates} onSync={onSyncTencentTemplates} />
                     <Flex justify="flex-end"><Button icon={<CloudUploadOutlined />} loading={testingTencent} onClick={onTestTencent}>测试腾讯连接</Button></Flex>
                 </Flex>
             ),

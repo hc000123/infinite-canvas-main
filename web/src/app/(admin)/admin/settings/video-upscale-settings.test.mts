@@ -6,6 +6,7 @@ import test from "node:test";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const component = readFileSync(join(root, "components/video-upscale-settings-section.tsx"), "utf8");
+const templateComponent = readFileSync(join(root, "components/tencent-mps-template-settings.tsx"), "utf8");
 const page = readFileSync(join(root, "page.tsx"), "utf8");
 const api = readFileSync(join(root, "../../../../services/api/admin.ts"), "utf8");
 
@@ -52,4 +53,13 @@ test("video settings expose isolated Tencent MPS credentials and COS storage", (
 	assert.match(page, /testAdminTencentMPSVideo/);
 	assert.match(api, /AdminPrivateTencentMPSVideoSettings/);
 	assert.match(api, /\/api\/admin\/settings\/tencent-mps-video-test/);
+});
+
+test("Tencent template sync is read-only until the administrator saves settings", () => {
+	for (const text of ["同步腾讯模板", "只读取模板，不创建任务", "暂不支持"]) assert.match(templateComponent, new RegExp(text));
+	assert.match(page, /syncAdminTencentMPSTemplates/);
+	assert.match(page, /mergeTencentTemplateSettings/);
+	const handler = page.match(/const syncTencentTemplates = async \(\) => \{[\s\S]*?^    \};/m)?.[0] || "";
+	assert.ok(handler);
+	assert.doesNotMatch(handler, /saveAdminSettings/);
 });
