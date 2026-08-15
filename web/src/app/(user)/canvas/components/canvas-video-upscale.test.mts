@@ -30,10 +30,13 @@ test("modal exposes available interpolation choices and processing modes", () =>
 });
 
 test("modal selects an available enhancement provider for each task", () => {
-    for (const text of ["火山 LAS", "腾讯 MPS", "漫剧增强", "真人增强", "老片修复"]) assert.match(modal, new RegExp(text));
+    for (const text of ["火山 LAS", "腾讯 MPS", "腾讯增强方案"]) assert.match(modal, new RegExp(text));
     assert.match(modal, /capabilities\?\.providers\.length === 1/);
     assert.match(modal, /setProvider\(capabilities\.providers\[0\]\.id\)/);
-    assert.match(modal, /providerCapability\?\.defaultScene/);
+    assert.match(modal, /providerCapability\?\.templates/);
+    assert.match(modal, /selectedTencentTemplate\?\.definition/);
+    assert.match(modal, /tencentTemplateId: selectedTencentTemplate\?\.definition/);
+    assert.doesNotMatch(modal, /enhancementSceneOptions/);
 });
 
 test("Tencent tasks hide LAS-only controls and display the billing notice", () => {
