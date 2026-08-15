@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/basketikun/infinite-canvas/model"
@@ -50,8 +51,9 @@ func CreateVideoUpscaleJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func videoUpscaleCreateInputFromRequest(r *http.Request) service.VideoUpscaleCreateInput {
+	templateID, _ := strconv.ParseInt(strings.TrimSpace(r.FormValue("tencentTemplateId")), 10, 64)
 	return service.VideoUpscaleCreateInput{
-		Provider: r.FormValue("provider"), EnhancementScene: r.FormValue("enhancementScene"), Target: r.FormValue("target"), ProjectID: r.FormValue("projectId"), CanvasID: r.FormValue("canvasId"), SourceNodeID: r.FormValue("sourceNodeId"), SourceAssetID: r.FormValue("sourceAssetId"), OutputQualityMode: r.FormValue("outputQualityMode"), FrameInterpolationMode: r.FormValue("frameInterpolationMode"), InterpolationMode: r.FormValue("interpolationMode"),
+		Provider: r.FormValue("provider"), EnhancementScene: r.FormValue("enhancementScene"), TencentTemplateID: templateID, Target: r.FormValue("target"), ProjectID: r.FormValue("projectId"), CanvasID: r.FormValue("canvasId"), SourceNodeID: r.FormValue("sourceNodeId"), SourceAssetID: r.FormValue("sourceAssetId"), OutputQualityMode: r.FormValue("outputQualityMode"), FrameInterpolationMode: r.FormValue("frameInterpolationMode"), InterpolationMode: r.FormValue("interpolationMode"),
 	}
 }
 

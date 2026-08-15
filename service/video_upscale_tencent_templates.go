@@ -180,3 +180,12 @@ func tencentTemplateSceneForDefinition(definition int64) string {
 	}
 	return "custom"
 }
+
+func enabledTencentMPSTemplate(setting model.TencentMPSVideoSetting, definition int64) (model.TencentMPSTemplateSetting, error) {
+	for _, item := range normalizeTencentMPSTemplates(setting.Templates) {
+		if item.Definition == definition && item.Enabled && item.Supported {
+			return item, nil
+		}
+	}
+	return model.TencentMPSTemplateSetting{}, safeMessageError{message: "所选腾讯增强模板不可用，请重新同步或选择其他方案"}
+}

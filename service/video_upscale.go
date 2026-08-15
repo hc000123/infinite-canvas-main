@@ -25,6 +25,7 @@ type VideoUpscaleCreateInput struct {
 	ContentType            string
 	Provider               string
 	EnhancementScene       string
+	TencentTemplateID      int64
 	Target                 string
 	ProjectID              string
 	CanvasID               string
@@ -58,6 +59,7 @@ func CreateVideoUpscaleJob(ctx context.Context, userID string, reader io.Reader,
 	}
 	var setting model.VideoUpscaleSetting
 	var tencentSetting model.TencentMPSVideoSetting
+	var tencentTemplate model.TencentMPSTemplateSetting
 	var err error
 	switch provider {
 	case "volcengine-las":
@@ -70,11 +72,20 @@ func CreateVideoUpscaleJob(ctx context.Context, userID string, reader io.Reader,
 	if err != nil {
 		return model.VideoUpscaleJob{}, err
 	}
+	if provider == "tencent-mps" {
+		tencentTemplate, err = enabledTencentMPSTemplate(tencentSetting, input.TencentTemplateID)
+		if err != nil {
+			return model.VideoUpscaleJob{}, err
+		}
+	}
 	ext, mimeType, err := videoUpscaleInputFormat(input.Filename, input.ContentType)
 	if err != nil {
 		return model.VideoUpscaleJob{}, err
 	}
 	target := strings.ToLower(strings.TrimSpace(input.Target))
+	if provider == "tencent-mps" {
+		target = tencentTemplate.Target
+	}
 	if target != "1080p" && target != "2k" {
 		return model.VideoUpscaleJob{}, safeMessageError{message: "视频超分只支持 1080p 或 2K"}
 	}
@@ -125,14 +136,9 @@ func CreateVideoUpscaleJob(ctx context.Context, userID string, reader io.Reader,
 	if provider == "volcengine-las" {
 		job.PricingRuleVersion, job.InterpolationPricingRuleVersion = videoUpscalePricingRuleVersion, videoInterpolationPricingRuleVersion
 	} else {
-		job.EnhancementScene = strings.ToLower(strings.TrimSpace(input.EnhancementScene))
-		if job.EnhancementScene == "" {
-			job.EnhancementScene = tencentSetting.DefaultScene
-		}
-		job.TencentTemplateID, err = tencentMPSTemplateID(job.EnhancementScene, target)
-		if err != nil {
-			return model.VideoUpscaleJob{}, err
-		}
+		job.EnhancementScene = tencentTemplate.Scene
+		job.TencentTemplateID = tencentTemplate.Definition
+		job.TencentTemplateName = tencentTemplate.DisplayName
 		job.CloudBucket, job.CloudRegion = tencentSetting.COSBucket, tencentSetting.COSRegion
 		job.CloudInputPrefix, job.CloudOutputPrefix = tencentSetting.InputPrefix, tencentSetting.OutputPrefix
 		job.TencentOutputObject = filepath.Base(job.ID) + "-enhanced.{format}"
@@ -405,18 +411,6 @@ func currentTencentMPSVideoSetting() (model.TencentMPSVideoSetting, error) {
 		return model.TencentMPSVideoSetting{}, safeMessageError{message: "服务端腾讯 MPS 视频增强配置不完整"}
 	}
 	return setting, nil
-}
-
-func tencentMPSTemplateID(scene, target string) (int64, error) {
-	templates := map[string]map[string]int64{
-		"comic":   {"1080p": 327004, "2k": 327006},
-		"live":    {"1080p": 327003, "2k": 327005},
-		"restore": {"1080p": 327022, "2k": 327023},
-	}
-	if templateID := templates[strings.ToLower(strings.TrimSpace(scene))][strings.ToLower(strings.TrimSpace(target))]; templateID != 0 {
-		return templateID, nil
-	}
-	return 0, safeMessageError{message: "腾讯 MPS 增强场景或目标清晰度不受支持"}
 }
 
 func videoUpscaleInputFormat(filename, contentType string) (string, string, error) {

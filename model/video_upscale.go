@@ -21,6 +21,7 @@ type VideoUpscaleJob struct {
 	Provider                              string                `json:"provider"`
 	EnhancementScene                      string                `json:"enhancementScene"`
 	TencentTemplateID                     int64                 `json:"tencentTemplateId"`
+	TencentTemplateName                   string                `json:"tencentTemplateName"`
 	CloudBucket                           string                `json:"-"`
 	CloudRegion                           string                `json:"-"`
 	CloudInputPrefix                      string                `json:"-"`

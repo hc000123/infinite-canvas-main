@@ -48,28 +48,6 @@ func TestCreateVideoUpscaleJobValidatesMetadataAndPersistsInput(t *testing.T) {
 	}
 }
 
-func TestTencentMPSTemplateID(t *testing.T) {
-	cases := []struct {
-		scene, target string
-		want          int64
-	}{
-		{"comic", "1080p", 327004}, {"comic", "2k", 327006},
-		{"live", "1080p", 327003}, {"live", "2k", 327005},
-		{"restore", "1080p", 327022}, {"restore", "2k", 327023},
-	}
-	for _, item := range cases {
-		got, err := tencentMPSTemplateID(item.scene, item.target)
-		if err != nil || got != item.want {
-			t.Fatalf("scene=%s target=%s got=%d err=%v want=%d", item.scene, item.target, got, err, item.want)
-		}
-	}
-	for _, item := range [][2]string{{"unknown", "1080p"}, {"comic", "4k"}} {
-		if _, err := tencentMPSTemplateID(item[0], item[1]); err == nil {
-			t.Fatalf("scene=%s target=%s should fail", item[0], item[1])
-		}
-	}
-}
-
 func TestCreateTencentMPSVideoUpscaleJobFreezesProviderOptions(t *testing.T) {
 	setupVideoUpscaleTest(t)
 	settings, err := repository.GetSettings()
@@ -86,7 +64,7 @@ func TestCreateTencentMPSVideoUpscaleJobFreezesProviderOptions(t *testing.T) {
 		return videoUpscaleSourceMetadata{Width: 1280, Height: 720, DurationSeconds: 10, FrameRate: 24}, nil
 	}
 	job, err := CreateVideoUpscaleJob(context.Background(), "user-a", strings.NewReader("video"), VideoUpscaleCreateInput{
-		Filename: "source.mp4", ContentType: "video/mp4", Provider: "tencent-mps", EnhancementScene: "comic", Target: "1080p",
+		Filename: "source.mp4", ContentType: "video/mp4", Provider: "tencent-mps", EnhancementScene: "comic", TencentTemplateID: 327004, Target: "1080p",
 		OutputQualityMode: "master", PreserveAudioSet: true, FrameInterpolationMode: "double", InterpolationMode: "medium",
 	})
 	if err != nil {
@@ -97,6 +75,55 @@ func TestCreateTencentMPSVideoUpscaleJobFreezesProviderOptions(t *testing.T) {
 	}
 	if job.OutputQualityMode != "" || job.FrameInterpolationMode != "keep" || job.InterpolationMode != "" || !job.PreserveAudio || job.CostEstimateAvailable || job.EstimatedTotalCostCNY != 0 {
 		t.Fatalf("Tencent provider-specific options=%#v", job)
+	}
+}
+
+func TestCreateTencentMPSJobFreezesEnabledTemplate(t *testing.T) {
+	setupVideoUpscaleTest(t)
+	saveTencentTemplateSettings(t, []model.TencentMPSTemplateSetting{{
+		Definition: 400001, DisplayName: "自定义清晰化", Scene: "custom", Target: "1080p", Width: 1920, Height: 1080, Enabled: true, Supported: true,
+	}})
+	videoUpscaleMetadataProbe = func(context.Context, string) (videoUpscaleSourceMetadata, error) {
+		return videoUpscaleSourceMetadata{Width: 1280, Height: 720, DurationSeconds: 1, FrameRate: 24}, nil
+	}
+	job, err := CreateVideoUpscaleJob(context.Background(), "user-a", strings.NewReader("video"), VideoUpscaleCreateInput{
+		Filename: "input.mp4", ContentType: "video/mp4", Provider: "tencent-mps", TencentTemplateID: 400001, Target: "2k", EnhancementScene: "comic",
+	})
+	if err != nil || job.TencentTemplateID != 400001 || job.TencentTemplateName != "自定义清晰化" || job.EnhancementScene != "custom" || job.Target != "1080p" {
+		t.Fatalf("job=%#v err=%v", job, err)
+	}
+}
+
+func TestCreateTencentMPSJobRejectsDisabledTemplateBeforeCloudWork(t *testing.T) {
+	setupVideoUpscaleTest(t)
+	saveTencentTemplateSettings(t, []model.TencentMPSTemplateSetting{{Definition: 400001, Enabled: false, Supported: true, Target: "1080p"}})
+	_, err := CreateVideoUpscaleJob(context.Background(), "user-a", strings.NewReader("video"), VideoUpscaleCreateInput{
+		Filename: "input.mp4", ContentType: "video/mp4", Provider: "tencent-mps", TencentTemplateID: 400001,
+	})
+	if err == nil {
+		t.Fatal("expected disabled-template error")
+	}
+	database, dbErr := repository.DB()
+	if dbErr != nil {
+		t.Fatal(dbErr)
+	}
+	var count int64
+	if dbErr = database.Model(&model.VideoUpscaleJob{}).Count(&count).Error; dbErr != nil || count != 0 {
+		t.Fatalf("job stored before allowlist validation: count=%d err=%v", count, dbErr)
+	}
+}
+
+func saveTencentTemplateSettings(t *testing.T, templates []model.TencentMPSTemplateSetting) {
+	t.Helper()
+	settings, err := repository.GetSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.Private.TencentMPSVideo = model.TencentMPSVideoSetting{
+		Enabled: true, SecretID: "secret-id", SecretKey: "secret-key", COSBucket: "media-1300000000", COSRegion: "ap-shanghai", InputPrefix: "video-upscale/input/", OutputPrefix: "video-upscale/output/", Templates: templates,
+	}
+	if _, err = repository.SaveSettings(settings, now()); err != nil {
+		t.Fatal(err)
 	}
 }
 
