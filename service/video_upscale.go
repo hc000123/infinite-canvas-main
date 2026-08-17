@@ -154,6 +154,9 @@ func CreateVideoUpscaleJob(ctx context.Context, userID string, reader io.Reader,
 		}
 	}()
 	metadata, err := videoUpscaleMetadataProbe(ctx, job.InputPath)
+	if errors.Is(err, exec.ErrNotFound) {
+		return model.VideoUpscaleJob{}, safeMessageError{message: "服务端缺少 ffprobe，暂时无法读取视频规格"}
+	}
 	if err != nil || metadata.Width < 1 || metadata.Height < 1 {
 		return model.VideoUpscaleJob{}, safeMessageError{message: "视频文件无效、已损坏或无法读取规格"}
 	}

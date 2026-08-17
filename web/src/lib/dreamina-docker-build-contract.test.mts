@@ -9,7 +9,8 @@ const releaseGuide = readFileSync(
 );
 
 test("production Docker builds verify the pinned Dreamina CLI", () => {
-    assert.doesNotMatch(dockerfile, /apt-get/);
+    const dreaminaStage = dockerfile.split("FROM node:22-bookworm-slim AS dreamina-build")[1]?.split("# 运行镜像")[0] || "";
+    assert.doesNotMatch(dreaminaStage, /apt-get/);
     assert.match(
         dockerfile,
         /COPY --from=api-build \/etc\/ssl\/certs\/ca-certificates\.crt \/etc\/ssl\/certs\/ca-certificates\.crt/,

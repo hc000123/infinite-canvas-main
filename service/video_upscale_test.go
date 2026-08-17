@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -150,6 +151,18 @@ func TestCreateVideoUpscaleJobAllowsUnknownDurationAndFrameRate(t *testing.T) {
 	}
 	if job.CostEstimateAvailable || job.EstimatedCostCNY != 0 || job.EstimatedBillableMinutes != 0 || job.PricingRuleVersion != videoUpscalePricingRuleVersion {
 		t.Fatalf("unknown metadata must not create a cost estimate: %#v", job)
+	}
+}
+
+func TestCreateVideoUpscaleJobReportsMissingFFprobeAsServerConfigurationError(t *testing.T) {
+	setupVideoUpscaleTest(t)
+	videoUpscaleMetadataProbe = func(context.Context, string) (videoUpscaleSourceMetadata, error) {
+		return videoUpscaleSourceMetadata{}, exec.ErrNotFound
+	}
+
+	_, err := CreateVideoUpscaleJob(context.Background(), "user-a", strings.NewReader("video"), VideoUpscaleCreateInput{Filename: "source.mp4", ContentType: "video/mp4", Target: "1080p"})
+	if err == nil || !strings.Contains(err.Error(), "服务端缺少 ffprobe") {
+		t.Fatalf("error=%v", err)
 	}
 }
 
