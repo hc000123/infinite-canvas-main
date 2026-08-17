@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestProjectCacheScopePathIsStableAndSafe(t *testing.T) {
@@ -191,6 +192,43 @@ func TestArchiveProjectCacheFileDeduplicatesSameReference(t *testing.T) {
 	}
 }
 
+func TestArchiveProjectCacheFileIgnoresFavoriteForImagesAndAudio(t *testing.T) {
+	for _, mimeType := range []string{"image/png", "audio/mpeg"} {
+		t.Run(mimeType, func(t *testing.T) {
+			root := t.TempDir()
+			created, err := ArchiveProjectCacheFile(root, "u1", ProjectCacheArchiveInput{
+				Context: ProjectCacheContext{ProjectID: "p1", NodeID: "new"}, Filename: "asset", MIMEType: mimeType, Reader: strings.NewReader("new"), Favorite: true,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if created.File.Favorite {
+				t.Fatal("non-video archive persisted favorite")
+			}
+
+			input := ProjectCacheArchiveInput{
+				Context: ProjectCacheContext{ProjectID: "p1", NodeID: "deduplicated"}, Filename: "duplicate", MIMEType: mimeType, Reader: strings.NewReader("duplicate"),
+			}
+			if _, err := ArchiveProjectCacheFile(root, "u1", input); err != nil {
+				t.Fatal(err)
+			}
+			input.Reader = strings.NewReader("duplicate")
+			input.Favorite = true
+			deduplicated, err := ArchiveProjectCacheFile(root, "u1", input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			manifest, err := ReadProjectCacheManifest(created.ManifestPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if deduplicated.File.Favorite || len(manifest.Files) != 2 || manifest.Files[0].Favorite || manifest.Files[1].Favorite {
+				t.Fatalf("deduplicated=%+v manifest=%+v", deduplicated.File, manifest)
+			}
+		})
+	}
+}
+
 func TestArchiveProjectCacheFileKeepsDistinctVersions(t *testing.T) {
 	root := t.TempDir()
 	ids := map[string]bool{}
@@ -344,6 +382,88 @@ func TestSetUserProjectCacheFileFavoritePersistsAndSeparatesUsers(t *testing.T) 
 	}
 }
 
+func TestSetUserProjectCacheFileFavoriteSameStateDoesNotRewriteManifest(t *testing.T) {
+	root := t.TempDir()
+	archived, err := ArchiveProjectCacheFile(root, "u1", ProjectCacheArchiveInput{
+		Context: ProjectCacheContext{ProjectID: "p1"}, Filename: "shot.mp4", MIMEType: "video/mp4", Reader: strings.NewReader("video"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SetUserProjectCacheFileFavorite(root, "u1", archived.File.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := ReadProjectCacheManifest(archived.ManifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest.UpdatedAt = "2000-01-01T00:00:00Z"
+	if err := writeProjectCacheManifest(archived.ManifestPath, manifest); err != nil {
+		t.Fatal(err)
+	}
+	fixedModTime := time.Unix(946684800, 0)
+	if err := os.Chtimes(archived.ManifestPath, fixedModTime, fixedModTime); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SetUserProjectCacheFileFavorite(root, "u1", archived.File.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	after, err := ReadProjectCacheManifest(archived.ManifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(archived.ManifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.UpdatedAt != manifest.UpdatedAt || !info.ModTime().Equal(fixedModTime) {
+		t.Fatalf("updatedAt=%q modTime=%s", after.UpdatedAt, info.ModTime())
+	}
+}
+
+func TestSetUserProjectCacheFileFavoriteRejectsNonReadyVideoAndOtherMedia(t *testing.T) {
+	tests := []struct {
+		name     string
+		mimeType string
+		prepare  func(t *testing.T, archived ProjectCacheArchiveResult)
+	}{
+		{name: "image", mimeType: "image/png"},
+		{name: "audio", mimeType: "audio/mpeg"},
+		{name: "missing video", mimeType: "video/mp4", prepare: func(t *testing.T, archived ProjectCacheArchiveResult) {
+			if err := os.Remove(filepath.Join(archived.ProjectPath, archived.File.RelativePath)); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{name: "non-ready video", mimeType: "video/mp4", prepare: func(t *testing.T, archived ProjectCacheArchiveResult) {
+			manifest, err := ReadProjectCacheManifest(archived.ManifestPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			manifest.Files[0].Status = "processing"
+			if err := writeProjectCacheManifest(archived.ManifestPath, manifest); err != nil {
+				t.Fatal(err)
+			}
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			archived, err := ArchiveProjectCacheFile(root, "u1", ProjectCacheArchiveInput{
+				Context: ProjectCacheContext{ProjectID: "p1"}, Filename: "asset", MIMEType: tt.mimeType, Reader: strings.NewReader("asset"), Favorite: true,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tt.prepare != nil {
+				tt.prepare(t, archived)
+			}
+			if _, err := SetUserProjectCacheFileFavorite(root, "u1", archived.File.ID, false); err == nil {
+				t.Fatal("invalid cache file favorite update succeeded")
+			}
+		})
+	}
+}
+
 func TestMoveUserProjectCacheFilePreservesFavorite(t *testing.T) {
 	root := t.TempDir()
 	archived, err := ArchiveProjectCacheFile(root, "u1", ProjectCacheArchiveInput{
@@ -359,6 +479,101 @@ func TestMoveUserProjectCacheFilePreservesFavorite(t *testing.T) {
 	if err != nil || !moved.File.Favorite {
 		t.Fatalf("moved=%+v err=%v", moved, err)
 	}
+}
+
+func TestMoveUserProjectCacheFileMergesFavoriteWhenTargetDeduplicates(t *testing.T) {
+	root := t.TempDir()
+	context := ProjectCacheContext{ProjectID: "p1", ProjectName: "A", NodeID: "n1"}
+	existing, err := ArchiveProjectCacheFile(root, "u1", ProjectCacheArchiveInput{
+		Context: context, Filename: "shot.mp4", MIMEType: "video/mp4", Reader: strings.NewReader("video"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := ArchiveProjectCacheFile(root, "u1", ProjectCacheArchiveInput{
+		Context: ProjectCacheContext{NodeID: "n1"}, Filename: "shot.mp4", MIMEType: "video/mp4", Reader: strings.NewReader("video"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SetUserProjectCacheFileFavorite(root, "u1", source.File.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	moved, err := MoveUserProjectCacheFile(root, "u1", source.File.ID, context)
+	if err != nil || moved.File.ID != existing.File.ID || !moved.File.Favorite {
+		t.Fatalf("moved=%+v existing=%+v err=%v", moved.File, existing.File, err)
+	}
+	manifest, _, err := GetUserProjectCache(root, "u1", "p1")
+	if err != nil || len(manifest.Files) != 1 || !manifest.Files[0].Favorite {
+		t.Fatalf("manifest=%+v err=%v", manifest, err)
+	}
+}
+
+func TestMoveUserProjectCacheFileDoesNotOverwriteConcurrentFavorite(t *testing.T) {
+	root := t.TempDir()
+	source, err := ArchiveProjectCacheFile(root, "u1", ProjectCacheArchiveInput{
+		Context: ProjectCacheContext{}, Filename: "shot.mp4", MIMEType: "video/mp4", Reader: strings.NewReader("video"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetContext := ProjectCacheContext{ProjectID: "p1", ProjectName: "A"}
+	targetManifestPath := filepath.Join(projectCacheScopePath(root, "u1", targetContext), "manifest.json")
+	targetLock := projectCacheLock(targetManifestPath)
+	targetLock.Lock()
+	moveDone := make(chan error, 1)
+	go func() {
+		_, moveErr := MoveUserProjectCacheFile(root, "u1", source.File.ID, targetContext)
+		moveDone <- moveErr
+	}()
+	waitForProjectCacheUserMutationLock(t, root, "u1")
+
+	favoriteDone := make(chan error, 1)
+	go func() {
+		_, favoriteErr := SetUserProjectCacheFileFavorite(root, "u1", source.File.ID, true)
+		favoriteDone <- favoriteErr
+	}()
+	favoriteCompleted := false
+	var favoriteErr error
+	select {
+	case favoriteErr = <-favoriteDone:
+		favoriteCompleted = true
+	case <-time.After(100 * time.Millisecond):
+	}
+	targetLock.Unlock()
+	if err := <-moveDone; err != nil {
+		t.Fatal(err)
+	}
+	if !favoriteCompleted {
+		favoriteErr = <-favoriteDone
+	}
+	manifest, _, err := GetUserProjectCache(root, "u1", "p1")
+	if err != nil || len(manifest.Files) != 1 {
+		t.Fatalf("manifest=%+v err=%v", manifest, err)
+	}
+	if favoriteErr == nil && !manifest.Files[0].Favorite {
+		t.Fatal("successful favorite was overwritten by move")
+	}
+	if favoriteErr != nil {
+		safe, ok := favoriteErr.(interface{ SafeMessage() string })
+		if !ok || safe.SafeMessage() != "缓存文件不存在" {
+			t.Fatalf("favorite error=%v", favoriteErr)
+		}
+	}
+}
+
+func waitForProjectCacheUserMutationLock(t *testing.T, root, userID string) {
+	t.Helper()
+	lock := projectCacheUserMutationLock(root, userID)
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if !lock.TryLock() {
+			return
+		}
+		lock.Unlock()
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("move did not acquire user mutation lock")
 }
 
 func TestMoveUnassignedCacheFileMovesMediaAndManifestReference(t *testing.T) {

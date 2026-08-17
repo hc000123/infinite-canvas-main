@@ -123,12 +123,16 @@ func SetProjectCacheFileFavorite(w http.ResponseWriter, r *http.Request, fileID 
 		return
 	}
 	var input struct {
-		Favorite bool `json:"favorite"`
+		Favorite *bool `json:"favorite"`
 	}
 	if !decodeProjectCacheJSON(w, r, &input) {
 		return
 	}
-	result, err := service.SetUserProjectCacheFileFavorite(config.Cfg.ProjectCacheDir, user.ID, fileID, input.Favorite)
+	if input.Favorite == nil {
+		Fail(w, "请求参数格式不正确")
+		return
+	}
+	result, err := service.SetUserProjectCacheFileFavorite(config.Cfg.ProjectCacheDir, user.ID, fileID, *input.Favorite)
 	if err != nil {
 		FailError(w, err)
 		return

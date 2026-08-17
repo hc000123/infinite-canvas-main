@@ -23,6 +23,10 @@ func projectCacheLock(path string) *sync.Mutex {
 	return value.(*sync.Mutex)
 }
 
+func projectCacheUserMutationLock(root, userID string) *sync.Mutex {
+	return projectCacheLock(filepath.Join(projectCacheUserRoot(root, userID), ".mutation"))
+}
+
 func ArchiveProjectCacheFile(root, userID string, input ProjectCacheArchiveInput) (ProjectCacheArchiveResult, error) {
 	if strings.TrimSpace(userID) == "" {
 		return ProjectCacheArchiveResult{}, errors.New("未登录或权限不足")
@@ -77,10 +81,18 @@ func ArchiveProjectCacheFile(root, userID string, input ProjectCacheArchiveInput
 		_ = os.Remove(temporaryPath)
 		return ProjectCacheArchiveResult{}, err
 	}
-	for _, item := range manifest.Files {
+	for index := range manifest.Files {
+		item := &manifest.Files[index]
 		if item.SHA256 == checksum && sameProjectCacheReference(item.Context, input.Context) {
 			_ = os.Remove(temporaryPath)
-			return ProjectCacheArchiveResult{File: item, ProjectPath: projectPath, ManifestPath: manifestPath}, nil
+			if kind == "video" && input.Favorite && !item.Favorite {
+				item.Favorite = true
+				manifest.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+				if err := writeProjectCacheManifest(manifestPath, manifest); err != nil {
+					return ProjectCacheArchiveResult{}, err
+				}
+			}
+			return ProjectCacheArchiveResult{File: *item, ProjectPath: projectPath, ManifestPath: manifestPath}, nil
 		}
 	}
 	createdAt := time.Now().UTC().Format(time.RFC3339)
@@ -102,7 +114,7 @@ func ArchiveProjectCacheFile(root, userID string, input ProjectCacheArchiveInput
 	}
 	item := ProjectCacheFile{
 		ID: id, RelativePath: filepath.ToSlash(relativePath), OriginalName: strings.TrimSpace(input.Filename), MIMEType: strings.TrimSpace(input.MIMEType),
-		SHA256: checksum, Kind: kind, Category: input.Context.Category, CreatedAt: createdAt, Bytes: bytesWritten, Context: input.Context, Status: "ready", Favorite: input.Favorite,
+		SHA256: checksum, Kind: kind, Category: input.Context.Category, CreatedAt: createdAt, Bytes: bytesWritten, Context: input.Context, Status: "ready", Favorite: kind == "video" && input.Favorite,
 	}
 	manifest.Files = append(manifest.Files, item)
 	manifest.ProjectID = input.Context.ProjectID
@@ -203,6 +215,10 @@ func SetUserProjectCacheStatus(root, userID, projectID, status string) (ProjectC
 }
 
 func SetUserProjectCacheFileFavorite(root, userID, fileID string, favorite bool) (ProjectCacheFile, error) {
+	// User mutation locks are always acquired before manifest locks.
+	userLock := projectCacheUserMutationLock(root, userID)
+	userLock.Lock()
+	defer userLock.Unlock()
 	path, _, _, err := findUserProjectCacheFile(root, userID, fileID)
 	if err != nil {
 		return ProjectCacheFile{}, err
@@ -217,6 +233,23 @@ func SetUserProjectCacheFileFavorite(root, userID, fileID string, favorite bool)
 	for index := range manifest.Files {
 		if manifest.Files[index].ID != fileID {
 			continue
+		}
+		if manifest.Files[index].Kind != "video" {
+			return ProjectCacheFile{}, safeMessageError{message: "仅支持收藏视频缓存"}
+		}
+		if manifest.Files[index].Status != "ready" {
+			return ProjectCacheFile{}, safeMessageError{message: "仅支持收藏状态正常的视频缓存"}
+		}
+		absolute, pathErr := safeProjectCacheJoin(filepath.Dir(path), manifest.Files[index].RelativePath)
+		if pathErr != nil {
+			return ProjectCacheFile{}, pathErr
+		}
+		info, statErr := os.Stat(absolute)
+		if statErr != nil || !info.Mode().IsRegular() {
+			return ProjectCacheFile{}, safeMessageError{message: "缓存视频不存在"}
+		}
+		if manifest.Files[index].Favorite == favorite {
+			return manifest.Files[index], nil
 		}
 		manifest.Files[index].Favorite = favorite
 		manifest.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
@@ -276,6 +309,9 @@ func DeleteUserProjectCacheFile(root, userID, fileID string) error {
 }
 
 func MoveUserProjectCacheFile(root, userID, fileID string, context ProjectCacheContext) (ProjectCacheArchiveResult, error) {
+	userLock := projectCacheUserMutationLock(root, userID)
+	userLock.Lock()
+	defer userLock.Unlock()
 	absolute, item, err := ResolveUserProjectCacheFile(root, userID, fileID)
 	if err != nil {
 		return ProjectCacheArchiveResult{}, err
