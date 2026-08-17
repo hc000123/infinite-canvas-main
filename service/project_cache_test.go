@@ -315,6 +315,52 @@ func TestSetProjectCacheStatusDoesNotDeleteFiles(t *testing.T) {
 	}
 }
 
+func TestSetUserProjectCacheFileFavoritePersistsAndSeparatesUsers(t *testing.T) {
+	root := t.TempDir()
+	archived, err := ArchiveProjectCacheFile(root, "u1", ProjectCacheArchiveInput{
+		Context:  ProjectCacheContext{ProjectID: "p1", ProjectName: "A"},
+		Filename: "shot.mp4", MIMEType: "video/mp4", Reader: strings.NewReader("video"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	favorite, err := SetUserProjectCacheFileFavorite(root, "u1", archived.File.ID, true)
+	if err != nil || !favorite.Favorite {
+		t.Fatalf("favorite=%+v err=%v", favorite, err)
+	}
+	if _, err := SetUserProjectCacheFileFavorite(root, "u1", archived.File.ID, true); err != nil {
+		t.Fatalf("idempotent favorite: %v", err)
+	}
+	manifest, _, err := GetUserProjectCache(root, "u1", "p1")
+	if err != nil || len(manifest.Files) != 1 || !manifest.Files[0].Favorite {
+		t.Fatalf("manifest=%+v err=%v", manifest, err)
+	}
+	if _, err := SetUserProjectCacheFileFavorite(root, "u2", archived.File.ID, false); err == nil {
+		t.Fatal("other user changed favorite")
+	}
+	unfavorite, err := SetUserProjectCacheFileFavorite(root, "u1", archived.File.ID, false)
+	if err != nil || unfavorite.Favorite {
+		t.Fatalf("unfavorite=%+v err=%v", unfavorite, err)
+	}
+}
+
+func TestMoveUserProjectCacheFilePreservesFavorite(t *testing.T) {
+	root := t.TempDir()
+	archived, err := ArchiveProjectCacheFile(root, "u1", ProjectCacheArchiveInput{
+		Context: ProjectCacheContext{}, Filename: "shot.mp4", MIMEType: "video/mp4", Reader: strings.NewReader("video"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SetUserProjectCacheFileFavorite(root, "u1", archived.File.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	moved, err := MoveUserProjectCacheFile(root, "u1", archived.File.ID, ProjectCacheContext{ProjectID: "p1", ProjectName: "A"})
+	if err != nil || !moved.File.Favorite {
+		t.Fatalf("moved=%+v err=%v", moved, err)
+	}
+}
+
 func TestMoveUnassignedCacheFileMovesMediaAndManifestReference(t *testing.T) {
 	root := t.TempDir()
 	archived, err := ArchiveProjectCacheFile(root, "u1", ProjectCacheArchiveInput{Context: ProjectCacheContext{}, Filename: "a.png", MIMEType: "image/png", Reader: strings.NewReader("a")})

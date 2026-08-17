@@ -102,7 +102,7 @@ func ArchiveProjectCacheFile(root, userID string, input ProjectCacheArchiveInput
 	}
 	item := ProjectCacheFile{
 		ID: id, RelativePath: filepath.ToSlash(relativePath), OriginalName: strings.TrimSpace(input.Filename), MIMEType: strings.TrimSpace(input.MIMEType),
-		SHA256: checksum, Kind: kind, Category: input.Context.Category, CreatedAt: createdAt, Bytes: bytesWritten, Context: input.Context, Status: "ready",
+		SHA256: checksum, Kind: kind, Category: input.Context.Category, CreatedAt: createdAt, Bytes: bytesWritten, Context: input.Context, Status: "ready", Favorite: input.Favorite,
 	}
 	manifest.Files = append(manifest.Files, item)
 	manifest.ProjectID = input.Context.ProjectID
@@ -202,6 +202,32 @@ func SetUserProjectCacheStatus(root, userID, projectID, status string) (ProjectC
 	return manifest, writeProjectCacheManifest(path, manifest)
 }
 
+func SetUserProjectCacheFileFavorite(root, userID, fileID string, favorite bool) (ProjectCacheFile, error) {
+	path, _, _, err := findUserProjectCacheFile(root, userID, fileID)
+	if err != nil {
+		return ProjectCacheFile{}, err
+	}
+	lock := projectCacheLock(path)
+	lock.Lock()
+	defer lock.Unlock()
+	manifest, err := ReadProjectCacheManifest(path)
+	if err != nil {
+		return ProjectCacheFile{}, err
+	}
+	for index := range manifest.Files {
+		if manifest.Files[index].ID != fileID {
+			continue
+		}
+		manifest.Files[index].Favorite = favorite
+		manifest.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		if err := writeProjectCacheManifest(path, manifest); err != nil {
+			return ProjectCacheFile{}, err
+		}
+		return manifest.Files[index], nil
+	}
+	return ProjectCacheFile{}, safeMessageError{message: "缓存文件不存在"}
+}
+
 func DeleteUserProjectCacheFile(root, userID, fileID string) error {
 	path, manifest, index, err := findUserProjectCacheFile(root, userID, fileID)
 	if err != nil {
@@ -272,7 +298,7 @@ func MoveUserProjectCacheFile(root, userID, fileID string, context ProjectCacheC
 	context.Prompt = firstProjectCacheValue(context.Prompt, item.Context.Prompt)
 	context.Model = firstProjectCacheValue(context.Model, item.Context.Model)
 	context.Provider = firstProjectCacheValue(context.Provider, item.Context.Provider)
-	result, err := ArchiveProjectCacheFile(root, userID, ProjectCacheArchiveInput{Context: context, Filename: item.OriginalName, MIMEType: item.MIMEType, Reader: file})
+	result, err := ArchiveProjectCacheFile(root, userID, ProjectCacheArchiveInput{Context: context, Filename: item.OriginalName, MIMEType: item.MIMEType, Reader: file, Favorite: item.Favorite})
 	if err != nil {
 		return ProjectCacheArchiveResult{}, err
 	}

@@ -37,6 +37,7 @@ type ProjectCacheFile struct {
 	Bytes        int64               `json:"bytes"`
 	Context      ProjectCacheContext `json:"context"`
 	Status       string              `json:"status"`
+	Favorite     bool                `json:"favorite"`
 }
 
 type ProjectCacheManifest struct {
@@ -54,6 +55,7 @@ type ProjectCacheArchiveInput struct {
 	Filename string
 	MIMEType string
 	Reader   io.Reader
+	Favorite bool
 }
 
 type ProjectCacheArchiveResult struct {
