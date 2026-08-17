@@ -16,6 +16,8 @@ test("production Docker builds verify the pinned Dreamina CLI", () => {
         /COPY --from=api-build \/etc\/ssl\/certs\/ca-certificates\.crt \/etc\/ssl\/certs\/ca-certificates\.crt/,
     );
     assert.match(dockerfile, /fetch\(process\.argv\[1\]\)/);
+    assert.match(dockerfile, /78e49e845b70b17c42015f9214a295564c9bf9048f8a5745429c18566c270ff3/);
+    assert.match(dockerfile, /23ffc16a3f3569c7d2985baee843217b73034f0fe649a6dda517b6d95d5beb9c/);
     assert.match(dockerfile, /sha256sum -c -/);
     assert.match(dockerfile, /dreamina version/);
 });

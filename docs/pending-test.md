@@ -20,7 +20,7 @@
 
 ### Docker 无缓存构建与本地生产冒烟
 
-- Dreamina CLI 官方 1.4.16 更新后同步刷新 Linux amd64 / arm64 固定 SHA256；两种架构均在对应容器网络连续三次取得稳定哈希，并在对应架构容器内通过 `dreamina version`。
+- Dreamina CLI 官方二进制更新到 commit `673dd28` 后同步刷新 Linux amd64 / arm64 固定 SHA256；两种架构均在对应容器网络连续三次取得稳定哈希，并在对应架构容器内通过 `dreamina version`。
 - Docker 后端构建的 Go 模块代理改为 `https://goproxy.cn|https://proxy.golang.org|direct`；首选代理网络失败时会继续回退，不再因失效代理长时间阻断无缓存发布构建。
 - 上线前门禁已通过 Go 格式、模块、Vet、Linux amd64 构建和全量测试，以及前端 1296 项测试、TypeScript、双 Lint、零漏洞依赖审计和 Next.js 27 页生产构建；Lint 仅保留既有 warning。
 - Docker `--no-cache` 构建已通过，Dreamina CLI 固定哈希与版本校验成功；新镜像切换后容器进入 `healthy`，核心页面、静态资源、设置接口和真实 `/api/uploaded-assets/...` 均返回 200，镜像内不存在 Codex CLI。
