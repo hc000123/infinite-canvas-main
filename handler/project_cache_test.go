@@ -75,6 +75,26 @@ func TestProjectCacheFileCannotBeReadByAnotherUser(t *testing.T) {
 	}
 }
 
+func TestSetProjectCacheFileFavoriteUsesAuthenticatedUser(t *testing.T) {
+	oldRoot := config.Cfg.ProjectCacheDir
+	config.Cfg.ProjectCacheDir = t.TempDir()
+	t.Cleanup(func() { config.Cfg.ProjectCacheDir = oldRoot })
+	archived, err := service.ArchiveProjectCacheFile(config.Cfg.ProjectCacheDir, "u1", service.ProjectCacheArchiveInput{
+		Context: service.ProjectCacheContext{ProjectID: "p1"}, Filename: "shot.mp4", MIMEType: "video/mp4", Reader: strings.NewReader("video"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/project-cache/files/"+archived.File.ID+"/favorite", strings.NewReader(`{"favorite":true}`))
+	request.Header.Set("Content-Type", "application/json")
+	request = request.WithContext(service.WithUser(request.Context(), model.AuthUser{ID: "u1"}))
+	response := httptest.NewRecorder()
+	SetProjectCacheFileFavorite(response, request, archived.File.ID)
+	if !bytes.Contains(response.Body.Bytes(), []byte(`"code":0`)) || !bytes.Contains(response.Body.Bytes(), []byte(`"favorite":true`)) {
+		t.Fatalf("body=%s", response.Body.String())
+	}
+}
+
 func TestProjectCachePackageReturnsZipHeaders(t *testing.T) {
 	oldRoot := config.Cfg.ProjectCacheDir
 	config.Cfg.ProjectCacheDir = t.TempDir()

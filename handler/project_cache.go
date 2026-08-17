@@ -116,6 +116,26 @@ func MoveProjectCacheFile(w http.ResponseWriter, r *http.Request, fileID string)
 	OK(w, result)
 }
 
+func SetProjectCacheFileFavorite(w http.ResponseWriter, r *http.Request, fileID string) {
+	user, ok := service.UserFromContext(r.Context())
+	if !ok {
+		Fail(w, "未登录或权限不足")
+		return
+	}
+	var input struct {
+		Favorite bool `json:"favorite"`
+	}
+	if !decodeProjectCacheJSON(w, r, &input) {
+		return
+	}
+	result, err := service.SetUserProjectCacheFileFavorite(config.Cfg.ProjectCacheDir, user.ID, fileID, input.Favorite)
+	if err != nil {
+		FailError(w, err)
+		return
+	}
+	OK(w, result)
+}
+
 func DeleteProjectCacheFile(w http.ResponseWriter, r *http.Request, fileID string) {
 	user, ok := service.UserFromContext(r.Context())
 	if !ok {

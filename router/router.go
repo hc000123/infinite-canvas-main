@@ -238,6 +238,7 @@ func New() *gin.Engine {
 	v1.POST("/project-cache/projects/:id/package/selection", func(c *gin.Context) { handler.DownloadProjectCacheSelection(c.Writer, c.Request, c.Param("id")) })
 	v1.GET("/project-cache/files/:id", func(c *gin.Context) { handler.ProjectCacheFile(c.Writer, c.Request, c.Param("id")) })
 	v1.POST("/project-cache/files/:id/move", func(c *gin.Context) { handler.MoveProjectCacheFile(c.Writer, c.Request, c.Param("id")) })
+	v1.POST("/project-cache/files/:id/favorite", func(c *gin.Context) { handler.SetProjectCacheFileFavorite(c.Writer, c.Request, c.Param("id")) })
 	v1.DELETE("/project-cache/files/:id", func(c *gin.Context) { handler.DeleteProjectCacheFile(c.Writer, c.Request, c.Param("id")) })
 	v1.DELETE("/project-cache/projects/:id", func(c *gin.Context) { handler.DeleteProjectCache(c.Writer, c.Request, c.Param("id")) })
 	v1.POST("/volcengine/assets/image-review", gin.WrapF(handler.SubmitVolcengineImageAsset))

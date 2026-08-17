@@ -157,6 +157,17 @@ func TestProjectCacheSelectionRouteRequiresAuth(t *testing.T) {
 	}
 }
 
+func TestProjectCacheFavoriteRouteRequiresAuth(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	app := New()
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/project-cache/files/file-1/favorite", strings.NewReader(`{"favorite":true}`))
+	app.ServeHTTP(recorder, request)
+	if recorder.Code == http.StatusNotFound || !strings.Contains(recorder.Body.String(), `"code":1001`) {
+		t.Fatalf("favorite route missing auth: status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestUserJimengLoginRoutesRequireAuthAndAdminRoutesAreRemoved(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	app := New()
