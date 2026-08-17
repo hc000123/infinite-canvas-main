@@ -371,7 +371,7 @@ export default function CacheManagementPage() {
                                         <Button size="small" type="primary" icon={<Download className="size-3.5" />} loading={selectionDownloading} disabled={!selectedFiles.length} onClick={() => void downloadSelection()}>下载所选{selectedFiles.length ? ` (${selectedFiles.length})` : ""}</Button>
                                     </div>
                                     <div className="mt-4">
-                                        <CacheFileGrid files={filteredFiles} favoriteUpdatingIds={favoriteUpdatingIds} selectedIds={selectedFileIds} onToggleFavorite={toggleFavorite} onToggleSelect={(file) => setSelectedFileIds((current) => { const next = new Set(current); next.has(file.id) ? next.delete(file.id) : next.add(file.id); return next; })} onDelete={removeFile} onMove={!manifest.projectId ? openMoveFile : undefined} onPreview={setPreviewFile} />
+                                        <CacheFileGrid files={filteredFiles} favoriteUpdatingIds={favoriteUpdatingIds} selectedIds={selectedFileIds} onToggleFavorite={toggleFavorite} onToggleSelect={(file) => setSelectedFileIds((current) => { const next = new Set(current); if (next.has(file.id)) next.delete(file.id); else next.add(file.id); return next; })} onDelete={removeFile} onMove={!manifest.projectId ? openMoveFile : undefined} onPreview={setPreviewFile} />
                                     </div>
                                 </>
                             ) : (
