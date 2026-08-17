@@ -65,12 +65,38 @@ test("uses the latest prompt draft when retrying", () => {
     assert.equal(retryState.canvasNodeRetryPrompt?.(failedVideo, undefined), "修改后的提示词");
 });
 
+test("retry serializes structured references against the latest input order", () => {
+    const sourceNode: CanvasNodeData = {
+        ...failedVideo,
+        id: "config-1",
+        type: "config",
+        metadata: {
+            prompt: "旧文本",
+            promptDocument: {
+                version: 1,
+                blocks: [
+                    { type: "reference", nodeId: "image-a", kind: "image", label: "@旧图片甲" },
+                    { type: "text", text: "看向" },
+                    { type: "reference", nodeId: "image-b", kind: "image", label: "@旧图片乙" },
+                ],
+            },
+        },
+    };
+    const inputs = [
+        { nodeId: "image-b", type: "image" as const, title: "乙", image: { id: "image-b", name: "b.jpg", type: "image/jpeg", dataUrl: "data:image/jpeg;base64,Yg==" } },
+        { nodeId: "image-a", type: "image" as const, title: "甲", image: { id: "image-a", name: "a.jpg", type: "image/jpeg", dataUrl: "data:image/jpeg;base64,YQ==" } },
+    ];
+
+    assert.equal(retryState.canvasNodeRetryPrompt(failedVideo, sourceNode, inputs), "@图片2看向@图片1");
+});
+
 test("retry wiring refreshes assets and rebuilds video preflight from current state", () => {
     const hook = readFileSync(new URL("../hooks/use-canvas-generation-retry-actions.ts", import.meta.url), "utf8");
     const page = readFileSync(new URL("../[id]/canvas-client-page.tsx", import.meta.url), "utf8");
 
     assert.match(hook, /syncCanvasVolcengineAssetsFromLibrary/);
     assert.match(hook, /buildVideoGenerationPlan/);
+    assert.match(hook, /buildNodeGenerationInputs\(sourceNode\.id, retryNodes, connectionsRef\.current\)/);
     assert.match(hook, /startCanvasNodeRetry/);
     assert.match(page, /retry:\s*\{\s*assets,/);
 });

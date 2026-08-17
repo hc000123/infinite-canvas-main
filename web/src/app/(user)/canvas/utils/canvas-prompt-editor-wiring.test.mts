@@ -87,3 +87,12 @@ test("video submit keeps the prompt visible while generation is running", () => 
 
     assert.match(promptPanel, /if \(!isGeneratedMedia && mode !== "video"\)/);
 });
+
+test("explicit multi-frame mode collects and submits one prompt per transition", () => {
+    const configPanel = readCanvasFile("../components/canvas-config-node-panel.tsx");
+    const videoApi = readCanvasFile("../../../../services/api/video.ts");
+
+    assert.match(configPanel, /videoTransitionPrompts/);
+    assert.match(configPanel, /图片 \{index \+ 1\} → 图片 \{index \+ 2\}/);
+    assert.match(videoApi, /transitionPrompts:\s*config\.videoTransitionPrompts/);
+});

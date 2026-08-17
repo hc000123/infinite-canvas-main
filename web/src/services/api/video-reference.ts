@@ -111,7 +111,7 @@ export function inferVideoReferenceMode(input: { imageCount: number; videoCount?
     if (input.imageRoleMode === "continue" && input.imageCount) return "multimodal2video";
     if (input.imageRoleMode === "first_last_frame" && input.imageCount >= 2) return "frames2video";
     if (input.imageRoleMode === "first_frame" && input.imageCount) return "image2video";
-    if (input.imageCount >= 2) return "multiframe2video";
+    if (input.imageCount >= 2) return "multimodal2video";
     if (input.imageCount === 1) return "image2video";
     return "text2video";
 }

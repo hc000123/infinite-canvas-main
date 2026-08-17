@@ -47,7 +47,10 @@ export function autoMentionPromptImageReferences(document: CanvasPromptDocument,
 
 export function serializePromptDocument(document: CanvasPromptDocument, options: CanvasReferenceMentionOption[]) {
     const labelById = new Map(options.map((option) => [option.id, option.label]));
-    return document.blocks.map((block) => (block.type === "text" ? block.text : labelById.get(block.nodeId) || block.label)).join("");
+    return document.blocks.reduce((text, block) => {
+        const value = block.type === "text" ? block.text : labelById.get(block.nodeId) || block.label;
+        return block.type === "reference" && value.startsWith("@") ? `${text.replace(/@+$/, "")}${value}` : text + value;
+    }, "");
 }
 
 export function validatePromptDocument(document: CanvasPromptDocument, options: CanvasReferenceMentionOption[]) {

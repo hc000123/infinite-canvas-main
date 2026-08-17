@@ -437,6 +437,7 @@ async function buildDreaminaVideoRequest(config: AiConfig, prompt: string, refer
         ratio: normalizeSeedanceRatio(config.size),
         resolution: normalizeDreaminaRequestedResolution(config.vquality),
         mode: config.videoReferenceMode,
+        transitionPrompts: config.videoTransitionPrompts,
         images,
         videos,
         audios,

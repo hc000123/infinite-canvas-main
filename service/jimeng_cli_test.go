@@ -146,6 +146,36 @@ func TestNormalizeJimengVideoTaskResponseKeepsFailureReason(t *testing.T) {
 	}
 }
 
+func TestNormalizeJimengVideoTaskResponseHidesTemporaryPathForUploadFailure(t *testing.T) {
+	body, err := NormalizeJimengVideoTaskResponse([]byte(`{
+		"submit_id": "dreamina-upload-1",
+		"gen_status": "fail",
+		"fail_reason": "upload resource \"/var/folders/demo/infinite-canvas-dreamina-1/image-01.jpg\": upload image: upload phase, no file upload, please check log for more details"
+	}`))
+	if err != nil {
+		t.Fatalf("NormalizeJimengVideoTaskResponse returned error: %v", err)
+	}
+	payload := readJimengJSONMap(t, body)
+	taskError, ok := payload["error"].(map[string]any)
+	if !ok || taskError["message"] != "即梦参考素材上传失败，请检查网络后重试" {
+		t.Fatalf("error = %#v, want sanitized upload failure", payload["error"])
+	}
+}
+
+func TestNormalizeJimengCLIErrorHidesTemporaryPathForUploadFailure(t *testing.T) {
+	message := `upload resource "/var/folders/demo/infinite-canvas-dreamina-1/image-03.jpg": upload image: upload phase, no file upload, please check log for more details`
+	if got := normalizeJimengCLIError(message); got != "即梦参考素材上传失败，请检查网络后重试" {
+		t.Fatalf("message = %q", got)
+	}
+}
+
+func TestNormalizeJimengCLIErrorExplainsUploadTimeout(t *testing.T) {
+	message := `Post "https://tos-d-lf.bytedancevod.com/upload/v1/demo": context deadline exceeded`
+	if got := normalizeJimengCLIError(message); got != "即梦参考素材上传超时，请检查网络后重试" {
+		t.Fatalf("message = %q", got)
+	}
+}
+
 func TestStartJimengLoginParsesHeadlessDeviceFlow(t *testing.T) {
 	cliPath := writeJimengLoginFakeCLI(t)
 	result, err := StartJimengLogin(context.Background(), model.ModelChannel{Protocol: string(model.ModelProtocolJimengCLI), CLIPath: cliPath})

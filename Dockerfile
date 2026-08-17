@@ -46,8 +46,8 @@ COPY --from=api-build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certi
 ARG TARGETARCH
 ARG DREAMINA_CLI_BASE=https://lf3-static.bytednsdoc.com/obj/eden-cn/psj_hupthlyk/ljhwZthlaukjlkulzlp/dreamina_cli_beta
 RUN case "$TARGETARCH" in \
-        amd64) dreamina_file=dreamina_cli_linux_amd64; dreamina_sha=7c2817bc844e5a93cc5c6e57f876ccaea91d438e520ad50f665a515e816c7dc6 ;; \
-        arm64) dreamina_file=dreamina_cli_linux_arm64; dreamina_sha=696216eee0fe55ba5e5d781429a3eb304cfdb539823397742a4d1a7575ab1202 ;; \
+        amd64) dreamina_file=dreamina_cli_linux_amd64; dreamina_sha=dab13d35e442045124e9fd2645f1e2efa66a91321d64b19456618cb493919d11 ;; \
+        arm64) dreamina_file=dreamina_cli_linux_arm64; dreamina_sha=b6927818c979e6ce221aab001bca5bddf444b9687483f7ab4a682c0f392d8ef2 ;; \
         *) echo "Unsupported Dreamina CLI architecture: $TARGETARCH" >&2; exit 1 ;; \
     esac \
     && node -e 'const fs = require("node:fs"); (async () => { let lastError; for (let attempt = 1; attempt <= 5; attempt++) { try { const response = await fetch(process.argv[1]); if (!response.ok) throw new Error(`HTTP ${response.status}`); fs.writeFileSync(process.argv[2], Buffer.from(await response.arrayBuffer())); return; } catch (error) { lastError = error; if (attempt < 5) await new Promise((resolve) => setTimeout(resolve, 2000)); } } throw lastError; })().catch((error) => { console.error(error); process.exit(1); })' "$DREAMINA_CLI_BASE/$dreamina_file" /usr/local/bin/dreamina \

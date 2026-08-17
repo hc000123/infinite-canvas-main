@@ -78,7 +78,10 @@ export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSu
     const videoReferenceValidation = mode === "video"
         ? validateDreaminaReferences({ protocol: config.videoProtocol, model: config.videoModel, mode: resolvedVideoReferenceMode, images: imageInputs.length, videos: videoInputs.length, audios: audioInputs.length })
         : { error: "", usageLabel: "", detailLabel: "" };
-    const generationBlocked = isRunning || !hasGenerationInput || missingReferenceIds.length > 0 || Boolean(videoReferenceValidation.error);
+    const transitionCount = resolvedVideoReferenceMode === "multiframe2video" && imageInputs.length > 2 ? imageInputs.length - 1 : 0;
+    const videoTransitionPrompts = Array.from({ length: transitionCount }, (_, index) => node.metadata?.videoTransitionPrompts?.[index] || "");
+    const transitionPromptError = transitionCount && videoTransitionPrompts.some((prompt) => !prompt.trim()) ? `请填写 ${transitionCount} 段转场提示词` : "";
+    const generationBlocked = isRunning || !hasGenerationInput || missingReferenceIds.length > 0 || Boolean(videoReferenceValidation.error || transitionPromptError);
     const imageReferenceValue = mode === "video" && imageInputs.length ? seedanceReferenceLabelRange("image", imageInputs.length) : `${inputSummary.imageCount} 张`;
     const videoReferenceValue = videoInputs.length ? seedanceReferenceLabelRange("video", videoInputs.length) : `${inputSummary.videoCount} 个`;
     const audioReferenceValue = audioInputs.length ? seedanceReferenceLabelRange("audio", audioInputs.length) : `${inputSummary.audioCount} 个`;
@@ -181,6 +184,28 @@ export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSu
                     onModeChange={(videoReferenceMode, videoReferenceImageMode) => onConfigChange(node.id, { videoReferenceMode, videoReferenceImageMode })}
                 />
 
+                {transitionCount ? (
+                    <div className="grid gap-1.5 rounded-lg border p-2" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
+                        <div className="text-[11px] font-medium">逐段转场提示词</div>
+                        {videoTransitionPrompts.map((prompt, index) => (
+                            <label key={index} className="grid gap-1 text-[10px]" style={{ color: theme.node.muted }}>
+                                <span>图片 {index + 1} → 图片 {index + 2}</span>
+                                <textarea
+                                    className="min-h-14 resize-y rounded-md border bg-transparent px-2 py-1.5 text-xs leading-5 outline-none focus-visible:ring-2 focus-visible:ring-[var(--studio-focus-ring)]"
+                                    style={{ borderColor: theme.node.stroke, color: theme.node.text }}
+                                    value={prompt}
+                                    placeholder="描述前一张图如何自然过渡到后一张图"
+                                    onChange={(event) => {
+                                        const next = [...videoTransitionPrompts];
+                                        next[index] = event.target.value;
+                                        onConfigChange(node.id, { videoTransitionPrompts: next });
+                                    }}
+                                />
+                            </label>
+                        ))}
+                    </div>
+                ) : null}
+
                 <CanvasVideoCapabilityHint
                     compact
                     theme={theme}
@@ -188,7 +213,7 @@ export function CanvasConfigNodePanel({ node, canvasAiConfig, isRunning, inputSu
                     notice={videoCapability?.notice}
                     usageLabel={videoReferenceValidation.usageLabel}
                     detailLabel={videoReferenceValidation.detailLabel}
-                    error={videoReferenceValidation.error}
+                    error={videoReferenceValidation.error || transitionPromptError}
                 />
 
                 <VideoReferenceDisplay imageReferences={imageReferences} inputs={mediaInputs} preset={referencePreset} theme={theme} />

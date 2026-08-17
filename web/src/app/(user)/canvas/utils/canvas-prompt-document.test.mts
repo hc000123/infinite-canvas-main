@@ -30,6 +30,19 @@ test("serializes references by current upstream order instead of a stale label",
     assert.equal(serializePromptDocument(document, options), "参考 图片 2");
 });
 
+test("serializing a reference absorbs a stray at sign from the preceding text block", () => {
+    const document = {
+        version: 1 as const,
+        blocks: [
+            { type: "text" as const, text: "主要人物：@" },
+            { type: "reference" as const, nodeId: "image-b", kind: "image" as const, label: "@旧图片" },
+            { type: "text" as const, text: "名字叫小满" },
+        ],
+    };
+
+    assert.equal(serializePromptDocument(document, [{ ...options[1], label: "@图片2" }]), "主要人物：@图片2名字叫小满");
+});
+
 test("reports references whose source node no longer exists", () => {
     const document = {
         version: 1 as const,

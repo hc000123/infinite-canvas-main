@@ -442,19 +442,20 @@ func TestJimengVideoProxySubmitsAllMultipartModes(t *testing.T) {
 	saveJimengHandlerSettings(t, cliPath, t.TempDir())
 	png := append([]byte("\x89PNG\r\n\x1a\n"), bytes.Repeat([]byte{0}, 32)...)
 	tests := []struct {
-		mode   string
-		files  []handlerJimengUpload
-		wantID string
+		mode        string
+		files       []handlerJimengUpload
+		transitions []string
+		wantID      string
 	}{
 		{mode: "text2video", wantID: "jimeng-submit-1"},
 		{mode: "image2video", files: []handlerJimengUpload{{field: "input_image[]", name: "first.png", contentType: "image/png", body: png, role: "first_frame"}}, wantID: "jimeng-image2video"},
 		{mode: "frames2video", files: []handlerJimengUpload{{field: "input_image[]", name: "first.png", contentType: "image/png", body: png, role: "first_frame"}, {field: "input_image[]", name: "last.png", contentType: "image/png", body: png, role: "last_frame"}}, wantID: "jimeng-frames2video"},
-		{mode: "multiframe2video", files: []handlerJimengUpload{{field: "input_image[]", name: "1.png", contentType: "image/png", body: png}, {field: "input_image[]", name: "2.png", contentType: "image/png", body: png}, {field: "input_image[]", name: "3.png", contentType: "image/png", body: png}}, wantID: "jimeng-multiframe2video"},
+		{mode: "multiframe2video", files: []handlerJimengUpload{{field: "input_image[]", name: "1.png", contentType: "image/png", body: png}, {field: "input_image[]", name: "2.png", contentType: "image/png", body: png}, {field: "input_image[]", name: "3.png", contentType: "image/png", body: png}}, transitions: []string{"镜头一转场", "镜头二转场"}, wantID: "jimeng-multiframe2video"},
 		{mode: "multimodal2video", files: []handlerJimengUpload{{field: "input_image[]", name: "image.png", contentType: "image/png", body: png}, {field: "input_video[]", name: "clip.mp4", contentType: "video/mp4", body: []byte("\x00\x00\x00\x18ftypmp42video")}, {field: "input_audio[]", name: "voice.mp3", contentType: "audio/mpeg", body: []byte("ID3audio")}}, wantID: "jimeng-multimodal2video"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.mode, func(t *testing.T) {
-			body, contentType := buildHandlerJimengMultipart(t, tt.mode, tt.files)
+			body, contentType := buildHandlerJimengMultipart(t, tt.mode, tt.files, tt.transitions)
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/videos", bytes.NewReader(body))
 			req.Header.Set("Content-Type", contentType)
 			req = req.WithContext(service.WithUser(req.Context(), model.AuthUser{ID: "user-jimeng-" + tt.mode, Username: "jimeng", Role: model.UserRoleUser}))
@@ -479,7 +480,7 @@ func TestJimengVideoProxyRefundsRejectedMultipartTask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, contentType := buildHandlerJimengMultipart(t, "image2video", nil)
+	body, contentType := buildHandlerJimengMultipart(t, "image2video", nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/videos", bytes.NewReader(body))
 	req.Header.Set("Content-Type", contentType)
 	req = req.WithContext(service.WithUser(req.Context(), model.AuthUser{ID: "user-jimeng-refund", Username: "jimeng-refund", Role: model.UserRoleUser}))
@@ -502,12 +503,17 @@ type handlerJimengUpload struct {
 	role        string
 }
 
-func buildHandlerJimengMultipart(t *testing.T, mode string, files []handlerJimengUpload) ([]byte, string) {
+func buildHandlerJimengMultipart(t *testing.T, mode string, files []handlerJimengUpload, transitions []string) ([]byte, string) {
 	t.Helper()
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 	for key, value := range map[string]string{"model": "seedance2.0fast", "dreamina_mode": mode, "prompt": "镜头推进", "duration": "6", "ratio": "9:16", "resolution": "720p"} {
 		if err := writer.WriteField(key, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, transition := range transitions {
+		if err := writer.WriteField("transition_prompt[]", transition); err != nil {
 			t.Fatal(err)
 		}
 	}

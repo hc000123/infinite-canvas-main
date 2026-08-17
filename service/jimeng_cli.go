@@ -516,12 +516,23 @@ func runJimengCLIUnlocked(ctx context.Context, channel model.ModelChannel, args 
 		if message == "" {
 			message = err.Error()
 		}
-		if strings.Contains(message, "AigcComplianceConfirmationRequired") {
-			message = "即梦模型需要完成一次性内容合规授权，请先在即梦网页生成一次并确认授权后重试"
-		}
-		return output, safeMessageError{message: message}
+		return output, safeMessageError{message: normalizeJimengCLIError(message)}
 	}
 	return output, nil
+}
+
+func normalizeJimengCLIError(message string) string {
+	lower := strings.ToLower(message)
+	if strings.Contains(lower, "context deadline exceeded") && strings.Contains(lower, "upload") {
+		return "即梦参考素材上传超时，请检查网络后重试"
+	}
+	if strings.Contains(lower, "no file upload") || strings.Contains(lower, "upload resource") {
+		return "即梦参考素材上传失败，请检查网络后重试"
+	}
+	if strings.Contains(message, "AigcComplianceConfirmationRequired") {
+		return "即梦模型需要完成一次性内容合规授权，请先在即梦网页生成一次并确认授权后重试"
+	}
+	return message
 }
 
 func jimengCLIHome(ctx context.Context) string {
@@ -547,11 +558,12 @@ func jimengEnvironmentWithHome(environment []string, home string) []string {
 }
 
 type jimengVideoFields struct {
-	Prompt        string
-	Duration      string
-	Ratio         string
-	Resolution    string
-	HasReferences bool
+	Prompt            string
+	TransitionPrompts []string
+	Duration          string
+	Ratio             string
+	Resolution        string
+	HasReferences     bool
 }
 
 func readJimengVideoFields(body []byte, contentType string) (jimengVideoFields, error) {
@@ -566,11 +578,12 @@ func readJimengVideoFields(body []byte, contentType string) (jimengVideoFields, 
 		}
 		defer form.RemoveAll()
 		return jimengVideoFields{
-			Prompt:        firstArkFormValue(form.Value, "prompt"),
-			Duration:      firstArkFormAliasValue(form.Value, "duration", "seconds"),
-			Ratio:         firstArkFormAliasValue(form.Value, "ratio", "size"),
-			Resolution:    firstArkFormAliasValue(form.Value, "video_resolution", "resolution", "resolution_name"),
-			HasReferences: len(form.File["input_reference[]"]) > 0 || len(form.Value["input_reference[]"]) > 0,
+			Prompt:            firstArkFormValue(form.Value, "prompt"),
+			TransitionPrompts: append([]string(nil), form.Value["transition_prompt[]"]...),
+			Duration:          firstArkFormAliasValue(form.Value, "duration", "seconds"),
+			Ratio:             firstArkFormAliasValue(form.Value, "ratio", "size"),
+			Resolution:        firstArkFormAliasValue(form.Value, "video_resolution", "resolution", "resolution_name"),
+			HasReferences:     len(form.File["input_reference[]"]) > 0 || len(form.Value["input_reference[]"]) > 0,
 		}, nil
 	}
 	var payload map[string]any
@@ -739,10 +752,10 @@ func jimengVideoURL(payload map[string]any) string {
 
 func jimengFailureMessage(payload map[string]any) string {
 	if value := aiTaskStringValue(payload, "fail_reason", "error_message", "message", "msg"); value != "" {
-		return value
+		return normalizeJimengCLIError(value)
 	}
 	if nested, ok := payload["error"].(map[string]any); ok {
-		return aiTaskStringValue(nested, "message", "msg", "code")
+		return normalizeJimengCLIError(aiTaskStringValue(nested, "message", "msg", "code"))
 	}
 	return ""
 }

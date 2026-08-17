@@ -1,7 +1,12 @@
 import type { CanvasNodeData, CanvasNodeMetadata } from "../types.ts";
-import { beginPendingCanvasMediaVersion, canvasPromptEditorValue, completePendingCanvasMediaVersion, rollbackPendingCanvasMediaVersion } from "./canvas-media-versions.ts";
+import type { NodeGenerationInput } from "./canvas-generation-inputs.ts";
+import { beginPendingCanvasMediaVersion, canvasPromptEditorDocument, canvasPromptEditorValue, completePendingCanvasMediaVersion, rollbackPendingCanvasMediaVersion } from "./canvas-media-versions.ts";
+import { serializePromptDocument } from "./canvas-prompt-document.ts";
+import { buildReferenceMentionOptions } from "./canvas-reference-mentions.ts";
 
-export function canvasNodeRetryPrompt(node: CanvasNodeData, sourceNode?: CanvasNodeData) {
+export function canvasNodeRetryPrompt(node: CanvasNodeData, sourceNode?: CanvasNodeData, inputs: NodeGenerationInput[] = []) {
+    const document = canvasPromptEditorDocument(node) || (sourceNode ? canvasPromptEditorDocument(sourceNode) : undefined);
+    if (document) return serializePromptDocument(document, buildReferenceMentionOptions(inputs)).trim();
     return (canvasPromptEditorValue(node) || (sourceNode ? canvasPromptEditorValue(sourceNode) : "")).trim();
 }
 

@@ -11,19 +11,26 @@ export type CanvasVideoProgress = {
 };
 
 const steps = ["创建任务", "排队", "生成", "回填", "完成"];
+const referenceSteps = ["上传素材", "排队", "生成", "回填", "完成"];
 
 export function buildCanvasVideoProgress(metadata: CanvasNodeMetadata | undefined, nodeStatus?: CanvasNodeStatus): CanvasVideoProgress {
     if (metadata?.subtitleErase) return subtitleEraseProgress(metadata.subtitleErase.status, metadata.subtitleErase.progress);
     if (metadata?.videoUpscale) return videoUpscaleProgress(metadata.videoUpscale.status, metadata.videoUpscale.progress);
     const taskStatus = normalizeVideoTaskStatus(metadata?.taskStatus || metadata?.rawTaskStatus);
     const elapsedSeconds = videoElapsedSeconds(metadata, Date.now(), nodeStatus);
-    if (metadata?.content && !metadata.pendingMediaVersion) return progress("succeeded", "完成", 100, 5);
-    if (nodeStatus === "error" || taskStatus === "failed") return failedProgress(metadata);
-    if (taskStatus === "cancelled") return progress("cancelled", "已取消", 100, 4);
-    if (nodeStatus === "success" || taskStatus === "succeeded") return progress(nodeStatus === "success" ? "succeeded" : "caching", nodeStatus === "success" ? "完成" : "回填视频", nodeStatus === "success" ? 100 : 92, nodeStatus === "success" ? 5 : 4);
-    if (taskStatus === "running") return progress("running", "生成中", runningPercent(elapsedSeconds), 3);
-    if (taskStatus === "queued") return progress("queued", "排队中", 24, 2);
-    return progress("creating", "创建任务", 8, 1);
+    const activeSteps = hasJimengReferenceUpload(metadata) ? referenceSteps : steps;
+    if (metadata?.content && !metadata.pendingMediaVersion) return progress("succeeded", "完成", 100, 5, activeSteps);
+    if (nodeStatus === "error" || taskStatus === "failed") return failedProgress(metadata, activeSteps);
+    if (taskStatus === "cancelled") return progress("cancelled", "已取消", 100, 4, activeSteps);
+    if (nodeStatus === "success" || taskStatus === "succeeded") return progress(nodeStatus === "success" ? "succeeded" : "caching", nodeStatus === "success" ? "完成" : "回填视频", nodeStatus === "success" ? 100 : 92, nodeStatus === "success" ? 5 : 4, activeSteps);
+    if (taskStatus === "running") return progress("running", "生成中", runningPercent(elapsedSeconds), 3, activeSteps);
+    if (taskStatus === "queued") return progress("queued", "排队中", 24, 2, activeSteps);
+    return progress("creating", activeSteps === referenceSteps ? "上传参考素材" : "创建任务", 8, 1, activeSteps);
+}
+
+export function videoPendingStatusLabel(progress: CanvasVideoProgress) {
+    if (progress.stage === "failed") return "未创建任务";
+    return progress.label === "上传参考素材" ? "等待上传完成" : "等待 taskId";
 }
 
 function subtitleEraseProgress(status: NonNullable<CanvasNodeMetadata["subtitleErase"]>["status"], percent: number) {
@@ -61,12 +68,16 @@ export function videoElapsedEndAt(metadata: CanvasNodeMetadata | undefined, node
     return normalizeTimestamp(metadata?.taskUpdatedAt) || normalizeTimestamp(metadata?.videoUrlExpiresAt) || parseTimestamp(metadata?.localStoredAt);
 }
 
-function failedProgress(metadata: CanvasNodeMetadata | undefined) {
-    return metadata?.taskId ? progress("failed", "生成失败", 72, 3) : progress("failed", "创建失败", 8, 1);
+function failedProgress(metadata: CanvasNodeMetadata | undefined, activeSteps: string[]) {
+    return metadata?.taskId ? progress("failed", "生成失败", 72, 3, activeSteps) : progress("failed", activeSteps === referenceSteps ? "上传失败" : "创建失败", 8, 1, activeSteps);
 }
 
-function progress(stage: CanvasVideoProgressStage, label: string, percent: number, currentStep: number): CanvasVideoProgress {
-    return { stage, label, percent: Math.max(0, Math.min(100, Math.round(percent))), currentStep, steps };
+function progress(stage: CanvasVideoProgressStage, label: string, percent: number, currentStep: number, progressSteps = steps): CanvasVideoProgress {
+    return { stage, label, percent: Math.max(0, Math.min(100, Math.round(percent))), currentStep, steps: progressSteps };
+}
+
+function hasJimengReferenceUpload(metadata: CanvasNodeMetadata | undefined) {
+    return metadata?.provider === "jimeng-cli" && Boolean(metadata.references?.length || metadata.videoReferences?.length || metadata.audioReferences?.length);
 }
 
 function runningPercent(elapsedSeconds: number) {

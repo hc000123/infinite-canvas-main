@@ -78,10 +78,11 @@ func prepareJimengVideoCommand(body []byte, contentType, modelVersion string, se
 	}
 
 	fields := jimengVideoFields{
-		Prompt:     prompt,
-		Duration:   firstArkFormAliasValue(form.Value, "duration", "seconds"),
-		Ratio:      firstArkFormAliasValue(form.Value, "ratio", "size"),
-		Resolution: firstArkFormAliasValue(form.Value, "video_resolution", "resolution", "resolution_name"),
+		Prompt:            prompt,
+		TransitionPrompts: append([]string(nil), form.Value["transition_prompt[]"]...),
+		Duration:          firstArkFormAliasValue(form.Value, "duration", "seconds"),
+		Ratio:             firstArkFormAliasValue(form.Value, "ratio", "size"),
+		Resolution:        firstArkFormAliasValue(form.Value, "video_resolution", "resolution", "resolution_name"),
 	}
 	args, err := buildJimengModeArgs(mode, fields, modelVersion, sessionID, imagePaths, imageRoles, videoPaths, audioPaths)
 	if err != nil {
@@ -265,9 +266,18 @@ func buildJimengModeArgs(mode string, fields jimengVideoFields, modelVersion str
 		if len(images) == 2 {
 			args = append(args, "--prompt="+prompt, "--duration="+strconv.Itoa(min(8, duration)))
 		} else {
+			transitions := make([]string, 0, len(fields.TransitionPrompts))
+			for _, transition := range fields.TransitionPrompts {
+				if value := strings.TrimSpace(transition); value != "" {
+					transitions = append(transitions, value)
+				}
+			}
+			if len(transitions) != len(images)-1 {
+				return nil, fmt.Errorf("多帧故事需要分别填写 %d 段转场提示词", len(images)-1)
+			}
 			segmentDuration := max(1, min(8, float64(duration)/float64(len(images)-1)))
-			for range len(images) - 1 {
-				args = append(args, "--transition-prompt="+prompt)
+			for _, transition := range transitions {
+				args = append(args, "--transition-prompt="+transition)
 			}
 			for range len(images) - 1 {
 				args = append(args, "--transition-duration="+strconv.FormatFloat(segmentDuration, 'f', -1, 64))

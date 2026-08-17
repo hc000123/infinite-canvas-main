@@ -338,18 +338,26 @@ test("video config preserves an explicit Dreamina reference mode", () => {
     const config = buildCanvasVideoConfig(routedVideoConfig("seedance2.0fast", "jimeng-cli"), {
         videoReferenceMode: "multiframe2video",
         videoReferenceImageMode: "reference",
+        videoTransitionPrompts: ["转场一", "转场二"],
     });
 
     assert.equal(config.videoReferenceMode, "multiframe2video");
+    assert.deepEqual(config.videoTransitionPrompts, ["转场一", "转场二"]);
 });
 
-test("video config infers Dreamina modes for legacy nodes", () => {
+test("ungenerated Dreamina nodes keep auto mode for live connected media", () => {
     const jimengConfig = routedVideoConfig("seedance2.0fast", "jimeng-cli");
 
-    assert.equal(buildCanvasVideoConfig(jimengConfig, { videoReferenceMode: undefined, references: [] }).videoReferenceMode, "text2video");
+    assert.equal(buildCanvasVideoConfig(jimengConfig, { videoReferenceMode: undefined, references: [] }).videoReferenceMode, "auto");
+});
+
+test("video config keeps empty legacy nodes automatic and infers saved reference modes", () => {
+    const jimengConfig = routedVideoConfig("seedance2.0fast", "jimeng-cli");
+
+    assert.equal(buildCanvasVideoConfig(jimengConfig, { taskId: "legacy-text-task", videoReferenceMode: undefined, references: [] }).videoReferenceMode, "auto");
     assert.equal(buildCanvasVideoConfig(jimengConfig, { videoReferenceMode: undefined, references: ["image.png"], videoReferenceImageMode: "first_frame" }).videoReferenceMode, "image2video");
     assert.equal(buildCanvasVideoConfig(jimengConfig, { videoReferenceMode: undefined, references: ["first.png", "last.png"], videoReferenceImageMode: "first_last_frame" }).videoReferenceMode, "frames2video");
-    assert.equal(buildCanvasVideoConfig(jimengConfig, { videoReferenceMode: undefined, references: ["1.png", "2.png", "3.png"] }).videoReferenceMode, "multiframe2video");
+    assert.equal(buildCanvasVideoConfig(jimengConfig, { videoReferenceMode: undefined, references: ["1.png", "2.png", "3.png"] }).videoReferenceMode, "multimodal2video");
     assert.equal(buildCanvasVideoConfig(jimengConfig, { videoReferenceMode: undefined, references: ["image.png"], videoReferences: ["video.mp4"] }).videoReferenceMode, "multimodal2video");
     assert.equal(buildCanvasVideoConfig(jimengConfig, { videoReferenceMode: undefined, references: ["tail-frame.png"], videoReferenceImageMode: "continue" }).videoReferenceMode, "multimodal2video");
 });

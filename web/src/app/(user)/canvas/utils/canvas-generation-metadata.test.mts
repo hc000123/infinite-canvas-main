@@ -75,12 +75,13 @@ test("builds video reference inputs with selected first and last frame mode", ()
 
 test("builds video generation metadata with stored references and reference order indexes", () => {
     const references = buildVideoReferenceInput([imageOne, imageTwo], [videoOne], [audioOne], directVideoReferenceInputs([imageOne, imageTwo], [videoOne], [audioOne]));
-    const metadata = buildVideoGenerationMetadata(baseConfig, references);
+    const metadata = buildVideoGenerationMetadata({ ...baseConfig, videoTransitionPrompts: ["转场一", "转场二"] }, references);
 
     assert.deepEqual(metadata.references, ["image:one", "asset://asset-two"]);
     assert.deepEqual(metadata.videoReferences, ["video:one"]);
     assert.deepEqual(metadata.audioReferences, ["https://example.com/audio.mp3"]);
     assert.equal(metadata.returnLastFrame, "true");
+    assert.deepEqual(metadata.videoTransitionPrompts, ["转场一", "转场二"]);
     assert.deepEqual(metadata.referenceRoles, [
         { nodeId: "image-1", kind: "image", role: "reference_image", index: 1 },
         { nodeId: "image-2", kind: "image", role: "reference_image", index: 2 },

@@ -41,6 +41,7 @@ export type AiConfig = {
     videoExtendDirection: "forward" | "backward";
     videoReferenceImageMode: SeedanceImageRoleMode;
     videoReferenceMode: VideoReferenceMode;
+    videoTransitionPrompts?: string[];
     systemPrompt: string;
     thinkingMode: string;
     reasoningEffort: "minimal" | "low" | "medium" | "high";
@@ -89,6 +90,7 @@ export const defaultConfig: AiConfig = {
     videoExtendDirection: "forward",
     videoReferenceImageMode: "reference",
     videoReferenceMode: "auto",
+    videoTransitionPrompts: [],
     systemPrompt: "",
     thinkingMode: "false",
     reasoningEffort: "medium",

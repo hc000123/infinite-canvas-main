@@ -32,15 +32,15 @@ test("builds reference mention options with preview urls", () => {
     ]);
 
     assert.deepEqual(options, [
-        { id: "image-1", label: "图片 1", detail: "角色图", previewType: "image", previewUrl: "image-url" },
-        { id: "video-1", label: "视频 1", detail: "运镜参考", previewType: "video", previewUrl: "video-url" },
-        { id: "audio-1", label: "音频 1", detail: "节奏参考", previewType: "audio", previewUrl: "audio-url" },
+        { id: "image-1", label: "@图片1", detail: "角色图", previewType: "image", previewUrl: "image-url" },
+        { id: "video-1", label: "@视频1", detail: "运镜参考", previewType: "video", previewUrl: "video-url" },
+        { id: "audio-1", label: "@音频1", detail: "节奏参考", previewType: "audio", previewUrl: "audio-url" },
     ]);
 });
 
 test("replaces the active @ token with the official Seedance label", () => {
-    assert.deepEqual(applyReferenceMention("让@图", 3, "图片 1"), { text: "让图片 1", caret: 5 });
-    assert.deepEqual(applyReferenceMention("参考 @视频1 的运动", 7, "视频 1"), { text: "参考 视频 1 的运动", caret: 7 });
+    assert.deepEqual(applyReferenceMention("让@图", 3, "@图片1"), { text: "让@图片1", caret: 5 });
+    assert.deepEqual(applyReferenceMention("参考 @视频1 的运动", 7, "@视频1"), { text: "参考 @视频1 的运动", caret: 7 });
 });
 
 test("matches @ mentions after existing prompt text for the Lexical editor", () => {

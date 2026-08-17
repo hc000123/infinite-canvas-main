@@ -38,6 +38,7 @@ const VERSION_METADATA_KEYS = [
     "videoExtendDirection",
     "videoReferenceImageMode",
     "videoReferenceMode",
+    "videoTransitionPrompts",
     "sourceVideoNodeId",
     "variantOfNodeId",
     "continuationOfNodeId",

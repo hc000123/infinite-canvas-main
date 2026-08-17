@@ -193,6 +193,7 @@ export type CanvasNodeMetadata = {
     videoExtendDirection?: CanvasVideoExtendDirection;
     videoReferenceImageMode?: SeedanceImageRoleMode;
     videoReferenceMode?: VideoReferenceMode;
+    videoTransitionPrompts?: string[];
     sourceVideoNodeId?: string;
     capturedFrameSourceVideoNodeId?: string;
     capturedFrameTime?: number;

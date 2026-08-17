@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildCanvasVideoProgress, isVideoElapsedTerminal, videoElapsedEndAt, videoElapsedSeconds } from "./canvas-video-progress.ts";
+import { buildCanvasVideoProgress, isVideoElapsedTerminal, videoElapsedEndAt, videoElapsedSeconds, videoPendingStatusLabel } from "./canvas-video-progress.ts";
 
 test("maps queued and running video task states to staged progress", () => {
     assert.deepEqual(buildCanvasVideoProgress({ taskStatus: "queued" }, "loading"), { stage: "queued", label: "排队中", percent: 24, currentStep: 2, steps: ["创建任务", "排队", "生成", "回填", "完成"] });
@@ -42,6 +42,27 @@ test("treats preserved old content as a running pending version instead of compl
 test("keeps failed creation progress at the creation stage before task id exists", () => {
     assert.deepEqual(buildCanvasVideoProgress({ generationStartedAt: Date.now() - 120_000 }, "error"), { stage: "failed", label: "创建失败", percent: 8, currentStep: 1, steps: ["创建任务", "排队", "生成", "回填", "完成"] });
     assert.deepEqual(buildCanvasVideoProgress({ taskId: "task-1", taskStatus: "failed" }, "error"), { stage: "failed", label: "生成失败", percent: 72, currentStep: 3, steps: ["创建任务", "排队", "生成", "回填", "完成"] });
+});
+
+test("shows reference upload before Dreamina returns a task id", () => {
+    assert.deepEqual(buildCanvasVideoProgress({ provider: "jimeng-cli", references: ["image:one"], generationStartedAt: Date.now() }, "loading"), {
+        stage: "creating",
+        label: "上传参考素材",
+        percent: 8,
+        currentStep: 1,
+        steps: ["上传素材", "排队", "生成", "回填", "完成"],
+    });
+});
+
+test("labels a pre-task Dreamina upload error as upload failure", () => {
+    const progress = buildCanvasVideoProgress({ provider: "jimeng-cli", references: ["image:one"], errorDetails: "即梦参考素材上传失败，请检查网络后重试" }, "error");
+    assert.equal(progress.label, "上传失败");
+});
+
+test("describes what is pending before a task id exists", () => {
+    assert.equal(videoPendingStatusLabel(buildCanvasVideoProgress({ provider: "jimeng-cli", references: ["image:one"] }, "loading")), "等待上传完成");
+    assert.equal(videoPendingStatusLabel(buildCanvasVideoProgress({}, "loading")), "等待 taskId");
+    assert.equal(videoPendingStatusLabel(buildCanvasVideoProgress({ provider: "jimeng-cli", references: ["image:one"] }, "error")), "未创建任务");
 });
 
 test("calculates elapsed seconds from task timestamps", () => {

@@ -55,21 +55,21 @@ export function buildReferenceMentionOptions(inputs: CanvasReferenceMentionInput
     return [
         ...images.map((input, index) => ({
             id: input.nodeId,
-            label: `图片 ${index + 1}`,
+            label: `@图片${index + 1}`,
             detail: input.title,
             previewType: "image" as const,
             previewUrl: input.image?.dataUrl || input.image?.url,
         })),
         ...videos.map((input, index) => ({
             id: input.nodeId,
-            label: `视频 ${index + 1}`,
+            label: `@视频${index + 1}`,
             detail: input.title,
             previewType: "video" as const,
             previewUrl: input.video?.url,
         })),
         ...audios.map((input, index) => ({
             id: input.nodeId,
-            label: `音频 ${index + 1}`,
+            label: `@音频${index + 1}`,
             detail: input.title,
             previewType: "audio" as const,
             previewUrl: input.audio?.url,

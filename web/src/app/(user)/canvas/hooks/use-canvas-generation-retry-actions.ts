@@ -10,7 +10,7 @@ import { defaultConfig } from "@/stores/use-config-store";
 import type { Asset, AssetWriteInput } from "@/stores/use-asset-store";
 
 import { NODE_DEFAULT_SIZE, VIDEO_NODE_MAX_HEIGHT, VIDEO_NODE_MAX_WIDTH } from "../constants";
-import { buildNodeGenerationContext, hydrateNodeGenerationContext, type NodeGenerationContext } from "../components/canvas-node-generation";
+import { buildNodeGenerationContext, buildNodeGenerationInputs, hydrateNodeGenerationContext, type NodeGenerationContext } from "../components/canvas-node-generation";
 import { buildRetryGenerationConfig } from "../utils/canvas-generation-config";
 import { buildRetryImageGenerationMetadata, buildVideoGenerationMetadata, videoTaskMetadata } from "../utils/canvas-generation-metadata";
 import { findRetrySourceNode, resolveMetadataReferences, resolveStoredAudioReferences, resolveStoredImageReferences, resolveStoredVideoReferences, sourceNodeReferenceImages, storedVideoReferenceInputs } from "../utils/canvas-generation-references";
@@ -102,9 +102,10 @@ export function useCanvasGenerationRetryActions({
                 return;
             }
 
-            const retryPrompt = canvasNodeRetryPrompt(node, sourceNode);
+            const retryInputs = buildNodeGenerationInputs(sourceNode.id, retryNodes, connectionsRef.current);
+            const retryPrompt = canvasNodeRetryPrompt(node, sourceNode, retryInputs);
             const context = hasSavedImageMetadata ? null : await hydrateNodeGenerationContext(buildNodeGenerationContext(sourceNode.id, retryNodes, connectionsRef.current, retryPrompt));
-            const prompt = (node.metadata?.promptDraft || (hasSavedImageMetadata ? savedImageMetadata?.prompt : context?.prompt) || retryPrompt).trim();
+            const prompt = ((hasSavedImageMetadata ? savedImageMetadata?.prompt : context?.prompt) || retryPrompt).trim();
             if (!prompt) {
                 message.warning("找不到提示词，无法重试");
                 return;

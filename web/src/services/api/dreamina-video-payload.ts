@@ -7,6 +7,7 @@ export type DreaminaVideoPayloadInput = {
     ratio: string;
     resolution: string;
     mode: VideoReferenceMode;
+    transitionPrompts?: string[];
     images: Array<{ file: File; role: SeedanceImageRole }>;
     videos: File[];
     audios: File[];
@@ -14,7 +15,8 @@ export type DreaminaVideoPayloadInput = {
 
 export function buildDreaminaVideoPayload(input: DreaminaVideoPayloadInput): FormData {
     const mode = input.mode === "auto" ? inferDreaminaMode(input) : input.mode;
-    validateDreaminaMedia(mode, input);
+    const transitionPrompts = input.transitionPrompts?.map((prompt) => prompt.trim()) || [];
+    validateDreaminaMedia(mode, input, transitionPrompts);
     const body = new FormData();
     body.append("model", input.model);
     body.append("prompt", input.prompt);
@@ -22,6 +24,7 @@ export function buildDreaminaVideoPayload(input: DreaminaVideoPayloadInput): For
     body.append("ratio", input.ratio);
     body.append("resolution", input.resolution);
     body.append("dreamina_mode", mode);
+    if (mode === "multiframe2video" && input.images.length > 2) transitionPrompts.forEach((prompt) => body.append("transition_prompt[]", prompt));
     input.images.forEach(({ file, role }) => {
         body.append("input_image[]", file, file.name);
         body.append("input_image_role[]", role);
@@ -37,12 +40,13 @@ function inferDreaminaMode(input: DreaminaVideoPayloadInput) {
     return inferVideoReferenceMode({ imageCount: input.images.length, videoCount: input.videos.length, audioCount: input.audios.length, imageRoleMode });
 }
 
-function validateDreaminaMedia(mode: Exclude<VideoReferenceMode, "auto">, input: DreaminaVideoPayloadInput) {
+function validateDreaminaMedia(mode: Exclude<VideoReferenceMode, "auto">, input: DreaminaVideoPayloadInput, transitionPrompts: string[]) {
     const { images, videos, audios } = input;
     if (mode === "text2video" && (images.length || videos.length || audios.length)) throw new Error("文生视频不能携带参考素材");
     if (mode === "image2video" && (images.length !== 1 || videos.length || audios.length)) throw new Error("图生视频需要恰好 1 张图片");
     if (mode === "frames2video" && (images.length !== 2 || videos.length || audios.length)) throw new Error("首尾帧需要恰好 2 张图片");
     if (mode === "multiframe2video" && (images.length < 2 || images.length > 20 || videos.length || audios.length)) throw new Error("多帧故事需要 2-20 张图片，且不能包含视频或音频");
+    if (mode === "multiframe2video" && images.length > 2 && (transitionPrompts.length !== images.length - 1 || transitionPrompts.some((prompt) => !prompt))) throw new Error(`多帧故事需要分别填写 ${images.length - 1} 段转场提示词`);
     if (mode !== "multimodal2video") return;
     if (input.model === "seedance2.5") {
         if (!images.length && !videos.length && !audios.length) throw new Error("全能参考至少添加一种参考素材");

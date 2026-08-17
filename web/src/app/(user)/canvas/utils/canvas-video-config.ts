@@ -50,6 +50,7 @@ export function buildCanvasVideoConfig(config: AiConfig, metadata?: CanvasNodeMe
         videoExtendDirection: metadata?.videoExtendDirection || config.videoExtendDirection || "forward",
         videoReferenceImageMode: normalizeSeedanceImageRoleMode(metadata?.videoReferenceImageMode || config.videoReferenceImageMode),
         videoReferenceMode: resolveCanvasVideoReferenceMode(config, metadata, provider),
+        videoTransitionPrompts: metadata?.videoTransitionPrompts || [],
     };
 }
 
@@ -136,6 +137,8 @@ function resolveCanvasVideoReferenceMode(config: AiConfig, metadata: CanvasNodeM
     const explicit = normalizeVideoReferenceMode(metadata?.videoReferenceMode);
     if (explicit !== "auto") return explicit;
     if (provider !== "jimeng-cli" || !metadata || metadata.videoReferenceMode === "auto") return normalizeVideoReferenceMode(config.videoReferenceMode);
+    const savedReferenceCount = (metadata.references?.length || 0) + (metadata.videoReferences?.length || 0) + (metadata.audioReferences?.length || 0);
+    if (!savedReferenceCount) return normalizeVideoReferenceMode(config.videoReferenceMode);
     return inferVideoReferenceMode({
         imageCount: metadata.references?.length || 0,
         videoCount: metadata.videoReferences?.length || 0,

@@ -50,8 +50,62 @@ test("infers all five Dreamina modes from auto", () => {
     assert.equal(modeFor(0), "text2video");
     assert.equal(modeFor(1, 0, 0, ["first_frame"]), "image2video");
     assert.equal(modeFor(2, 0, 0, ["first_frame", "last_frame"]), "frames2video");
-    assert.equal(modeFor(3), "multiframe2video");
+    assert.equal(modeFor(2), "multimodal2video");
+    assert.equal(modeFor(3), "multimodal2video");
     assert.equal(modeFor(1, 1, 1), "multimodal2video");
+});
+
+test("submits one distinct transition prompt for each explicit multi-frame segment", () => {
+    const payload = buildDreaminaVideoPayload({
+        model: "seedance2.5",
+        prompt: "整段故事说明",
+        transitionPrompts: ["人物从图片1转身走向图片2", "人物从图片2推门进入图片3"],
+        duration: "6",
+        ratio: "16:9",
+        resolution: "1080p",
+        mode: "multiframe2video",
+        images: ["1.png", "2.png", "3.png"].map((name) => ({ file: file(name, "image/png"), role: "reference_image" as const })),
+        videos: [],
+        audios: [],
+    });
+
+    assert.deepEqual(payload.getAll("transition_prompt[]"), ["人物从图片1转身走向图片2", "人物从图片2推门进入图片3"]);
+    assert.equal(payload.get("model"), "seedance2.5");
+});
+
+test("rejects explicit multi-frame submission when segment prompts are missing", () => {
+    assert.throws(
+        () => buildDreaminaVideoPayload({
+            model: "seedance2.0fast",
+            prompt: "整段故事说明",
+            transitionPrompts: ["只有第一段"],
+            duration: "6",
+            ratio: "16:9",
+            resolution: "720p",
+            mode: "multiframe2video",
+            images: ["1.png", "2.png", "3.png"].map((name) => ({ file: file(name, "image/png"), role: "reference_image" as const })),
+            videos: [],
+            audios: [],
+        }),
+        /需要分别填写 2 段转场提示词/,
+    );
+});
+
+test("does not leak stale transition prompts into all-reference requests", () => {
+    const payload = buildDreaminaVideoPayload({
+        model: "seedance2.5",
+        prompt: "参考多张图片生成视频",
+        transitionPrompts: ["旧转场"],
+        duration: "6",
+        ratio: "16:9",
+        resolution: "720p",
+        mode: "multimodal2video",
+        images: [{ file: file("1.png", "image/png"), role: "reference_image" }],
+        videos: [],
+        audios: [],
+    });
+
+    assert.deepEqual(payload.getAll("transition_prompt[]"), []);
 });
 
 test("rejects media combinations that the selected Dreamina mode cannot accept", () => {

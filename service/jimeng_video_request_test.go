@@ -27,23 +27,24 @@ func TestPrepareJimengVideoCommandBuildsAllModes(t *testing.T) {
 	mp4 := []byte("\x00\x00\x00\x18ftypmp42video")
 	mp3 := []byte("ID3audio")
 	tests := []struct {
-		name       string
-		mode       string
-		uploads    []jimengUpload
-		wantPrefix []string
-		wantParts  []string
+		name        string
+		mode        string
+		uploads     []jimengUpload
+		transitions []string
+		wantPrefix  []string
+		wantParts   []string
 	}{
 		{name: "text", mode: "text2video", wantPrefix: []string{"text2video", "--prompt=镜头推进", "--duration=6", "--ratio=9:16", "--video_resolution=720p", "--model_version=seedance2.0fast"}},
 		{name: "image", mode: "image2video", uploads: []jimengUpload{{field: "input_image[]", name: "first.png", content: png, fileType: "image/png", role: "first_frame"}}, wantPrefix: []string{"image2video"}, wantParts: []string{"--image=", "--prompt=镜头推进", "--duration=6", "--video_resolution=720p", "--model_version=seedance2.0fast"}},
 		{name: "legacy reference image", mode: "auto", uploads: []jimengUpload{{field: "input_reference[]", name: "legacy.png", content: png, fileType: "image/png", role: "reference_image"}}, wantPrefix: []string{"image2video"}, wantParts: []string{"--image=", "--prompt=镜头推进", "--duration=6"}},
 		{name: "frames", mode: "frames2video", uploads: []jimengUpload{{field: "input_image[]", name: "last.png", content: png, fileType: "image/png", role: "last_frame"}, {field: "input_image[]", name: "first.png", content: png, fileType: "image/png", role: "first_frame"}}, wantPrefix: []string{"frames2video"}, wantParts: []string{"--first=", "--last=", "--prompt=镜头推进", "--duration=6"}},
-		{name: "multiframe", mode: "multiframe2video", uploads: []jimengUpload{{field: "input_image[]", name: "1.png", content: png, fileType: "image/png"}, {field: "input_image[]", name: "2.png", content: png, fileType: "image/png"}, {field: "input_image[]", name: "3.png", content: png, fileType: "image/png"}}, wantPrefix: []string{"multiframe2video"}, wantParts: []string{"--images=", "--video_resolution=1080p", "--transition-prompt=镜头推进", "--transition-prompt=镜头推进", "--transition-duration=3", "--transition-duration=3"}},
+		{name: "multiframe", mode: "multiframe2video", uploads: []jimengUpload{{field: "input_image[]", name: "1.png", content: png, fileType: "image/png"}, {field: "input_image[]", name: "2.png", content: png, fileType: "image/png"}, {field: "input_image[]", name: "3.png", content: png, fileType: "image/png"}}, transitions: []string{"人物转身走向门口", "人物推门进入房间"}, wantPrefix: []string{"multiframe2video"}, wantParts: []string{"--images=", "--video_resolution=1080p", "--transition-prompt=人物转身走向门口", "--transition-prompt=人物推门进入房间", "--transition-duration=3", "--transition-duration=3"}},
 		{name: "multimodal", mode: "multimodal2video", uploads: []jimengUpload{{field: "input_image[]", name: "image.png", content: png, fileType: "image/png"}, {field: "input_video[]", name: "clip.mp4", content: mp4, fileType: "video/mp4"}, {field: "input_audio[]", name: "voice.mp3", content: mp3, fileType: "audio/mpeg"}}, wantPrefix: []string{"multimodal2video"}, wantParts: []string{"--image=", "--video=", "--audio=", "--prompt=镜头推进", "--ratio=9:16"}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			body, contentType := buildJimengMultipart(t, tt.mode, tt.uploads)
+			body, contentType := buildJimengMultipartWithTransitions(t, tt.mode, tt.uploads, tt.transitions)
 			command, err := prepareJimengVideoCommand(body, contentType, "seedance2.0fast", 2)
 			if err != nil {
 				t.Fatalf("prepareJimengVideoCommand: %v", err)
@@ -90,12 +91,34 @@ func TestPrepareJimengVideoCommandAllowsSeedance25AudioOnly(t *testing.T) {
 	}
 }
 
+func TestPrepareJimengVideoCommandPreservesImageBytes(t *testing.T) {
+	content := append([]byte("\x89PNG\r\n\x1a\n"), bytes.Repeat([]byte{0x5a}, 64)...)
+	body, contentType := buildJimengMultipart(t, "image2video", []jimengUpload{{field: "input_image[]", name: "original.png", content: content, fileType: "image/png"}})
+	command, err := prepareJimengVideoCommand(body, contentType, "seedance2.0fast", 0)
+	if err != nil {
+		t.Fatalf("prepareJimengVideoCommand: %v", err)
+	}
+	defer command.cleanup()
+	path := strings.TrimPrefix(command.args[1], "--image=")
+	staged, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read staged image: %v", err)
+	}
+	if !bytes.Equal(staged, content) {
+		t.Fatal("staged image bytes changed")
+	}
+}
+
 func TestJimengMultiframeTransitionDurationUsesNewMinimum(t *testing.T) {
 	images := make([]string, 10)
 	for index := range images {
 		images[index] = filepath.Join(t.TempDir(), "frame.png")
 	}
-	args, err := buildJimengModeArgs("multiframe2video", jimengVideoFields{Prompt: "连续变化", Duration: "4", Resolution: "720p"}, "seedance2.0fast", 0, images, nil, nil, nil)
+	transitions := make([]string, len(images)-1)
+	for index := range transitions {
+		transitions[index] = "连续变化"
+	}
+	args, err := buildJimengModeArgs("multiframe2video", jimengVideoFields{Prompt: "连续变化", TransitionPrompts: transitions, Duration: "4", Resolution: "720p"}, "seedance2.0fast", 0, images, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("buildJimengModeArgs: %v", err)
 	}
@@ -185,11 +208,20 @@ func TestJimengEnvironmentPreservesMacOSHomeForLoginKeychain(t *testing.T) {
 }
 
 func buildJimengMultipart(t *testing.T, mode string, uploads []jimengUpload) ([]byte, string) {
+	return buildJimengMultipartWithTransitions(t, mode, uploads, nil)
+}
+
+func buildJimengMultipartWithTransitions(t *testing.T, mode string, uploads []jimengUpload, transitions []string) ([]byte, string) {
 	t.Helper()
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 	for key, value := range map[string]string{"dreamina_mode": mode, "prompt": "镜头推进", "duration": "6", "ratio": "9:16", "resolution": "1080p"} {
 		if err := writer.WriteField(key, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, transition := range transitions {
+		if err := writer.WriteField("transition_prompt[]", transition); err != nil {
 			t.Fatal(err)
 		}
 	}
