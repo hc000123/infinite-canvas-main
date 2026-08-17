@@ -19,6 +19,21 @@ test("cache page selects visible files and downloads one or many", () => {
     assert.match(api, /package\/selection/);
 });
 
+test("cache videos expose persistent favorites without replacing batch selection", () => {
+    const page = read("./page.tsx");
+    const grid = read("./components/cache-file-grid.tsx");
+    const api = read("../../../services/api/project-cache.ts");
+    assert.match(page, /favoriteOnly/);
+    assert.match(page, /只看收藏视频/);
+    assert.match(page, /setProjectCacheFileFavorite/);
+    assert.match(grid, /file\.kind === "video"/);
+    assert.match(grid, /aria-pressed/);
+    assert.match(grid, /line-clamp-2/);
+    assert.match(api, /\/favorite/);
+    assert.match(grid, /Checkbox/);
+    assert.match(page, /下载所选/);
+});
+
 test("cached video preview exposes its recorded generation prompt", () => {
     const preview = read("./components/cache-file-preview-modal.tsx");
     assert.match(preview, /file\.kind === "video"/);

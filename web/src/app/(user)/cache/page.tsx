@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { App, Button, Empty, Input, Modal, Select, Spin, Tag } from "antd";
-import { Archive, Copy, Database, Download, RefreshCw, Trash2 } from "lucide-react";
+import { Archive, Copy, Database, Download, RefreshCw, Star, Trash2 } from "lucide-react";
 import copy from "copy-to-clipboard";
 import { saveAs } from "file-saver";
 
@@ -17,6 +17,7 @@ import {
     listProjectCaches,
     moveProjectCacheFile,
     preflightProjectCachePackage,
+    setProjectCacheFileFavorite,
     type ProjectCacheFile,
     type ProjectCacheManifest,
     type ProjectCacheSummary,
@@ -67,6 +68,8 @@ export default function CacheManagementPage() {
     const [moving, setMoving] = useState(false);
     const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(() => new Set());
     const [selectionDownloading, setSelectionDownloading] = useState(false);
+    const [favoriteOnly, setFavoriteOnly] = useState(false);
+    const [favoriteUpdatingIds, setFavoriteUpdatingIds] = useState<Set<string>>(() => new Set());
 
     const loadList = useCallback(async () => {
         if (!token) return;
@@ -115,7 +118,7 @@ export default function CacheManagementPage() {
         () => Array.from(new Map((manifest?.files || []).filter((item) => item.context.episodeId).map((item) => [item.context.episodeId, { value: item.context.episodeId, label: item.context.episodeName || item.context.episodeId }])).values()),
         [manifest?.files],
     );
-    const filteredFiles = useMemo(() => filterProjectCacheFiles(manifest?.files || [], { category, episodeId, keyword, kind }), [category, episodeId, keyword, kind, manifest?.files]);
+    const filteredFiles = useMemo(() => filterProjectCacheFiles(manifest?.files || [], { category, episodeId, favoriteOnly, keyword, kind }), [category, episodeId, favoriteOnly, keyword, kind, manifest?.files]);
     const readyFilteredIds = filteredFiles.filter((item) => item.status === "ready").map((item) => item.id);
     const selectedFiles = (manifest?.files || []).filter((item) => item.status === "ready" && selectedFileIds.has(item.id));
     const allVisibleSelected = readyFilteredIds.length > 0 && readyFilteredIds.every((id) => selectedFileIds.has(id));
@@ -166,6 +169,23 @@ export default function CacheManagementPage() {
             message.error(error instanceof Error ? error.message : "所选缓存下载失败");
         } finally {
             setSelectionDownloading(false);
+        }
+    };
+
+    const toggleFavorite = async (file: ProjectCacheFile) => {
+        if (!token || file.kind !== "video" || file.status !== "ready") return;
+        setFavoriteUpdatingIds((current) => new Set(current).add(file.id));
+        try {
+            const updated = await setProjectCacheFileFavorite(file.id, !file.favorite, token);
+            setManifest((current) => current ? { ...current, files: current.files.map((item) => item.id === updated.id ? updated : item) } : current);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "收藏状态保存失败");
+        } finally {
+            setFavoriteUpdatingIds((current) => {
+                const next = new Set(current);
+                next.delete(file.id);
+                return next;
+            });
         }
     };
 
@@ -268,6 +288,7 @@ export default function CacheManagementPage() {
                                 setCategory("");
                                 setKind("");
                                 setEpisodeId("");
+                                setFavoriteOnly(false);
                             }}
                         />
                         <section className="thin-scrollbar min-h-0 overflow-y-auto p-5">
@@ -335,6 +356,13 @@ export default function CacheManagementPage() {
                                                 { value: "audio", label: "音频" },
                                             ]}
                                         />
+                                        <Button
+                                            type={favoriteOnly ? "primary" : "default"}
+                                            icon={<Star className={`size-4 ${favoriteOnly ? "fill-current" : ""}`} />}
+                                            onClick={() => setFavoriteOnly((value) => !value)}
+                                        >
+                                            只看收藏视频
+                                        </Button>
                                     </div>
                                     <div className="mt-3 flex flex-wrap items-center gap-2 border-b border-[var(--studio-border-subtle)] pb-3">
                                         <span className="mr-auto text-sm text-[var(--studio-text-secondary)]">已选 <strong className="text-[var(--studio-text-primary)]">{selectedFiles.length}</strong> 项</span>
@@ -343,7 +371,7 @@ export default function CacheManagementPage() {
                                         <Button size="small" type="primary" icon={<Download className="size-3.5" />} loading={selectionDownloading} disabled={!selectedFiles.length} onClick={() => void downloadSelection()}>下载所选{selectedFiles.length ? ` (${selectedFiles.length})` : ""}</Button>
                                     </div>
                                     <div className="mt-4">
-                                        <CacheFileGrid files={filteredFiles} selectedIds={selectedFileIds} onToggleSelect={(file) => setSelectedFileIds((current) => { const next = new Set(current); next.has(file.id) ? next.delete(file.id) : next.add(file.id); return next; })} onDelete={removeFile} onMove={!manifest.projectId ? openMoveFile : undefined} onPreview={setPreviewFile} />
+                                        <CacheFileGrid files={filteredFiles} favoriteUpdatingIds={favoriteUpdatingIds} selectedIds={selectedFileIds} onToggleFavorite={toggleFavorite} onToggleSelect={(file) => setSelectedFileIds((current) => { const next = new Set(current); next.has(file.id) ? next.delete(file.id) : next.add(file.id); return next; })} onDelete={removeFile} onMove={!manifest.projectId ? openMoveFile : undefined} onPreview={setPreviewFile} />
                                     </div>
                                 </>
                             ) : (

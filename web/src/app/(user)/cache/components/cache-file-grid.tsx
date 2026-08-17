@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button, Checkbox, Empty, Spin, Tag } from "antd";
-import { AudioLines, ExternalLink, FileQuestion, FolderInput, ImageIcon, Trash2, Video } from "lucide-react";
+import { AudioLines, ExternalLink, FileQuestion, FolderInput, ImageIcon, Star, Trash2, Video } from "lucide-react";
 
 import type { ProjectCacheFile } from "@/services/api/project-cache";
 import { useCacheFileObjectUrl } from "../use-cache-file-object-url";
@@ -10,22 +10,40 @@ import { useCacheFileObjectUrl } from "../use-cache-file-object-url";
 const categoryLabels: Record<ProjectCacheFile["category"], string> = { character: "角色", scene: "场景", prop: "道具", storyboard: "分镜", other: "其他" };
 const kindLabels: Record<ProjectCacheFile["kind"], string> = { image: "图片", video: "视频", audio: "音频" };
 
-export function CacheFileGrid({ files, onDelete, onMove, onPreview, onToggleSelect, selectedIds }: { files: ProjectCacheFile[]; onDelete: (file: ProjectCacheFile) => void; onMove?: (file: ProjectCacheFile) => void; onPreview: (file: ProjectCacheFile) => void; onToggleSelect: (file: ProjectCacheFile) => void; selectedIds: ReadonlySet<string> }) {
+export function CacheFileGrid({ files, favoriteUpdatingIds, onDelete, onMove, onPreview, onToggleFavorite, onToggleSelect, selectedIds }: { files: ProjectCacheFile[]; favoriteUpdatingIds: ReadonlySet<string>; onDelete: (file: ProjectCacheFile) => void; onMove?: (file: ProjectCacheFile) => void; onPreview: (file: ProjectCacheFile) => void; onToggleFavorite: (file: ProjectCacheFile) => void; onToggleSelect: (file: ProjectCacheFile) => void; selectedIds: ReadonlySet<string> }) {
     if (!files.length) return <Empty className="py-16" description="当前分类没有缓存文件" />;
     return (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,240px),1fr))] gap-4">
-            {files.map((file) => <CacheFileCard key={file.id} file={file} selected={selectedIds.has(file.id)} onDelete={onDelete} onMove={onMove} onPreview={onPreview} onToggleSelect={onToggleSelect} />)}
+            {files.map((file) => <CacheFileCard key={file.id} file={file} favoriteUpdating={favoriteUpdatingIds.has(file.id)} selected={selectedIds.has(file.id)} onDelete={onDelete} onMove={onMove} onPreview={onPreview} onToggleFavorite={onToggleFavorite} onToggleSelect={onToggleSelect} />)}
         </div>
     );
 }
 
-function CacheFileCard({ file, onDelete, onMove, onPreview, onToggleSelect, selected }: { file: ProjectCacheFile; onDelete: (file: ProjectCacheFile) => void; onMove?: (file: ProjectCacheFile) => void; onPreview: (file: ProjectCacheFile) => void; onToggleSelect: (file: ProjectCacheFile) => void; selected: boolean }) {
+function CacheFileCard({ favoriteUpdating, file, onDelete, onMove, onPreview, onToggleFavorite, onToggleSelect, selected }: { favoriteUpdating: boolean; file: ProjectCacheFile; onDelete: (file: ProjectCacheFile) => void; onMove?: (file: ProjectCacheFile) => void; onPreview: (file: ProjectCacheFile) => void; onToggleFavorite: (file: ProjectCacheFile) => void; onToggleSelect: (file: ProjectCacheFile) => void; selected: boolean }) {
     const missing = file.status === "missing";
     return (
         <article className={`group relative min-w-0 overflow-hidden rounded-xl border bg-[var(--studio-panel-bg)] transition [content-visibility:auto] [contain-intrinsic-size:340px] ${selected ? "border-[var(--studio-accent)] ring-1 ring-[var(--studio-accent)]" : "border-[var(--studio-border-subtle)] hover:border-[var(--studio-border-strong)]"}`}>
             <span className="absolute left-2 top-2 z-10 grid size-8 place-items-center rounded-md bg-[color-mix(in_srgb,var(--studio-panel-bg)_88%,transparent)] backdrop-blur" onClick={(event) => event.stopPropagation()}>
                 <Checkbox checked={selected} disabled={missing} aria-label={`选择 ${file.originalName || file.id}`} onChange={() => onToggleSelect(file)} />
             </span>
+            {file.kind === "video" ? (
+                <Button
+                    type="text"
+                    shape="circle"
+                    size="small"
+                    className="!absolute !right-2 !top-2 !z-10 !bg-[color-mix(in_srgb,var(--studio-panel-bg)_88%,transparent)] !text-[var(--studio-text-secondary)] backdrop-blur"
+                    icon={<Star className={`size-4 ${file.favorite ? "fill-current text-[var(--studio-accent)]" : ""}`} />}
+                    disabled={missing || favoriteUpdating}
+                    loading={favoriteUpdating}
+                    aria-label={file.favorite ? `取消收藏 ${file.originalName || file.id}` : `收藏 ${file.originalName || file.id}`}
+                    aria-pressed={file.favorite}
+                    title={file.favorite ? "取消收藏" : "收藏视频"}
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onToggleFavorite(file);
+                    }}
+                />
+            ) : null}
             <button
                 type="button"
                 disabled={missing}
@@ -37,7 +55,7 @@ function CacheFileCard({ file, onDelete, onMove, onPreview, onToggleSelect, sele
                 {!missing ? <span className="absolute inset-x-0 bottom-0 translate-y-full bg-[color-mix(in_srgb,var(--studio-panel-bg)_88%,transparent)] py-2 text-xs text-[var(--studio-text-primary)] backdrop-blur transition group-hover:translate-y-0">点击预览</span> : null}
             </button>
             <div className="p-3">
-                <div className="truncate text-sm font-semibold text-[var(--studio-text-primary)]" title={file.originalName || file.id}>{file.originalName || file.id}</div>
+                <div className="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-[var(--studio-text-primary)]" title={file.originalName || file.id}>{file.originalName || file.id}</div>
                 <div className="mt-1 truncate text-xs text-[var(--studio-text-muted)]" title={file.relativePath}>{file.context.episodeName || "项目共享"}</div>
                 <div className="mt-3 flex flex-wrap items-center gap-1.5">
                     <Tag className="m-0">{categoryLabels[file.category]}</Tag>
