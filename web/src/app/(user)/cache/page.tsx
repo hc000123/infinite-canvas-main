@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { App, Button, Empty, Input, Modal, Select, Spin, Tag } from "antd";
 import { Archive, Copy, Database, Download, RefreshCw, Star, Trash2 } from "lucide-react";
@@ -34,7 +34,7 @@ import { useCreativeProjectStore } from "../projects/use-creative-project-store"
 import { CacheFileGrid } from "./components/cache-file-grid";
 import { CacheFilePreviewModal } from "./components/cache-file-preview-modal";
 import { CacheProjectList } from "./components/cache-project-list";
-import { filterProjectCacheFiles, mergeProjectCacheState, pruneCacheSelection, toggleVisibleCacheSelection } from "./cache-view-model";
+import { createLatestRequestGuard, createProjectCacheViewReset, filterProjectCacheFiles, mergeProjectCacheState, pruneCacheSelection, toggleVisibleCacheSelection } from "./cache-view-model";
 
 export default function CacheManagementPage() {
     const searchParams = useSearchParams();
@@ -54,6 +54,9 @@ export default function CacheManagementPage() {
     const [manifest, setManifest] = useState<ProjectCacheManifest>();
     const [summary, setSummary] = useState<ProjectCacheSummary>();
     const [selectedId, setSelectedId] = useState(searchParams.get("projectId") || "");
+    const selectedIdRef = useRef(selectedId);
+    selectedIdRef.current = selectedId;
+    const [beginDetailRequest] = useState(() => createLatestRequestGuard());
     const [loading, setLoading] = useState(true);
     const [detailLoading, setDetailLoading] = useState(false);
     const [keyword, setKeyword] = useState("");
@@ -87,24 +90,39 @@ export default function CacheManagementPage() {
 
     const loadDetail = useCallback(async () => {
         if (!token || !selectedId) {
+            beginDetailRequest();
             setManifest(undefined);
             setSummary(undefined);
+            setDetailLoading(false);
             return;
         }
+        const requestProjectId = selectedId;
+        const isLatestRequest = beginDetailRequest();
+        const isCurrentRequest = () => isLatestRequest() && selectedIdRef.current === requestProjectId;
         setDetailLoading(true);
         try {
-            const result = await getProjectCache(selectedId, token);
+            const result = await getProjectCache(requestProjectId, token);
+            if (!isCurrentRequest()) return;
             setManifest(result.manifest);
             setSummary(result.summary);
         } catch (error) {
+            if (!isCurrentRequest()) return;
             message.error(error instanceof Error ? error.message : "读取项目缓存失败");
         } finally {
-            setDetailLoading(false);
+            if (isCurrentRequest()) setDetailLoading(false);
         }
-    }, [message, selectedId, token]);
+    }, [beginDetailRequest, message, selectedId, token]);
 
     useEffect(() => void loadList(), [loadList]);
     useEffect(() => void loadDetail(), [loadDetail]);
+    useEffect(() => {
+        const reset = createProjectCacheViewReset();
+        setSelectedFileIds(reset.selectedFileIds);
+        setCategory(reset.category);
+        setKind(reset.kind);
+        setEpisodeId(reset.episodeId);
+        setFavoriteOnly(reset.favoriteOnly);
+    }, [selectedId]);
     useEffect(() => {
         const readyIds = (manifest?.files || []).filter((item) => item.status === "ready").map((item) => item.id);
         setSelectedFileIds((current) => {
@@ -282,14 +300,7 @@ export default function CacheManagementPage() {
                         <CacheProjectList
                             items={projectRows}
                             selectedId={selectedId}
-                            onSelect={(id) => {
-                                setSelectedId(id);
-                                setSelectedFileIds(new Set());
-                                setCategory("");
-                                setKind("");
-                                setEpisodeId("");
-                                setFavoriteOnly(false);
-                            }}
+                            onSelect={setSelectedId}
                         />
                         <section className="thin-scrollbar min-h-0 overflow-y-auto p-5">
                             {detailLoading ? (
@@ -359,6 +370,7 @@ export default function CacheManagementPage() {
                                         <Button
                                             type={favoriteOnly ? "primary" : "default"}
                                             icon={<Star className={`size-4 ${favoriteOnly ? "fill-current" : ""}`} />}
+                                            aria-pressed={favoriteOnly}
                                             onClick={() => setFavoriteOnly((value) => !value)}
                                         >
                                             只看收藏视频

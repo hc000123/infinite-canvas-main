@@ -25,6 +25,7 @@ test("cache videos expose persistent favorites without replacing batch selection
     const api = read("../../../services/api/project-cache.ts");
     assert.match(page, /favoriteOnly/);
     assert.match(page, /只看收藏视频/);
+    assert.match(page, /aria-pressed=\{favoriteOnly\}/);
     assert.match(page, /setProjectCacheFileFavorite/);
     assert.match(grid, /file\.kind === "video"/);
     assert.match(grid, /aria-pressed/);
@@ -32,6 +33,13 @@ test("cache videos expose persistent favorites without replacing batch selection
     assert.match(api, /\/favorite/);
     assert.match(grid, /Checkbox/);
     assert.match(page, /下载所选/);
+});
+
+test("cache project changes reset scoped view state and ignore stale detail requests", () => {
+    const page = read("./page.tsx");
+    assert.match(page, /createLatestRequestGuard/);
+    assert.match(page, /createProjectCacheViewReset/);
+    assert.match(page, /\[selectedId\]/);
 });
 
 test("cached video preview exposes its recorded generation prompt", () => {

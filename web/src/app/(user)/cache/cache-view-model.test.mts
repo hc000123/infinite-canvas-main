@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { filterProjectCacheFiles, mergeProjectCacheState, pruneCacheSelection, toggleVisibleCacheSelection } from "./cache-view-model.ts";
+import { createLatestRequestGuard, createProjectCacheViewReset, filterProjectCacheFiles, mergeProjectCacheState, pruneCacheSelection, toggleVisibleCacheSelection } from "./cache-view-model.ts";
 
 test("marks disk cache orphaned when the local project is absent", () => {
     const rows = mergeProjectCacheState([{ projectId: "p1", projectName: "A", status: "active", path: "/a", updatedAt: "", bytes: 10, fileCount: 1, missingCount: 0 }], []);
@@ -29,6 +29,25 @@ test("favorite filter returns only ready favorite videos and composes with other
     ];
     const result = filterProjectCacheFiles(files, { favoriteOnly: true, episodeId: "e1", category: "storyboard", keyword: "shot" });
     assert.deepEqual(result.map((item) => item.id), ["favorite-video"]);
+    assert.deepEqual(filterProjectCacheFiles(files, { favoriteOnly: true, kind: "image" }), []);
+});
+
+test("latest request guard invalidates every earlier request", () => {
+    const beginRequest = createLatestRequestGuard();
+    const firstIsCurrent = beginRequest();
+    assert.equal(firstIsCurrent(), true);
+
+    const secondIsCurrent = beginRequest();
+    assert.equal(firstIsCurrent(), false);
+    assert.equal(secondIsCurrent(), true);
+});
+
+test("project change reset clears project-scoped filters and selection", () => {
+    const reset = createProjectCacheViewReset();
+    assert.deepEqual(
+        { category: reset.category, episodeId: reset.episodeId, favoriteOnly: reset.favoriteOnly, kind: reset.kind, selectedFileIds: [...reset.selectedFileIds] },
+        { category: "", episodeId: "", favoriteOnly: false, kind: "", selectedFileIds: [] },
+    );
 });
 
 test("toggles only the visible cache selection while preserving hidden items", () => {

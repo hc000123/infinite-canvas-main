@@ -21,6 +21,18 @@ export function filterProjectCacheFiles<T extends { category: string; context: {
     });
 }
 
+export function createLatestRequestGuard() {
+    let latestRequestId = 0;
+    return () => {
+        const requestId = ++latestRequestId;
+        return () => requestId === latestRequestId;
+    };
+}
+
+export function createProjectCacheViewReset() {
+    return { category: "", episodeId: "", favoriteOnly: false, kind: "", selectedFileIds: new Set<string>() };
+}
+
 export function projectCacheStatusLabel(status: ProjectCacheDisplayStatus) {
     return status === "deleted" ? "项目已删除" : status === "orphaned" ? "未关联当前项目" : status === "unassigned" ? "未归属" : "正常";
 }
