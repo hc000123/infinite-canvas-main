@@ -159,6 +159,19 @@ func tencentMPSTemplateSetting(upstream *mps.TranscodeTemplate) (model.TencentMP
 }
 
 func tencentTemplateTargetForDimensions(width, height int) string {
+	if width == 0 || height == 0 {
+		fixed := width
+		if fixed == 0 {
+			fixed = height
+		}
+		if fixed == 1080 || fixed == 1920 {
+			return "1080p"
+		}
+		if fixed == 1440 || fixed == 2560 {
+			return "2k"
+		}
+		return ""
+	}
 	longEdge, shortEdge := width, height
 	if longEdge < shortEdge {
 		longEdge, shortEdge = shortEdge, longEdge

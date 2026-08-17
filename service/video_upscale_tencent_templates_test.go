@@ -61,9 +61,29 @@ func TestNormalizeTencentMPSTemplatesDisablesUnsupportedEntries(t *testing.T) {
 	}
 }
 
+func TestTencentTemplateTargetForDimensionsAcceptsFollowSourceAspectRatio(t *testing.T) {
+	tests := []struct {
+		width  int
+		height int
+		want   string
+	}{
+		{width: 0, height: 1080, want: "1080p"},
+		{width: 1920, height: 0, want: "1080p"},
+		{width: 0, height: 1440, want: "2k"},
+		{width: 2560, height: 0, want: "2k"},
+		{width: 0, height: 720, want: ""},
+		{width: 0, height: 2160, want: ""},
+	}
+	for _, test := range tests {
+		if got := tencentTemplateTargetForDimensions(test.width, test.height); got != test.want {
+			t.Fatalf("targetForDimensions(%d, %d)=%q want=%q", test.width, test.height, got, test.want)
+		}
+	}
+}
+
 func TestListTencentMPSEnhancementTemplatesUsesReadOnlyPagination(t *testing.T) {
 	fake := &fakeTencentTemplateAPI{pages: []*mps.DescribeTranscodeTemplatesResponse{
-		tencentTemplatePage(150, tencentTemplate("400001", "自定义清晰化", "Custom", 1920, 1080, false)),
+		tencentTemplatePage(150, tencentTemplate("400001", "自定义清晰化", "Custom", 0, 1080, false)),
 		tencentTemplatePage(150, tencentTemplate("400002", "自定义 2K", "Custom", 2560, 1440, false)),
 	}}
 	items, err := listTencentMPSEnhancementTemplates(context.Background(), fake)
