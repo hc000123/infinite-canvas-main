@@ -16,6 +16,7 @@ export type ProjectCacheFile = {
     bytes: number;
     context: ProjectCacheContext;
     status: "ready" | "missing";
+    favorite: boolean;
 };
 
 export type ProjectCacheSummary = { projectId: string; projectName: string; status: "active" | "deleted"; path: string; updatedAt: string; bytes: number; fileCount: number; missingCount: number };
@@ -79,6 +80,10 @@ export function updateProjectCacheStatus(projectId: string, status: "active" | "
 
 export function moveProjectCacheFile(fileId: string, context: ProjectCacheContext, token: string) {
     return apiPost(`/api/v1/project-cache/files/${encodeURIComponent(fileId)}/move`, context, token);
+}
+
+export function setProjectCacheFileFavorite(fileId: string, favorite: boolean, token: string) {
+    return apiPost<ProjectCacheFile>(`/api/v1/project-cache/files/${encodeURIComponent(fileId)}/favorite`, { favorite }, token);
 }
 
 export function deleteProjectCacheFile(fileId: string, token: string) {

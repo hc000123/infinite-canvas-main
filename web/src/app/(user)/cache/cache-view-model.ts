@@ -10,9 +10,10 @@ export function mergeProjectCacheState<T extends ProjectCacheSummary>(diskProjec
     }));
 }
 
-export function filterProjectCacheFiles<T extends { category: string; context: { episodeId?: string }; kind: string; originalName: string; id: string }>(files: T[], filters: { episodeId?: string; category?: string; kind?: string; keyword?: string }) {
+export function filterProjectCacheFiles<T extends { category: string; context: { episodeId?: string }; kind: string; originalName: string; id: string; status: string; favorite?: boolean }>(files: T[], filters: { episodeId?: string; category?: string; kind?: string; keyword?: string; favoriteOnly?: boolean }) {
     const keyword = filters.keyword?.trim().toLowerCase() || "";
     return files.filter((item) => {
+        if (filters.favoriteOnly && !(item.favorite && item.kind === "video" && item.status === "ready")) return false;
         if (filters.episodeId && item.context.episodeId !== filters.episodeId) return false;
         if (filters.category && item.category !== filters.category) return false;
         if (filters.kind && item.kind !== filters.kind) return false;
